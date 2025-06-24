@@ -35,6 +35,13 @@ To get started with the BenchMAC evaluation harness, follow these steps.
     uv sync
     ```
 
+2.  **Set up pre-commit hooks:**
+    ```bash
+    uv run pre-commit install
+    ```
+    
+    This ensures that code is automatically linted, formatted, and the lockfile stays up to date before each commit.
+
 ## 📄 License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
