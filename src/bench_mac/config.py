@@ -64,6 +64,12 @@ class Settings(BaseSettings):
         return self.cache_dir / "silver_patches_repos"
 
     # --- Docker Settings ---
+    docker_host: str | None = Field(
+        default=None,
+        description="The host for the Docker daemon socket (e.g., 'unix:///var/run/docker.sock'). "  # noqa: E501
+        "If None, the library will try to auto-detect.",
+    )
+
     docker_base_image_name: str = Field(
         default="benchmac-base",
         description="The name for the foundational Docker base image.",
