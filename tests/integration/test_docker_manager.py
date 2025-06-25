@@ -113,11 +113,14 @@ class TestDockerManager:
             # 2. Execute a simple command
             command = 'echo "hello from the container"'
             print(f"Executing command: {command}")
-            exit_code, logs = docker_manager.execute_in_container(container, command)
+            exit_code, stdout, stderr = docker_manager.execute_in_container(
+                container, command
+            )
 
             # 3. Assert the results
             assert exit_code == 0
-            assert "hello from the container" in logs
+            assert "hello from the container" in stdout
+            assert stderr == ""  # No error output expected
 
         finally:
             # 4. Cleanup
@@ -151,12 +154,57 @@ class TestDockerManager:
             # 2. Verify the file exists and has the correct content
             command = f"cat {container_dest_path}"
             print(f"Verifying file content with command: {command}")
-            exit_code, logs = docker_manager.execute_in_container(container, command)
+            exit_code, stdout, stderr = docker_manager.execute_in_container(
+                container, command
+            )
 
             assert exit_code == 0
-            assert file_content in logs
+            assert file_content in stdout
+            assert stderr == ""  # No error output expected
 
         finally:
             # 3. Cleanup
+            if container:
+                docker_manager.cleanup_container(container)
+
+    def test_execute_command_with_stderr(
+        self, docker_manager: DockerManager, unique_tag: str
+    ) -> None:
+        """
+        Test that stderr is properly captured when executing commands.
+        """
+        # Setup: Build and run a container
+        docker_manager.build_image(dockerfile_content=SIMPLE_DOCKERFILE, tag=unique_tag)
+        container = docker_manager.run_container(image_tag=unique_tag)
+
+        try:
+            # 1. Execute a command that writes to stderr
+            command = 'sh -c "echo stdout_message && echo stderr_message >&2"'
+            print(
+                f"Executing command that outputs to both stdout and stderr: {command}"
+            )
+            exit_code, stdout, stderr = docker_manager.execute_in_container(
+                container, command
+            )
+
+            # 2. Assert the results
+            assert exit_code == 0
+            assert "stdout_message" in stdout
+            assert "stderr_message" in stderr
+
+            # 3. Test a command that fails (non-zero exit code)
+            fail_command = 'sh -c "echo error_output >&2 && exit 1"'
+            print(f"Executing failing command: {fail_command}")
+            exit_code, stdout, stderr = docker_manager.execute_in_container(
+                container, fail_command
+            )
+
+            # 4. Assert failure is captured
+            assert exit_code == 1
+            assert stdout == ""
+            assert "error_output" in stderr
+
+        finally:
+            # 5. Cleanup
             if container:
                 docker_manager.cleanup_container(container)

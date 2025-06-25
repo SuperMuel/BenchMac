@@ -156,7 +156,7 @@ class DockerManager:
 
     def execute_in_container(
         self, container: Container, command: str
-    ) -> tuple[int, str]:
+    ) -> tuple[int, str, str]:
         """
         Executes a shell command inside a running container.
 
@@ -169,13 +169,19 @@ class DockerManager:
 
         Returns
         -------
-        A tuple containing (exit_code, logs).
+        A tuple containing (exit_code, stdout, stderr).
         """
         print(f"Executing in {container.short_id}: {command}")
-        exit_code, output = container.exec_run(command)  # type: ignore[reportUnknownMemberType]
-        logs = output.decode("utf-8").strip()
+        exit_code, output = container.exec_run(command, demux=True)  # type: ignore[reportUnknownMemberType]
+
         print(f"  > Exit code: {exit_code}")
-        return exit_code, logs
+
+        # When demux=True, output is a tuple of (stdout, stderr)
+        # Each can be bytes or None
+        stdout = output[0].decode("utf-8") if output[0] else ""
+        stderr = output[1].decode("utf-8") if output[1] else ""
+
+        return exit_code, stdout, stderr
 
     def copy_to_container(
         self, container: Container, src_path: Path, dest_path: str
