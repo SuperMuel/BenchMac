@@ -1,6 +1,5 @@
 import pytest
 from pydantic import ValidationError
-from typing_extensions import TypedDict
 
 from bench_mac.models import (
     BenchmarkInstance,
@@ -9,24 +8,6 @@ from bench_mac.models import (
     MetricsReport,
     Submission,
 )
-
-
-class BenchmarkInstanceData(TypedDict):
-    """TypedDict for BenchmarkInstance test data - supports IDE refactoring."""
-
-    instance_id: str
-    repo: str
-    base_commit: str
-    source_angular_version: str
-    target_angular_version: str
-    target_node_version: str
-
-
-class SubmissionData(TypedDict):
-    """TypedDict for Submission test data - supports IDE refactoring."""
-
-    instance_id: str
-    model_patch: str
 
 
 @pytest.mark.unit
@@ -54,7 +35,7 @@ class TestBenchmarkInstance:
     """Tests for the BenchmarkInstance model, including its complex validation."""
 
     # A dictionary of valid data to be used as a base for tests
-    VALID_INSTANCE_DATA: BenchmarkInstanceData = {
+    VALID_INSTANCE_DATA = {
         "instance_id": "my-project_v15_to_v16",
         "repo": "SuperMuel/BenchMAC",
         "base_commit": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
@@ -236,103 +217,3 @@ class TestEvaluationResult:
         metrics = MetricsReport(patch_application_success=True)
         result = EvaluationResult(instance_id="some-id", metrics=metrics)
         assert result.logs == {}
-
-
-# ============================================================================
-# DEMONSTRATION OF DIFFERENT SOLUTIONS TO THE REFACTORING PROBLEM
-# ============================================================================
-
-
-# Solution 3: Use constants for field names
-class BenchmarkInstanceFields:
-    """Constants for BenchmarkInstance field names - supports IDE refactoring."""
-
-    INSTANCE_ID = "instance_id"
-    REPO = "repo"
-    BASE_COMMIT = "base_commit"
-    SOURCE_ANGULAR_VERSION = "source_angular_version"
-    TARGET_ANGULAR_VERSION = "target_angular_version"
-    TARGET_NODE_VERSION = "target_node_version"
-
-
-# Solution 4: Use factory functions
-def create_valid_benchmark_instance(**overrides) -> BenchmarkInstance:
-    """Factory function to create BenchmarkInstance with overrides."""
-    defaults = BenchmarkInstanceData(
-        instance_id="my-project_v15_to_v16",
-        repo="SuperMuel/BenchMAC",
-        base_commit="a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
-        source_angular_version="15.0.0",
-        target_angular_version="16.1.0",
-        target_node_version="18.13.0",
-    )
-    return BenchmarkInstance.model_validate({**defaults, **overrides})
-
-
-@pytest.mark.unit
-class TestRefactoringSolutions:
-    """Demonstrates different solutions to the field name refactoring problem."""
-
-    def test_solution_1_typeddict(self) -> None:
-        """Solution 1: TypedDict provides type safety and IDE refactoring support."""
-        # The TypedDict ensures field names are typed and refactorable
-        data: BenchmarkInstanceData = {
-            "instance_id": "test-id",
-            "repo": "test/repo",
-            "base_commit": "a1b2c3d4e5f6a7b8",
-            "source_angular_version": "15.0.0",
-            "target_angular_version": "16.0.0",
-            "target_node_version": "18.13.0",
-        }
-        instance = BenchmarkInstance.model_validate(data)
-        assert instance.instance_id == data["instance_id"]
-
-    def test_solution_2_direct_construction(self) -> None:
-        """Solution 2: Direct model construction with keyword arguments."""
-        # Field names are in code, not strings, so IDE refactoring works
-        instance = BenchmarkInstance(
-            instance_id="test-id",
-            repo="test/repo",
-            base_commit="a1b2c3d4e5f6a7b8",
-            source_angular_version="15.0.0",
-            target_angular_version="16.0.0",
-            target_node_version="18.13.0",
-        )
-        assert instance.instance_id == "test-id"
-
-    def test_solution_3_field_constants(self) -> None:
-        """Solution 3: Use constants for field names that need string references."""
-        # Field names as constants can be refactored by IDE
-        data = {
-            BenchmarkInstanceFields.INSTANCE_ID: "test-id",
-            BenchmarkInstanceFields.REPO: "test/repo",
-            BenchmarkInstanceFields.BASE_COMMIT: "a1b2c3d4e5f6a7b8",
-            BenchmarkInstanceFields.SOURCE_ANGULAR_VERSION: "15.0.0",
-            BenchmarkInstanceFields.TARGET_ANGULAR_VERSION: "16.0.0",
-            BenchmarkInstanceFields.TARGET_NODE_VERSION: "18.13.0",
-        }
-        instance = BenchmarkInstance.model_validate(data)
-
-        # Using getattr with constants
-        assert getattr(instance, BenchmarkInstanceFields.INSTANCE_ID) == "test-id"
-
-    def test_solution_4_factory_functions(self) -> None:
-        """Solution 4: Use factory functions for test data creation."""
-        # Factory functions encapsulate field names in code
-        instance = create_valid_benchmark_instance(
-            instance_id="custom-id", repo="custom/repo"
-        )
-        assert instance.instance_id == "custom-id"
-        assert instance.repo == "custom/repo"
-        # Other fields use defaults from factory
-
-    def test_solution_5_model_fields_introspection(self) -> None:
-        """Solution 5: Use Pydantic model field introspection."""
-        # Get field names dynamically from the model
-        field_names = list(BenchmarkInstance.model_fields.keys())
-        assert "instance_id" in field_names
-        assert "repo" in field_names
-
-        # This approach is useful for generic testing but still has string issues
-        for field_name in ["instance_id", "repo"]:
-            assert field_name in BenchmarkInstance.model_fields
