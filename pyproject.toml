@@ -7,7 +7,12 @@ authors = [
     { name = "Samuel Mallet", email = "69467005+SuperMuel@users.noreply.github.com" },
 ]
 requires-python = ">=3.12"
-dependencies = ["docker>=7.1.0", "pydantic>=2.11.7"]
+dependencies = [
+    "cyclopts>=3.20.0",
+    "docker>=7.1.0",
+    "pydantic>=2.11.7",
+    "requests>=2.32.4",
+]
 
 [project.urls]
 Homepage = "https://github.com/SuperMuel/BenchMac"
@@ -18,11 +23,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["pytest>=8.4.1", "pytest-cov>=6.2.1", "ruff>=0.12.0"]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.0",
+    "python-dotenv>=1.1.1",
+]
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["tests/*", "src/**/__init__.py"]
+omit = ["tests/*", "src/**/__init__.py", "scripts/*"]
 
 [tool.coverage.report]
 exclude_lines = [
