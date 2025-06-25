@@ -13,7 +13,7 @@ from pathlib import Path
 
 import docker
 from bench_mac.config import settings
-from docker.errors import DockerException, ImageNotFound, NotFound
+from docker.errors import BuildError, DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 from docker.models.images import Image
 
@@ -84,7 +84,7 @@ class DockerManager:
                 dockerfile_path.write_text(dockerfile_content, encoding="utf-8")
 
                 image, build_log_stream = self._client.images.build(
-                    path=str(tmpdir),
+                    path=tmpdir,
                     tag=tag,
                     rm=True,  # Remove intermediate containers
                     forcerm=True,
@@ -92,14 +92,14 @@ class DockerManager:
 
                 # Stream and print build logs for user feedback
                 for chunk in build_log_stream:
-                    if "stream" in chunk:
-                        line = chunk["stream"].strip()
-                        if line:
-                            print(f"  | {line}")
+                    if isinstance(chunk, dict) and "stream" in chunk:
+                        line = chunk["stream"]
+                        if isinstance(line, str) and line.strip():
+                            print(f"  | {line.strip()}")
 
             print(f"✅ Successfully built image: {tag}")
             return image
-        except docker.errors.BuildError as e:
+        except BuildError as e:
             print(f"❌ Docker build failed for tag {tag}: {e}")
             raise
 
@@ -117,15 +117,13 @@ class DockerManager:
             return
         try:
             print(f"Removing image: {tag}")
-            self._client.images.remove(tag, force=True)
+            self._client.images.remove(tag, force=True)  # type: ignore[reportUnknownMemberType]
             print(f"✅ Successfully removed image: {tag}")
         except DockerException as e:
             print(f"❌ Failed to remove image {tag}: {e}")
             raise
 
-    def run_container(
-        self, image_tag: str, detach: bool = True, auto_remove: bool = False
-    ) -> Container:
+    def run_container(self, image_tag: str, auto_remove: bool = False) -> Container:
         """
         Runs a container from a given image tag.
 
@@ -133,8 +131,6 @@ class DockerManager:
         ----------
         image_tag
             The tag of the image to run.
-        detach
-            If True (default), run the container in the background.
         auto_remove
             If True, the container will be automatically removed on exit.
             Note: This is False by default to allow for inspection on failure.
@@ -147,10 +143,10 @@ class DockerManager:
         try:
             container = self._client.containers.run(
                 image_tag,
-                detach=detach,
-                auto_remove=auto_remove,
                 # Keep the container alive indefinitely until we stop it
                 command="tail -f /dev/null",
+                detach=True,
+                auto_remove=auto_remove,
             )
             print(f"✅ Container {container.short_id} is running.")
             return container
@@ -176,7 +172,7 @@ class DockerManager:
         A tuple containing (exit_code, logs).
         """
         print(f"Executing in {container.short_id}: {command}")
-        exit_code, output = container.exec_run(command)
+        exit_code, output = container.exec_run(command)  # type: ignore[reportUnknownMemberType]
         logs = output.decode("utf-8").strip()
         print(f"  > Exit code: {exit_code}")
         return exit_code, logs
@@ -208,7 +204,13 @@ class DockerManager:
         tar_stream.seek(0)
 
         try:
-            container.put_archive(path=str(Path(dest_path).parent), data=tar_stream)
+            success = container.put_archive(  # type: ignore[reportUnknownMemberType]
+                path=str(Path(dest_path).parent), data=tar_stream
+            )
+            if not success:
+                raise DockerException(
+                    f"Failed to copy {src_path} to container {container.short_id}:{dest_path}"  # noqa: E501
+                )
             print("✅ Copy successful.")
         except Exception as e:
             print(f"❌ Failed to copy to container: {e}")
@@ -223,8 +225,6 @@ class DockerManager:
         container
             The Container object to clean up.
         """
-        if not container:
-            return
         try:
             # Reload the container's state from the daemon to get the latest status
             container.reload()
