@@ -20,6 +20,7 @@ import requests
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
+from bench_mac.config import settings
 from bench_mac.models import BenchmarkInstance
 
 load_dotenv()
@@ -135,13 +136,10 @@ def main(instances_file: Path | None = None) -> None:
     Parameters
     ----------
     instances_file
-        Path to instances.jsonl file. If not provided, defaults to ../data/instances.jsonl relative to script location.
+        Path to instances.jsonl file. If not provided, defaults to the default instances file path in ./config.py.
     """  # noqa: E501
-    # Determine instances file path
     if instances_file is None:
-        # Default path - relative to the script
-        script_dir = Path(__file__).parent
-        instances_file = script_dir.parent / "data" / "instances.jsonl"
+        instances_file = settings.instances_file
 
     if not instances_file.exists():
         print(f"Error: {instances_file} not found")
@@ -180,4 +178,5 @@ def main(instances_file: Path | None = None) -> None:
 
 
 if __name__ == "__main__":
+    settings.initialize_directories()
     cyclopts.run(main)

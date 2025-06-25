@@ -33,6 +33,7 @@ from pathlib import Path
 
 import cyclopts
 
+from bench_mac.config import settings
 from bench_mac.models import BenchmarkInstance
 
 # --- Configuration ---
@@ -176,7 +177,7 @@ def generate_patch_for_instance(
     print(f"✅ Successfully generated patch for {instance_id}")
 
 
-def main(instance_id: str | None = None, cleanup: bool = False) -> None:
+def main(instance_id: str | None = None) -> None:
     """
     Generates Silver Patches for specified benchmark instances.
 
@@ -190,9 +191,6 @@ def main(instance_id: str | None = None, cleanup: bool = False) -> None:
         The specific instance_id to generate a patch for.
         If not provided, patches will be generated for ALL instances
         defined in the SILVER_SOLUTIONS map.
-    cleanup
-        If True, removes the temp_repos directory after processing.
-        If False (default), keeps the cloned repositories for inspection.
     """
     # Check if git is installed
     if not shutil.which("git"):
@@ -200,12 +198,9 @@ def main(instance_id: str | None = None, cleanup: bool = False) -> None:
         print("   Please install Git and ensure it is in your system's PATH.")
         return
 
-    # Determine script's directory to locate other files
-    script_dir = Path(__file__).parent
-    project_root = script_dir.parent
-    instances_file = project_root / "data" / "instances.jsonl"
-    output_dir = project_root / "data" / "silver_patches"
-    temp_repos_dir = project_root / ".benchmac_cache" / "silver_patches_repos"
+    instances_file = settings.instances_file
+    output_dir = settings.silver_patches_dir
+    temp_repos_dir = settings.silver_patches_repos_dir
 
     # Create output directory if it doesn't exist
     output_dir.mkdir(exist_ok=True)
@@ -258,23 +253,7 @@ def main(instance_id: str | None = None, cleanup: bool = False) -> None:
     print(f"\n{'=' * 50}")
     print("🎉 Script finished.")
 
-    # Optional cleanup
-    if cleanup:
-        temp_repos_dir = project_root / "temp_repos"
-        if temp_repos_dir.exists():
-            print(f"\n🧹 Cleaning up temp repositories at {temp_repos_dir}...")
-            shutil.rmtree(temp_repos_dir)
-            print("✅ Cleanup completed.")
-    else:
-        temp_repos_dir = project_root / "temp_repos"
-        if temp_repos_dir.exists():
-            print(
-                f"\n📁 Cloned repositories available for inspection at: {temp_repos_dir}"  # noqa: E501
-            )
-            print(
-                "   Use --cleanup flag to automatically remove them after processing."
-            )
-
 
 if __name__ == "__main__":
+    settings.initialize_directories()
     cyclopts.run(main)
