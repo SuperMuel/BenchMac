@@ -81,12 +81,9 @@ class BenchmarkInstance(BaseModel):
     def validate_repo_format(cls, v: str) -> str:
         """Validate that repo is either a valid URL or owner/repo format."""
         # Check if it's a valid URL
-        try:
-            parsed = urlparse(v)
-            if parsed.scheme in ("http", "https") and parsed.netloc:
-                return v
-        except Exception:
-            pass
+        parsed = urlparse(v)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            return v
 
         # Check if it's in owner/repo format
         owner_repo_pattern = r"^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?/[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$"  # noqa: E501

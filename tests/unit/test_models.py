@@ -160,6 +160,22 @@ class TestBenchmarkInstance:
                 {**self.VALID_INSTANCE_DATA, field_name: invalid_version}
             )
 
+    @pytest.mark.parametrize("invalid_version", ["", " ", "v18", "18.a.b", "18..0"])
+    def test_node_version_invalid_cases(self, invalid_version: str) -> None:
+        """Test that invalid Node.js versions raise a ValueError."""
+        with pytest.raises(ValidationError, match="Node.js version must be"):
+            BenchmarkInstance.model_validate(
+                {**self.VALID_INSTANCE_DATA, "target_node_version": invalid_version}
+            )
+
+    @pytest.mark.parametrize("valid_version", ["1", "16", "18.13", "20.5.1"])
+    def test_node_version_valid_cases(self, valid_version: str) -> None:
+        """Test that valid Node.js versions are accepted."""
+        instance = BenchmarkInstance.model_validate(
+            {**self.VALID_INSTANCE_DATA, "target_node_version": valid_version}
+        )
+        assert instance.target_node_version == valid_version
+
     def test_missing_required_field_raises_error(self) -> None:
         """Test that omitting a required field raises a ValidationError."""
         # Create a dict without the required field (can't delete from TypedDict)
