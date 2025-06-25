@@ -97,8 +97,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 
 "tests/*" = [
-    "S101", # Allow `assert` statements in tests.
-    "ANN",  # Relax annotation requirements for test functions.
+    "S101",   # Allow `assert` statements in tests.
+    "ANN",    # Relax annotation requirements for test functions.
+    "RUF012",
 ]
 
 
