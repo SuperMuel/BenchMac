@@ -30,9 +30,10 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
 
 import cyclopts
+
+from bench_mac.models import BenchmarkInstance
 
 # --- Configuration ---
 
@@ -73,22 +74,29 @@ def run_command(command: list[str], cwd: Path | None = None) -> str:
         raise
 
 
-def load_instances(file_path: Path) -> dict[str, dict[str, Any]]:
+def load_instances(file_path: Path) -> dict[str, BenchmarkInstance]:
     """Load instances from JSONL file into a dictionary keyed by instance_id."""
-    instances_map: dict[str, dict[str, Any]] = {}
+    instances_map: dict[str, BenchmarkInstance] = {}
     print(f"  > Loading instances from {file_path}...")
     try:
         with file_path.open("r", encoding="utf-8") as f:
-            for line in f:
+            for line_number, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:
                     continue
-                instance = json.loads(line)
-                instance_id = instance.get("instance_id")
-                if instance_id:
-                    instances_map[instance_id] = instance
-                else:
-                    print("  ⚠️ Warning: Found instance without an 'instance_id'.")
+
+                # Parse JSON and create BenchmarkInstance
+                instance_data = json.loads(line)
+                try:
+                    instance = BenchmarkInstance.model_validate(instance_data)
+                    instances_map[instance.instance_id] = instance
+                except Exception as e:
+                    instance_id = instance_data.get("instance_id", "unknown")
+                    print(
+                        f"  ⚠️ Warning: Failed to validate instance {instance_id} (line {line_number}): {e}"  # noqa: E501
+                    )
+                    continue
+
     except FileNotFoundError:
         print(f"  ❌ Error: Instances file not found at {file_path}")
         raise
@@ -101,7 +109,7 @@ def load_instances(file_path: Path) -> dict[str, dict[str, Any]]:
 
 def generate_patch_for_instance(
     instance_id: str,
-    instance_data: dict[str, Any],
+    instance: BenchmarkInstance,
     solution_commit: str,
     output_dir: Path,
     temp_repos_dir: Path,
@@ -109,8 +117,8 @@ def generate_patch_for_instance(
     """Generate and save a single silver patch."""
     print(f"\n--- Generating patch for: {instance_id} ---")
 
-    repo_url = instance_data["repo"]
-    base_commit = instance_data["base_commit"]
+    repo_url = instance.repo
+    base_commit = instance.base_commit
 
     # Ensure the repo URL is in a format git can clone
     if not repo_url.startswith(("http", "git@")):
@@ -229,13 +237,13 @@ def main(instance_id: str | None = None, cleanup: bool = False) -> None:
             )
             continue
 
-        instance_data = instances_map[target_id]
+        instance = instances_map[target_id]
         solution_commit = SILVER_SOLUTIONS[target_id]
 
         try:
             generate_patch_for_instance(
                 target_id,
-                instance_data,
+                instance,
                 solution_commit,
                 output_dir,
                 temp_repos_dir,
