@@ -1,6 +1,7 @@
 # BenchMAC
 
-[![CI](https://github.com/SuperMuel/BenchMAC/actions/workflows/ci.yml/badge.svg)](https://github.com/SuperMuel/BenchMAC/actions/workflows/test_harness.yml)
+[![CI](https://github.com/SuperMuel/BenchMAC/actions/workflows/ci.yml/badge.svg)](https://github.com/SuperMuel/BenchMAC/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/SuperMuel/BenchMAC/branch/main/graph/badge.svg)](https://codecov.io/gh/SuperMuel/BenchMAC)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **BenchMAC** is a benchmark for evaluating AI agents on their ability to perform complex, real-world **M**igration tasks for **A**ngular **C**odebases.

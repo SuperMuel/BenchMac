@@ -1,0 +1,13 @@
+coverage:
+  status:
+    project: # Overall project coverage settings
+      default:
+        target: 80% # Require 80% total code coverage
+        threshold: 5% # Allow coverage to drop by max 5% before failing
+        if_ci_failed: error # Mark as error if CI fails
+    patch: # Coverage settings for new code in PR/patch
+      default:
+        target: 80% # Require 80% coverage on new code
+        threshold: 5% # Allow new code coverage to be 5% below target
+        if_ci_failed: error # Mark as error if CI fails
+
