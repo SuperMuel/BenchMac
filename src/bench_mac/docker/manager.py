@@ -12,10 +12,11 @@ import tempfile
 from pathlib import Path
 
 import docker
-from bench_mac.config import settings
 from docker.errors import BuildError, DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 from docker.models.images import Image
+
+from bench_mac.config import settings
 
 
 class DockerManager:

@@ -13,10 +13,10 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
-from bench_mac.docker_manager import DockerManager
 from docker.errors import DockerException
 from docker.models.containers import Container
+
+from bench_mac.docker.manager import DockerManager
 
 # A simple, minimal Dockerfile for testing purposes.
 # Using alpine as a base makes it small and fast.

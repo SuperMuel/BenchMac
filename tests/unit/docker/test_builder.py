@@ -1,0 +1,146 @@
+import pytest
+
+from bench_mac.docker.builder import (
+    _get_environment_image_tag,
+    _get_instance_image_tag,
+)
+from bench_mac.models import BenchmarkInstance
+
+
+@pytest.mark.unit
+class TestGetEnvironmentImageTag:
+    """Tests for the _get_environment_image_tag function."""
+
+    def test_basic_version_formatting(self) -> None:
+        """Test that versions are correctly formatted in the tag."""
+        node_version = "18.13.0"
+        angular_cli_version = "16"
+
+        result = _get_environment_image_tag(node_version, angular_cli_version)
+
+        assert result == "benchmac-env:node18-13-0-ng16"
+
+    def test_version_sanitization_dots_to_dashes(self) -> None:
+        """Test that dots in versions are converted to dashes."""
+        node_version = "20.5.1"
+        angular_cli_version = "17.2.3"
+
+        result = _get_environment_image_tag(node_version, angular_cli_version)
+
+        assert result == "benchmac-env:node20-5-1-ng17-2-3"
+
+    def test_single_digit_versions(self) -> None:
+        """Test handling of single digit versions."""
+        node_version = "18"
+        angular_cli_version = "16"
+
+        result = _get_environment_image_tag(node_version, angular_cli_version)
+
+        assert result == "benchmac-env:node18-ng16"
+
+    def test_partial_versions(self) -> None:
+        """Test handling of partial versions (major.minor)."""
+        node_version = "18.13"
+        angular_cli_version = "16.1"
+
+        result = _get_environment_image_tag(node_version, angular_cli_version)
+
+        assert result == "benchmac-env:node18-13-ng16-1"
+
+    @pytest.mark.parametrize(
+        "node_version,angular_cli_version,expected",
+        [
+            ("16", "14", "benchmac-env:node16-ng14"),
+            ("18.0", "15.0", "benchmac-env:node18-0-ng15-0"),
+            ("20.1.2", "17.3.4", "benchmac-env:node20-1-2-ng17-3-4"),
+        ],
+    )
+    def test_various_version_combinations(
+        self, node_version: str, angular_cli_version: str, expected: str
+    ) -> None:
+        """Test various combinations of node and angular versions."""
+        result = _get_environment_image_tag(node_version, angular_cli_version)
+        assert result == expected
+
+    def test_empty_node_version_raises_error(self) -> None:
+        """Test that empty node version raises a ValueError."""
+        with pytest.raises(ValueError, match="Node version is required"):
+            _get_environment_image_tag("", "16")
+
+    def test_empty_angular_cli_version_raises_error(self) -> None:
+        """Test that empty Angular CLI version raises a ValueError."""
+        with pytest.raises(ValueError, match="Angular CLI version is required"):
+            _get_environment_image_tag("18.13.0", "")
+
+
+@pytest.mark.unit
+class TestGetInstanceImageTag:
+    """Tests for the _get_instance_image_tag function."""
+
+    def test_short_commit_hash(self) -> None:
+        """Test handling of short commit hashes."""
+        instance = BenchmarkInstance.model_validate(
+            {
+                "instance_id": "test-instance",
+                "repo": "user/repo",
+                "base_commit": "a1b2c3d",
+                "source_angular_version": "15.0.0",
+                "target_angular_version": "16.1.0",
+                "target_node_version": "18.13.0",
+            }
+        )
+
+        result = _get_instance_image_tag(instance)
+
+        assert result == "benchmac-instance:user__repo__a1b2c3d"
+
+    @pytest.mark.parametrize(
+        "repo,commit,expected_suffix",
+        [
+            ("owner/repo", "abc123def45", "owner__repo__abc123def45"),
+            ("test/project-name", "def456789ab", "test__project-name__def456789ab"),
+            (
+                "https://github.com/angular/angular-cli.git",
+                "abcdef123456789a",
+                "gh__angular__angular-cli__abcdef123456789a",
+            ),
+        ],
+    )
+    def test_various_repo_commit_combinations(
+        self, repo: str, commit: str, expected_suffix: str
+    ) -> None:
+        """Test various combinations of repository names and commit hashes."""
+        instance = BenchmarkInstance.model_validate(
+            {
+                "instance_id": "test-instance",
+                "repo": repo,
+                "base_commit": commit,
+                "source_angular_version": "15.0.0",
+                "target_angular_version": "16.1.0",
+                "target_node_version": "18.13.0",
+            }
+        )
+
+        result = _get_instance_image_tag(instance)
+
+        assert result == f"benchmac-instance:{expected_suffix}"
+
+    def test_tag_length_exceeds_limit_raises_error(self) -> None:
+        """Test that a tag longer than 128 characters raises a ValueError."""
+        # Create an instance that will generate a very long tag
+        very_long_repo = "https://github.com/very-long-organization-name/extremely-long-repository-name-that-goes-on-and-on.git"
+        very_long_commit = "a" * 40  # 40-character commit hash
+
+        instance = BenchmarkInstance.model_validate(
+            {
+                "instance_id": "test-instance-with-very-long-name",
+                "repo": very_long_repo,
+                "base_commit": very_long_commit,
+                "source_angular_version": "15.0.0",
+                "target_angular_version": "16.1.0",
+                "target_node_version": "18.13.0",
+            }
+        )
+
+        with pytest.raises(ValueError, match="Generated image tag is too long"):
+            _get_instance_image_tag(instance)
