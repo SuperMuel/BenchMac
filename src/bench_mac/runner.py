@@ -1,20 +1,23 @@
 import os
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+
+from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluator import evaluate_submission
 from bench_mac.models import (
-    BenchmarkInstance,
     EvaluationFailure,
     EvaluationSuccess,
+    EvaluationTask,
     RunOutcome,
-    Submission,
 )
 
 
 def run_single_evaluation_task(
-    instance: BenchmarkInstance, submission: Submission
+    task: EvaluationTask,
+    log_dir: Path,
 ) -> RunOutcome:
     """
     A top-level function designed to be run in a separate process.
@@ -22,16 +25,30 @@ def run_single_evaluation_task(
     It initializes its own DockerManager and calls the core evaluation logic,
     wrapping the result in a RunOutcome object to handle success or failure.
     """
+    instance_log_path = log_dir / "instances" / f"{task.instance.instance_id}.log"
+
+    handler_id = logger.add(instance_log_path, level="DEBUG", serialize=True)
+    instance_logger = logger.bind(instance_id=task.instance.instance_id)
+
     try:
         docker_manager = DockerManager(quiet_init=True)
-        result = evaluate_submission(instance, submission, docker_manager)
+        result = evaluate_submission(
+            task.instance,
+            task.submission,
+            docker_manager,
+            logger=instance_logger,
+        )
         return EvaluationSuccess(result=result)
     except Exception as e:
         # Catch any unexpected crash in the worker process
+        instance_logger.exception("Worker process for instance crashed unexpectedly.")
         return EvaluationFailure(
-            instance_id=instance.instance_id,
-            error=f"Worker process crashed: {e}",
+            instance_id=task.instance.instance_id,
+            error=f"Worker process crashed ({e.__class__.__name__}: {e})\n"
+            f"See instance log for details in {instance_log_path}",
         )
+    finally:
+        logger.remove(handler_id)
 
 
 class BenchmarkRunner:
@@ -42,11 +59,12 @@ class BenchmarkRunner:
         Initializes the runner with a specific number of parallel workers.
         """
         self.workers = workers or os.cpu_count() or 1
-        print(f"BenchmarkRunner initialized with {self.workers} worker(s).")
+        logger.info(f"BenchmarkRunner initialized with {self.workers} worker(s).")
 
     def run(
         self,
-        tasks: Sequence[tuple[BenchmarkInstance, Submission]],
+        tasks: Sequence[EvaluationTask],
+        log_dir: Path,
         on_result: Callable[[RunOutcome], None],
         on_progress: Callable[[int, int], None] | None = None,
     ) -> None:
@@ -63,10 +81,10 @@ class BenchmarkRunner:
         task_list = list(tasks)
         total_tasks = len(task_list)
         if total_tasks == 0:
-            print("No tasks to evaluate. Exiting.")
+            logger.info("No tasks to evaluate. Exiting.")
             return
 
-        print(f"Starting evaluation of {total_tasks} tasks...")
+        logger.info(f"Starting evaluation of {total_tasks} tasks...")
 
         # Fail if the Docker daemon is not running.
         DockerManager.get_client(quiet=False)
@@ -74,8 +92,12 @@ class BenchmarkRunner:
         completed_count = 0
         with ProcessPoolExecutor(max_workers=self.workers) as executor:
             futures = {
-                executor.submit(run_single_evaluation_task, instance, submission)
-                for instance, submission in task_list
+                executor.submit(
+                    run_single_evaluation_task,
+                    task,
+                    log_dir,
+                )
+                for task in task_list
             }
 
             for future in as_completed(futures):

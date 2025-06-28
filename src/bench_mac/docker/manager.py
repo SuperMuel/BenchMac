@@ -16,6 +16,7 @@ from docker import DockerClient
 from docker.errors import BuildError, DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 from docker.models.images import Image
+from loguru import logger
 
 from bench_mac.config import settings
 
@@ -47,16 +48,18 @@ class DockerManager:
         """
         try:
             if not quiet:
-                print("Attempting to connect to Docker daemon...")
+                logger.info("Attempting to connect to Docker daemon...")
 
             if settings.docker_host:
                 if not quiet:
-                    print(f"  > Using configured host: {settings.docker_host}")
+                    logger.info(f"  > Using configured host: {settings.docker_host}")
                 client = docker.DockerClient(base_url=settings.docker_host)
             else:
                 if not quiet:
-                    print("  > No host configured, using auto-detection (from_env).")
-                client = docker.from_env()
+                    logger.info(
+                        "  > No host configured, using auto-detection (from_env)."
+                    )
+                client = docker.from_env()  # type: ignore[reportUnknownMemberType]
 
             # A low-timeout ping is a fast way to check for a running daemon
             if not client.ping():  # type: ignore[reportUnknownMemberType]
@@ -65,7 +68,7 @@ class DockerManager:
                 )
 
             if not quiet:
-                print("✅ Docker client initialized successfully.")
+                logger.info("✅ Docker client initialized successfully.")
 
             return client
 
@@ -113,7 +116,7 @@ class DockerManager:
         -------
         The built Docker Image object.
         """
-        print(f"Building Docker image with tag: {tag}...")
+        logger.info(f"Building Docker image with tag: {tag}...")
         try:
             # docker-py needs a file context, so we create a temporary one.
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -128,16 +131,17 @@ class DockerManager:
                 )
 
                 # Stream and print build logs for user feedback
+                # TODO: improve this
                 for chunk in build_log_stream:
                     if isinstance(chunk, dict) and "stream" in chunk:
                         line = chunk["stream"]
                         if isinstance(line, str) and line.strip():
-                            print(f"  | {line.strip()}")
+                            logger.debug(f"  | {line.strip()}")
 
-            print(f"✅ Successfully built image: {tag}")
+            logger.debug(f"✅ Successfully built image: {tag}")
             return image
         except BuildError as e:
-            print(f"❌ Docker build failed for tag {tag}: {e}")
+            logger.error(f"❌ Docker build failed for tag {tag}: {e}")
             raise
 
     def remove_image(self, tag: str) -> None:
@@ -150,14 +154,14 @@ class DockerManager:
             The tag of the image to remove.
         """
         if not self.image_exists(tag):
-            print(f"Image {tag} does not exist, no need to remove.")
+            logger.debug(f"Image {tag} does not exist, no need to remove.")
             return
         try:
-            print(f"Removing image: {tag}")
+            logger.debug(f"Removing image: {tag}")
             self._client.images.remove(tag, force=True)  # type: ignore[reportUnknownMemberType]
-            print(f"✅ Successfully removed image: {tag}")
+            logger.debug(f"✅ Successfully removed image: {tag}")
         except DockerException as e:
-            print(f"❌ Failed to remove image {tag}: {e}")
+            logger.error(f"❌ Failed to remove image {tag}: {e}")
             raise
 
     def run_container(self, image_tag: str, auto_remove: bool = False) -> Container:
@@ -176,7 +180,7 @@ class DockerManager:
         -------
         The running Docker Container object.
         """
-        print(f"Running container from image: {image_tag}...")
+        logger.info(f"Running container from image: {image_tag}...")
         try:
             container = self._client.containers.run(
                 image_tag,
@@ -185,10 +189,10 @@ class DockerManager:
                 detach=True,
                 auto_remove=auto_remove,
             )
-            print(f"✅ Container {container.short_id} is running.")
+            logger.debug(f"✅ Container {container.short_id} is running.")
             return container
         except DockerException as e:
-            print(f"❌ Failed to run container from image {image_tag}: {e}")
+            logger.error(f"❌ Failed to run container from image {image_tag}: {e}")
             raise
 
     def execute_in_container(
@@ -208,10 +212,10 @@ class DockerManager:
         -------
         A tuple containing (exit_code, stdout, stderr).
         """
-        print(f"Executing in {container.short_id}: {command}")
+        logger.debug(f"Executing in {container.short_id}: {command}")
         exit_code, output = container.exec_run(command, demux=True)  # type: ignore[reportUnknownMemberType]
 
-        print(f"  > Exit code: {exit_code}")
+        logger.debug(f"  > Exit code: {exit_code}")
 
         # When demux=True, output is a tuple of (stdout, stderr)
         # Each can be bytes or None
@@ -235,7 +239,7 @@ class DockerManager:
         dest_path
             The absolute path inside the container where the content will be placed.
         """
-        print(f"Copying {src_path} to {container.short_id}:{dest_path}")
+        logger.debug(f"Copying {src_path} to {container.short_id}:{dest_path}")
 
         # The docker-py `put_archive` method requires a tarball stream.
         # We create one in memory.
@@ -254,9 +258,9 @@ class DockerManager:
                 raise DockerException(
                     f"Failed to copy {src_path} to container {container.short_id}:{dest_path}"  # noqa: E501
                 )
-            print("✅ Copy successful.")
+            logger.debug("✅ Copy successful.")
         except Exception as e:
-            print(f"❌ Failed to copy to container: {e}")
+            logger.error(f"❌ Failed to copy to container: {e}")
             raise
 
     def cleanup_container(self, container: Container) -> None:
@@ -272,13 +276,13 @@ class DockerManager:
             # Reload the container's state from the daemon to get the latest status
             container.reload()
             if container.status == "running":
-                print(f"Stopping container: {container.short_id}")
+                logger.debug(f"Stopping container: {container.short_id}")
                 container.stop()
-            print(f"Removing container: {container.short_id}")
+            logger.debug(f"Removing container: {container.short_id}")
             container.remove()
-            print(f"✅ Container {container.short_id} cleaned up.")
+            logger.debug(f"✅ Container {container.short_id} cleaned up.")
         except NotFound:
             # The container was already removed (e.g., with auto_remove=True)
-            print(f"Container {container.short_id} already removed.")
+            logger.debug(f"Container {container.short_id} already removed.")
         except DockerException as e:
-            print(f"⚠️  Could not clean up container {container.short_id}: {e}")
+            logger.error(f"⚠️  Could not clean up container {container.short_id}: {e}")

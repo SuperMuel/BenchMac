@@ -1,5 +1,9 @@
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
@@ -28,6 +32,8 @@ def evaluate_submission(
     instance: BenchmarkInstance,
     submission: Submission,
     docker_manager: DockerManager,
+    *,
+    logger: "Logger",
 ) -> EvaluationResult:
     """
     Orchestrates the end-to-end evaluation for a single submission.
@@ -64,11 +70,11 @@ def evaluate_submission(
 
         try:
             # 1. Prepare Environment
-            print(f"Preparing environment for instance: {instance.instance_id}")
+            logger.info(f"Preparing environment for instance: {instance.instance_id}")
             instance_image_tag = prepare_environment(instance, docker_manager)
 
             # 2. Run Container
-            print(f"Starting container from image: {instance_image_tag}")
+            logger.info(f"Starting container from image: {instance_image_tag}")
             container = docker_manager.run_container(instance_image_tag)
 
             # 3. Apply Patch
@@ -80,7 +86,7 @@ def evaluate_submission(
             # Use `git apply --check` first for a non-destructive failure check
             # but for simplicity in the MVP, we'll apply directly.
             patch_command = f"git apply -p0 {container_patch_path}"
-            print(f"Executing patch command: {patch_command}")
+            logger.info(f"Executing patch command: {patch_command}")
             exit_code, stdout, stderr = docker_manager.execute_in_container(
                 container, patch_command
             )
@@ -89,20 +95,20 @@ def evaluate_submission(
             logs["patch_apply"] = f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
 
             if exit_code != 0:
-                print("❌ Patch application failed. Halting evaluation.")
+                logger.error("❌ Patch application failed. Halting evaluation.")
                 metrics_data["patch_application_success"] = False
                 return _create_evaluation_result(
                     instance.instance_id, metrics_data, logs
                 )
 
             metrics_data["patch_application_success"] = True
-            print("✅ Patch applied successfully.")
+            logger.info("✅ Patch applied successfully.")
 
             # --- (Future steps will be added here) ---
             # For now, we stop here and return a successful patch application result.
 
         except Exception as e:
-            print(f"An unexpected error occurred during evaluation: {e}")
+            logger.error(f"An unexpected error occurred during evaluation: {e}")
             logs["harness_error"] = str(e)
             # Ensure metrics reflect a total failure in case of a crash
             metrics_data["patch_application_success"] = False
@@ -110,7 +116,7 @@ def evaluate_submission(
         finally:
             # 4. Cleanup
             if container:
-                print(f"Cleaning up container {container.short_id}...")
+                logger.info(f"Cleaning up container {container.short_id}...")
                 docker_manager.cleanup_container(container)
 
     return _create_evaluation_result(instance.instance_id, metrics_data, logs)

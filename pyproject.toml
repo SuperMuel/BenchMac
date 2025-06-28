@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "cyclopts>=3.20.0",
     "docker>=7.1.0",
+    "loguru>=0.7.3",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "python-slugify>=8.0.4",
@@ -109,8 +110,8 @@ select = [
     "PTH",    # flake8-use-pathlib
     "ANN001", # Checks that function arguments have type annotations.
     "ANN201", # Missing return type annotation for public function {name}
-    "DTZ",
-
+    "DTZ",    # flake8-datetimez: checks for naive datetime usage
+    "T201",   # Report print statements
 ]
 
 ignore = []
@@ -130,9 +131,13 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 
 "tests/*" = [
-    "S101",   # Allow `assert` statements in tests.
-    "ANN",    # Relax annotation requirements for test functions.
-    "RUF012",
+    "S101",   # Allow `assert` statements
+    "ANN",    # Relax annotation requirements
+    "RUF012", # Allow mutable class attributes 
+    "T201",   # Allow print statements in tests
+]
+"scripts/*" = [
+    "T201", # Allow print statements in scripts
 ]
 
 

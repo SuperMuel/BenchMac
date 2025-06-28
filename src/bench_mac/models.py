@@ -198,6 +198,13 @@ class MetricsReport(BaseModel):
     # )
 
 
+class EvaluationTask(BaseModel):
+    """A task to evaluate a single submission."""
+
+    instance: BenchmarkInstance
+    submission: Submission
+
+
 class EvaluationResult(BaseModel):
     """The final, comprehensive result of evaluating a single submission."""
 

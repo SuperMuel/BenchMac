@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from bench_mac.models import (
@@ -5,6 +7,7 @@ from bench_mac.models import (
     EvaluationFailure,
     EvaluationResult,
     EvaluationSuccess,
+    EvaluationTask,
     MetricsReport,
     RunOutcome,
     Submission,
@@ -15,7 +18,7 @@ from bench_mac.runner import BenchmarkRunner
 
 
 @pytest.fixture
-def sample_tasks() -> list[tuple[BenchmarkInstance, Submission]]:
+def sample_tasks() -> list[EvaluationTask]:
     """Provides a simple list of two tasks for testing."""
     instance1 = BenchmarkInstance.model_validate(
         {
@@ -41,21 +44,24 @@ def sample_tasks() -> list[tuple[BenchmarkInstance, Submission]]:
     )
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")
 
-    return [(instance1, submission1), (instance2, submission2)]
+    return [
+        EvaluationTask(instance=instance1, submission=submission1),
+        EvaluationTask(instance=instance2, submission=submission2),
+    ]
 
 
 def fake_run_single_evaluation_task(
-    instance: BenchmarkInstance, submission: Submission
+    task: EvaluationTask,
 ) -> RunOutcome:
     """
     A fake worker function that replaces the real one during tests.
     It returns predictable results without any I/O or Docker calls.
     """
-    if "success" in instance.instance_id:
+    if "success" in task.instance.instance_id:
         # Simulate a successful evaluation
         return EvaluationSuccess(
             result=EvaluationResult(
-                instance_id=instance.instance_id,
+                instance_id=task.instance.instance_id,
                 metrics=MetricsReport(
                     patch_application_success=True,
                 ),
@@ -65,7 +71,7 @@ def fake_run_single_evaluation_task(
     else:
         # Simulate a harness-level failure
         return EvaluationFailure(
-            instance_id=instance.instance_id,
+            instance_id=task.instance.instance_id,
             error="Simulated worker crash",
         )
 
@@ -78,7 +84,7 @@ class TestBenchmarkRunner:
     def test_run_orchestration_and_callbacks(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        sample_tasks: list[tuple[BenchmarkInstance, Submission]],
+        sample_tasks: list[EvaluationTask],
     ):
         """
         Verify that the runner correctly executes tasks in parallel and
@@ -110,6 +116,7 @@ class TestBenchmarkRunner:
         # --- ACT ---
         runner.run(
             tasks=sample_tasks,
+            log_dir=Path("test_logs"),
             on_result=on_result_callback,
             on_progress=on_progress_callback,
         )

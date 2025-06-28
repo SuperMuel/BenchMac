@@ -1,5 +1,6 @@
 import pytest
 from docker.errors import DockerException
+from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluator import evaluate_submission
@@ -83,7 +84,12 @@ class TestEvaluateSubmission:
         Verify that a known-good patch is evaluated as successful.
         """
         # --- ACT ---
-        result = evaluate_submission(test_instance, silver_submission, docker_manager)
+        result = evaluate_submission(
+            test_instance,
+            silver_submission,
+            docker_manager,
+            logger=logger,
+        )
 
         # --- ASSERT ---
         assert result is not None
@@ -111,7 +117,12 @@ class TestEvaluateSubmission:
         )
 
         # --- ACT ---
-        result = evaluate_submission(test_instance, bad_submission, docker_manager)
+        result = evaluate_submission(
+            test_instance,
+            bad_submission,
+            docker_manager,
+            logger=logger,
+        )
 
         # --- ASSERT ---
         assert result is not None

@@ -12,6 +12,7 @@ by setting environment variables (e.g., `BENCHMAC_LOG_LEVEL=DEBUG`).
 from pathlib import Path
 from typing import Literal
 
+from loguru import logger
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     """
 
     # --- General Settings ---
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
+    cli_default_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO",
         description="The logging level for the application.",
     )
@@ -49,14 +50,14 @@ class Settings(BaseSettings):
         return self.data_dir / "silver_patches"
 
     @property
-    def cache_dir(self) -> Path:
-        """Path to the root directory for temporary and cached files."""
-        return self.project_root / ".benchmac_cache"
+    def benchmac_dir(self) -> Path:
+        """Path to the directory containing the BenchMAC repository."""
+        return self.project_root / ".benchmac"
 
     @property
-    def logs_dir(self) -> Path:
-        """Path to the directory where evaluation logs are stored."""
-        return self.cache_dir / "logs"
+    def cache_dir(self) -> Path:
+        """Path to the root directory for temporary and cached files."""
+        return self.benchmac_dir / "cache"
 
     @property
     def silver_patches_repos_dir(self) -> Path:
@@ -86,13 +87,12 @@ class Settings(BaseSettings):
 
     def initialize_directories(self) -> None:
         """Creates all necessary cache and data directories."""
-        print("Initializing BenchMAC directories...")
+        logger.info("Initializing BenchMAC directories...")
         settings.data_dir.mkdir(exist_ok=True)
         settings.silver_patches_dir.mkdir(exist_ok=True)
         settings.cache_dir.mkdir(exist_ok=True)
-        settings.logs_dir.mkdir(exist_ok=True)
         settings.silver_patches_repos_dir.mkdir(exist_ok=True)
-        print("✅ Directories initialized.")
+        logger.info("✅ Directories initialized.")
 
 
 # Create a single, importable instance of the settings

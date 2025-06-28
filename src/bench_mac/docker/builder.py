@@ -10,6 +10,7 @@ This module orchestrates the building of three layers of Docker images:
 import re
 from urllib.parse import urlparse
 
+from loguru import logger
 from slugify import slugify
 
 from bench_mac.config import settings
@@ -237,17 +238,19 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     -------
     The tag of the final, ready-to-use Instance Image.
     """
-    print(f"\n--- Preparing environment for instance: {instance.instance_id} ---")
+    logger.debug(
+        f"\n--- Preparing environment for instance: {instance.instance_id} ---"
+    )
 
     # --- Layer 1: Base Image ---
     base_image_tag = settings.docker_base_image_name
     if not manager.image_exists(base_image_tag):
-        print(f"Base image '{base_image_tag}' not found. Building...")
+        logger.info(f"Base image '{base_image_tag}' not found. Building...")
         manager.build_image(
             dockerfile_content=BASE_DOCKERFILE_CONTENT, tag=base_image_tag
         )
     else:
-        print(f"Base image '{base_image_tag}' already exists. Skipping build.")
+        logger.debug(f"Base image '{base_image_tag}' already exists. Skipping build.")
 
     # --- Layer 2: Environment Image ---
     # The target Angular version determines the CLI version needed.
@@ -258,18 +261,20 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     )
 
     if not manager.image_exists(env_image_tag):
-        print(f"Environment image '{env_image_tag}' not found. Building...")
+        logger.info(f"Environment image '{env_image_tag}' not found. Building...")
         dockerfile_content = _generate_environment_dockerfile_content(
             base_image_tag, instance.target_node_version, target_cli_major_version
         )
         manager.build_image(dockerfile_content=dockerfile_content, tag=env_image_tag)
     else:
-        print(f"Environment image '{env_image_tag}' already exists. Skipping build.")
+        logger.debug(
+            f"Environment image '{env_image_tag}' already exists. Skipping build."
+        )
 
     # --- Layer 3: Instance Image ---
     instance_image_tag = _get_instance_image_tag(instance)
     if not manager.image_exists(instance_image_tag):
-        print(f"Instance image '{instance_image_tag}' not found. Building...")
+        logger.info(f"Instance image '{instance_image_tag}' not found. Building...")
         dockerfile_content = _generate_instance_dockerfile_content(
             env_image_tag, instance.repo, instance.base_commit
         )
@@ -277,7 +282,9 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
             dockerfile_content=dockerfile_content, tag=instance_image_tag
         )
     else:
-        print(f"Instance image '{instance_image_tag}' already exists. Skipping build.")
+        logger.debug(
+            f"Instance image '{instance_image_tag}' already exists. Skipping build."
+        )
 
-    print(f"✅ Environment ready. Final image tag: {instance_image_tag}")
+    logger.info(f"✅ Environment ready. Final image tag: {instance_image_tag}")
     return instance_image_tag
