@@ -1,5 +1,5 @@
 import re
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
@@ -214,3 +214,23 @@ class EvaluationResult(BaseModel):
         default_factory=dict,
         description="A dictionary containing raw logs from evaluation steps (e.g., 'build', 'test').",  # noqa: E501
     )
+
+
+class EvaluationSuccess(BaseModel):
+    """Represents a successfully completed evaluation run for an instance."""
+
+    status: Literal["success"] = "success"
+    result: EvaluationResult
+
+
+class EvaluationFailure(BaseModel):
+    """Represents a harness-level failure during an evaluation run."""
+
+    status: Literal["failure"] = "failure"
+    instance_id: str
+    error: str
+
+
+RunOutcome = EvaluationSuccess | EvaluationFailure
+# TODO: Rename EvaluationSuccess to EvaluationRunSuccess and EvaluationFailure
+# to EvaluationRunFailure to distinguish an EvaluationRun from an Evaluation
