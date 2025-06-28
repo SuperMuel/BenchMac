@@ -4,8 +4,10 @@ import sys
 from collections.abc import Generator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated
 
 import cyclopts
+from cyclopts import Parameter
 from rich.progress import (
     BarColumn,
     Progress,
@@ -139,12 +141,17 @@ def evaluate(
     *,
     output_file: Path | None = None,
     instances_file: Path | None = None,
-    instance_id: list[str] | None = None,
+    instance_id: Annotated[
+        list[str] | None,
+        Parameter(
+            help="Filter submissions by instance ID. Can be used multiple times.",
+            negative=(),
+        ),
+    ] = None,
     workers: int = os.cpu_count() or 1,
 ) -> None:
     """
     Run the BenchMAC evaluation on a set of submissions.
-    ...
     """
     if not submissions_file.exists():
         print(f"❌ Error: Submissions file not found at '{submissions_file}'")
