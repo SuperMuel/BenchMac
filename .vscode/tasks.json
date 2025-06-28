@@ -26,6 +26,23 @@
                 "$python"
             ],
             "detail": "Run unit and integration tests with coverage reporting using uv and pytest"
+        },
+        {
+            "label": "Upload Coverage",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source .env && uvx --from codecov-cli codecov upload-process --file coverage.xml"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": []
         }
     ]
 }
