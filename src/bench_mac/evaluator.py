@@ -70,11 +70,11 @@ def evaluate_submission(
 
         try:
             # 1. Prepare Environment
-            logger.info(f"Preparing environment for instance: {instance.instance_id}")
+            logger.debug(f"Preparing environment for instance: {instance.instance_id}")
             instance_image_tag = prepare_environment(instance, docker_manager)
 
             # 2. Run Container
-            logger.info(f"Starting container from image: {instance_image_tag}")
+            logger.debug(f"Starting container from image: {instance_image_tag}")
             container = docker_manager.run_container(instance_image_tag)
 
             # 3. Apply Patch
@@ -86,7 +86,7 @@ def evaluate_submission(
             # Use `git apply --check` first for a non-destructive failure check
             # but for simplicity in the MVP, we'll apply directly.
             patch_command = f"git apply -p0 {container_patch_path}"
-            logger.info(f"Executing patch command: {patch_command}")
+            logger.debug(f"Executing patch command: {patch_command}")
             exit_code, stdout, stderr = docker_manager.execute_in_container(
                 container, patch_command
             )
@@ -102,13 +102,15 @@ def evaluate_submission(
                 )
 
             metrics_data["patch_application_success"] = True
-            logger.info("✅ Patch applied successfully.")
+            logger.success("✅ Patch applied successfully.")
 
             # --- (Future steps will be added here) ---
             # For now, we stop here and return a successful patch application result.
 
         except Exception as e:
-            logger.error(f"An unexpected error occurred during evaluation: {e}")
+            logger.exception(
+                f"An unexpected error occurred during evaluation: {e.__class__.__name__}: {e}"  # noqa: E501
+            )
             logs["harness_error"] = str(e)
             # Ensure metrics reflect a total failure in case of a crash
             metrics_data["patch_application_success"] = False
@@ -116,7 +118,7 @@ def evaluate_submission(
         finally:
             # 4. Cleanup
             if container:
-                logger.info(f"Cleaning up container {container.short_id}...")
+                logger.debug(f"Cleaning up container {container.short_id}...")
                 docker_manager.cleanup_container(container)
 
     return _create_evaluation_result(instance.instance_id, metrics_data, logs)

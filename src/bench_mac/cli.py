@@ -58,7 +58,6 @@ def _load_instances(instances_path: Path) -> dict[str, BenchmarkInstance]:
 def _prepare_tasks(
     submissions_path: Path,
     instances_path: Path,
-    logs_dir: Path,
     filter_ids: list[str] | None = None,
 ) -> Generator[EvaluationTask, None, None]:
     """Matches submissions to instances and yields tasks to be run."""
@@ -66,7 +65,7 @@ def _prepare_tasks(
     instances_map = _load_instances(instances_path)
     logger.info(f"Loaded {len(instances_map)} instances.")
 
-    logger.info("Loading and matching submissions...")
+    logger.debug("Loading and matching submissions...")
     for sub in _load_submissions(submissions_path):
         if filter_ids and sub.instance_id not in filter_ids:
             continue
@@ -214,7 +213,6 @@ def evaluate(
         _prepare_tasks(
             submissions_path=submissions_file,
             instances_path=instances_file or settings.instances_file,
-            logs_dir=run_dir / "logs",
             filter_ids=instance_id,
         )
     )
@@ -235,7 +233,9 @@ def evaluate(
 
         logger.info("✅ Evaluation complete.")
     except Exception as e:
-        logger.error(f"❌ An unexpected error occurred during the run: {e}")
+        logger.exception(
+            f"❌ An unexpected error occurred during the run: {e.__class__.__name__}: {e}"  # noqa: E501
+        )
 
     logger.complete()
 

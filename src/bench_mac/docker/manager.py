@@ -141,7 +141,9 @@ class DockerManager:
             logger.debug(f"✅ Successfully built image: {tag}")
             return image
         except BuildError as e:
-            logger.error(f"❌ Docker build failed for tag {tag}: {e}")
+            logger.exception(
+                f"❌ Docker build failed for tag {tag} ({e.__class__.__name__}: {e})"
+            )
             raise
 
     def remove_image(self, tag: str) -> None:
@@ -192,7 +194,9 @@ class DockerManager:
             logger.debug(f"✅ Container {container.short_id} is running.")
             return container
         except DockerException as e:
-            logger.error(f"❌ Failed to run container from image {image_tag}: {e}")
+            logger.exception(
+                f"❌ Failed to run container from image {image_tag} ({e.__class__.__name__}: {e})"  # noqa: E501
+            )
             raise
 
     def execute_in_container(

@@ -245,7 +245,7 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     # --- Layer 1: Base Image ---
     base_image_tag = settings.docker_base_image_name
     if not manager.image_exists(base_image_tag):
-        logger.info(f"Base image '{base_image_tag}' not found. Building...")
+        logger.debug(f"Base image '{base_image_tag}' not found. Building...")
         manager.build_image(
             dockerfile_content=BASE_DOCKERFILE_CONTENT, tag=base_image_tag
         )
@@ -261,7 +261,7 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     )
 
     if not manager.image_exists(env_image_tag):
-        logger.info(f"Environment image '{env_image_tag}' not found. Building...")
+        logger.debug(f"Environment image '{env_image_tag}' not found. Building...")
         dockerfile_content = _generate_environment_dockerfile_content(
             base_image_tag, instance.target_node_version, target_cli_major_version
         )
@@ -274,7 +274,7 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     # --- Layer 3: Instance Image ---
     instance_image_tag = _get_instance_image_tag(instance)
     if not manager.image_exists(instance_image_tag):
-        logger.info(f"Instance image '{instance_image_tag}' not found. Building...")
+        logger.debug(f"Instance image '{instance_image_tag}' not found. Building...")
         dockerfile_content = _generate_instance_dockerfile_content(
             env_image_tag, instance.repo, instance.base_commit
         )
@@ -286,5 +286,5 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
             f"Instance image '{instance_image_tag}' already exists. Skipping build."
         )
 
-    logger.info(f"✅ Environment ready. Final image tag: {instance_image_tag}")
+    logger.success(f"✅ Environment ready. Final image tag: {instance_image_tag}")
     return instance_image_tag

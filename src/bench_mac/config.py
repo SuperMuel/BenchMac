@@ -97,6 +97,7 @@ class Settings(BaseSettings):
         settings.silver_patches_dir.mkdir(exist_ok=True)
         settings.cache_dir.mkdir(exist_ok=True)
         settings.silver_patches_repos_dir.mkdir(exist_ok=True)
+        settings.results_dir.mkdir(exist_ok=True)
         logger.info("✅ Directories initialized.")
 
 
