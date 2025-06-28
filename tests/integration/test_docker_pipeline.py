@@ -32,7 +32,7 @@ SIMPLE_DOCKERFILE = 'FROM alpine:latest\nCMD ["echo", "container is running"]'
 
 
 @pytest.fixture(scope="module")
-def docker_manager() -> DockerManager | None:
+def docker_manager() -> DockerManager:
     """
     Provides a DockerManager instance for the test module.
 
@@ -43,7 +43,6 @@ def docker_manager() -> DockerManager | None:
         return manager
     except DockerException:
         pytest.skip("Docker daemon is not running. Skipping integration tests.")
-        return None
 
 
 @pytest.fixture
