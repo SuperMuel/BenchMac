@@ -52,6 +52,7 @@ def sample_tasks() -> list[EvaluationTask]:
 
 def fake_run_single_evaluation_task(
     task: EvaluationTask,
+    log_dir: Path,
 ) -> RunOutcome:
     """
     A fake worker function that replaces the real one during tests.
