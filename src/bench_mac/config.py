@@ -60,6 +60,11 @@ class Settings(BaseSettings):
         return self.benchmac_dir / "cache"
 
     @property
+    def results_dir(self) -> Path:
+        """Path to the directory where evaluation results are stored."""
+        return self.benchmac_dir / "results"
+
+    @property
     def silver_patches_repos_dir(self) -> Path:
         """Path to the directory where repositories are temporarily cloned for silver patch generation."""  # noqa: E501
         return self.cache_dir / "silver_patches_repos"

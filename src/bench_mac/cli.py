@@ -134,10 +134,11 @@ def _run_non_interactive(
         def on_result(outcome: RunOutcome):
             # Write to file
             f.write(outcome.model_dump_json() + "\n")
+
             # Also print a summary to the console log
             if outcome.status == "success":
                 logger.info(f"✅ SUCCESS: {outcome.result.instance_id}")
-            else:
+            elif outcome.status == "failure":
                 logger.error(f"❌ FAILURE: {outcome.instance_id} - {outcome.error}")
 
         runner.run(
@@ -171,9 +172,7 @@ def evaluate(
     """
     run_id = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
 
-    run_dir = (
-        Path("results") / run_id
-    )  # TODO: make this configurable via config or cli arg
+    run_dir = settings.results_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = run_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
