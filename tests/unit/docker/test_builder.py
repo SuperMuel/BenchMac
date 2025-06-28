@@ -3,6 +3,7 @@ import pytest
 from bench_mac.docker.builder import (
     _get_environment_image_tag,
     _get_instance_image_tag,
+    _normalize_repo_url,
 )
 from bench_mac.models import BenchmarkInstance
 
@@ -144,3 +145,82 @@ class TestGetInstanceImageTag:
 
         with pytest.raises(ValueError, match="Generated image tag is too long"):
             _get_instance_image_tag(instance)
+
+
+@pytest.mark.unit
+class TestNormalizeRepoUrl:
+    """Tests for the _normalize_repo_url function."""
+
+    def test_https_url_returned_as_is(self) -> None:
+        """Test that HTTPS URLs are returned unchanged."""
+        url = "https://github.com/angular/angular-cli.git"
+        result = _normalize_repo_url(url)
+        assert result == url
+
+    def test_http_url_returned_as_is(self) -> None:
+        """Test that HTTP URLs are returned unchanged."""
+        url = "http://github.com/user/repo.git"
+        result = _normalize_repo_url(url)
+        assert result == url
+
+    def test_git_ssh_url_returned_as_is(self) -> None:
+        """Test that git SSH URLs are returned unchanged."""
+        url = "git@github.com:user/repo.git"
+        result = _normalize_repo_url(url)
+        assert result == url
+
+    def test_git_protocol_url_returned_as_is(self) -> None:
+        """Test that git:// URLs are returned unchanged."""
+        url = "git://github.com/user/repo.git"
+        result = _normalize_repo_url(url)
+        assert result == url
+
+    def test_owner_repo_format_converted_to_github_url(self) -> None:
+        """Test that owner/repo format is converted to GitHub HTTPS URL."""
+        repo_ref = "SuperMuel/angular2-hn"
+        result = _normalize_repo_url(repo_ref)
+        assert result == "https://github.com/SuperMuel/angular2-hn.git"
+
+    def test_owner_repo_with_underscores_and_dashes(self) -> None:
+        """Test owner/repo format with underscores and dashes in names."""
+        repo_ref = "my-org_name/my-repo_name"
+        result = _normalize_repo_url(repo_ref)
+        assert result == "https://github.com/my-org_name/my-repo_name.git"
+
+    def test_owner_repo_with_dots(self) -> None:
+        """Test owner/repo format with dots in names."""
+        repo_ref = "org.name/repo.name"
+        result = _normalize_repo_url(repo_ref)
+        assert result == "https://github.com/org.name/repo.name.git"
+
+    def test_empty_string_raises_error(self) -> None:
+        """Test that empty string raises ValueError."""
+        with pytest.raises(ValueError, match="Repository URL cannot be empty"):
+            _normalize_repo_url("")
+
+    def test_whitespace_only_raises_error(self) -> None:
+        """Test that whitespace-only string raises ValueError."""
+        with pytest.raises(ValueError, match="Repository URL cannot be empty"):
+            _normalize_repo_url("   ")
+
+    def test_invalid_format_raises_error(self) -> None:
+        """Test that invalid format raises ValueError."""
+        with pytest.raises(
+            ValueError,
+            match="Invalid repository reference.*Expected a git-clonable URL",
+        ):
+            _normalize_repo_url("not/a/valid/format")
+
+    def test_single_word_raises_error(self) -> None:
+        """Test that single word (no slash) raises ValueError."""
+        with pytest.raises(
+            ValueError,
+            match="Invalid repository reference.*Expected a git-clonable URL",
+        ):
+            _normalize_repo_url("justarepo")
+
+    def test_whitespace_trimmed(self) -> None:
+        """Test that whitespace is trimmed from input."""
+        repo_ref = "  user/repo  "
+        result = _normalize_repo_url(repo_ref)
+        assert result == "https://github.com/user/repo.git"

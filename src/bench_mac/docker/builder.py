@@ -7,6 +7,7 @@ This module orchestrates the building of three layers of Docker images:
 3.  Instance Image: Built on Environment, clones a specific project at a specific commit.
 """  # noqa: E501
 
+import re
 from urllib.parse import urlparse
 
 from slugify import slugify
@@ -14,6 +15,70 @@ from slugify import slugify
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import BenchmarkInstance
+
+BASE_DOCKERFILE_CONTENT = """
+# Base image for all BenchMAC environments.
+# It provides a stable OS and universal, version-agnostic tools.
+# We use a specific Ubuntu LTS version for long-term reproducibility.
+FROM ubuntu:22.04
+
+# Prevent apt-get and other tools from hanging by waiting for user input.
+# This is essential for non-interactive builds in Docker.
+ENV DEBIAN_FRONTEND=noninteractive
+
+
+# Install essential system dependencies in a single layer to optimize caching.
+#
+# - build-essential: Provides C/C++ compilers (gcc, g++) needed by `node-gyp`
+#   to build native Node.js addons for performance-critical npm packages.
+# - ca-certificates: Provides SSL certificates for tools like curl to make
+#   secure HTTPS requests. A critical fix to prevent download failures.
+# - curl: Used to download the nvm installation script.
+# - git: Required to clone the benchmark project repositories.
+# - python3 & python-is-python3: `node-gyp` requires a Python executable to
+#   orchestrate its build scripts. Installing both ensures maximum compatibility
+#   for any npm package that needs to be compiled during `npm install`.
+#
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    python3 \
+    python-is-python3 \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
+# --- NVM (Node Version Manager) Setup ---
+
+# Define a standard, system-wide location for the NVM installation.
+# This is more explicit and robust than letting it default to a user's home
+# directory (e.g., /root/.nvm), making the setup predictable.
+ENV NVM_DIR /usr/local/nvm
+
+# The nvm installer script requires its target directory to exist
+# before it will run.
+RUN mkdir -p $NVM_DIR
+
+# Download and execute the nvm installation script.
+# The script will install nvm into the directory specified by $NVM_DIR.
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+# Add nvm and a default Node version's bin directory to the system's PATH.
+# This makes `nvm`, `node`, and `npm` directly available to subsequent RUN commands
+# in this Dockerfile and, crucially, in any child images that build FROM this one.
+# Note: This NODE_VERSION is just a sensible default for the base image; it will be
+# overridden by the specific version required in the 'environment' image layer.
+ENV NODE_VERSION 18.13.0
+ENV PATH $NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
+
+# Set a default working directory for subsequent commands.
+WORKDIR /app
+
+# Provide a default command to get an interactive shell
+# if the container is run directly.
+CMD ["/bin/bash"]
+"""
 
 
 def _get_environment_image_tag(node_version: str, angular_cli_version: str) -> str:
@@ -61,6 +126,49 @@ def _get_instance_image_tag(instance: BenchmarkInstance) -> str:
     return tag
 
 
+def _normalize_repo_url(repo_url: str) -> str:
+    """
+    Converts a repository reference to a git-clonable URL.
+
+    Parameters
+    ----------
+    repo_url
+        The repository reference, which can be:
+        - A full git URL (http://, https://, git@, git://)
+        - An owner/repo format (e.g., "angular/angular-cli")
+
+    Returns
+    -------
+    A git-clonable URL string.
+
+    Raises
+    ------
+    ValueError
+        If the input is not a valid repository reference.
+    """
+    if not repo_url or not repo_url.strip():
+        raise ValueError("Repository URL cannot be empty")
+
+    repo_url = repo_url.strip()
+
+    # Check if it's already a git-clonable URL
+    valid_prefixes = ("http://", "https://", "git@", "git://")
+    if any(repo_url.startswith(prefix) for prefix in valid_prefixes):
+        return repo_url
+
+    # Check if it matches owner/repo format
+    owner_repo_pattern = re.compile(r"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$")
+    if owner_repo_pattern.match(repo_url):
+        return f"https://github.com/{repo_url}.git"
+
+    # If it doesn't match any known format, raise an error
+    raise ValueError(
+        f"Invalid repository reference: '{repo_url}'. "
+        "Expected a git-clonable URL (http://, https://, git@, git://) "
+        "or owner/repo format (e.g., 'angular/angular-cli')"
+    )
+
+
 def _generate_environment_dockerfile_content(
     base_image_tag: str, node_version: str, angular_cli_version: str
 ) -> str:
@@ -91,10 +199,8 @@ def _generate_instance_dockerfile_content(
     environment_image_tag: str, repo_url: str, base_commit: str
 ) -> str:
     """Programmatically generates the Dockerfile content for an Instance Image."""
-    # Ensure the repo URL is in a format git can clone
-    valid_prefixes = ("http://", "https://", "git@", "git://")
-    if not any(repo_url.startswith(prefix) for prefix in valid_prefixes):
-        raise ValueError(f'repo_url must be a valid "git-clonable" URL, got {repo_url}')
+    # Normalize the repo URL to ensure it's git-clonable
+    normalized_repo_url = _normalize_repo_url(repo_url)
 
     return f"""
 FROM {environment_image_tag}
@@ -104,7 +210,7 @@ WORKDIR /app/project
 # Clone the specific repository and checkout the base commit
 # Using --depth 1 can speed up clones for large repos, but we need the full
 # history to check out a specific commit.
-RUN git clone {repo_url} . && \\
+RUN git clone {normalized_repo_url} . && \\
     git checkout {base_commit}
 
 # Set the default command to open a shell in the project directory
@@ -137,15 +243,9 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     base_image_tag = settings.docker_base_image_name
     if not manager.image_exists(base_image_tag):
         print(f"Base image '{base_image_tag}' not found. Building...")
-        base_dockerfile_path = settings.project_root / "docker" / "base" / "Dockerfile"
-        try:
-            base_dockerfile_content = base_dockerfile_path.read_text(encoding="utf-8")
-            manager.build_image(
-                dockerfile_content=base_dockerfile_content, tag=base_image_tag
-            )
-        except FileNotFoundError:
-            print(f"❌ Error: Base Dockerfile not found at {base_dockerfile_path}")
-            raise
+        manager.build_image(
+            dockerfile_content=BASE_DOCKERFILE_CONTENT, tag=base_image_tag
+        )
     else:
         print(f"Base image '{base_image_tag}' already exists. Skipping build.")
 
