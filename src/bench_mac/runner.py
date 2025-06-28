@@ -23,7 +23,7 @@ def run_single_evaluation_task(
     wrapping the result in a RunOutcome object to handle success or failure.
     """
     try:
-        docker_manager = DockerManager()
+        docker_manager = DockerManager(quiet_init=True)
         result = evaluate_submission(instance, submission, docker_manager)
         return EvaluationSuccess(result=result)
     except Exception as e:
@@ -67,6 +67,9 @@ class BenchmarkRunner:
             return
 
         print(f"Starting evaluation of {total_tasks} tasks...")
+
+        # Fail if the Docker daemon is not running.
+        DockerManager.get_client(quiet=False)
 
         completed_count = 0
         with ProcessPoolExecutor(max_workers=self.workers) as executor:

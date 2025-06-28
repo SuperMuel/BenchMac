@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 import docker
+from docker import DockerClient
 from docker.errors import BuildError, DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 from docker.models.images import Image
@@ -24,9 +25,20 @@ class DockerManager:
     Manages Docker images and containers for isolated benchmark evaluations.
     """
 
-    def __init__(self) -> None:
+    @classmethod
+    def get_client(cls, quiet: bool = True) -> DockerClient:
         """
-        Initializes the Docker client and verifies connection to the daemon.
+        Tests the connection to Docker daemon and returns a Docker client.
+
+        Parameters
+        ----------
+        quiet
+            If True, suppresses debug messages.
+
+        Returns
+        -------
+        DockerClient
+            A configured Docker client instance.
 
         Raises
         ------
@@ -34,25 +46,49 @@ class DockerManager:
             If the Docker daemon is not running or cannot be reached.
         """
         try:
-            print("Attempting to connect to Docker daemon...")
+            if not quiet:
+                print("Attempting to connect to Docker daemon...")
+
             if settings.docker_host:
-                print(f"  > Using configured host: {settings.docker_host}")
-                self._client = docker.DockerClient(base_url=settings.docker_host)
+                if not quiet:
+                    print(f"  > Using configured host: {settings.docker_host}")
+                client = docker.DockerClient(base_url=settings.docker_host)
             else:
-                print("  > No host configured, using auto-detection (from_env).")
-                self._client = docker.from_env()
+                if not quiet:
+                    print("  > No host configured, using auto-detection (from_env).")
+                client = docker.from_env()
 
             # A low-timeout ping is a fast way to check for a running daemon
-            if not self._client.ping():  # type: ignore[reportUnknownMemberType]
+            if not client.ping():  # type: ignore[reportUnknownMemberType]
                 raise DockerException(
                     "Docker daemon responded to ping, but in a failed state."
                 )
-            print("✅ Docker client initialized successfully.")
+
+            if not quiet:
+                print("✅ Docker client initialized successfully.")
+
+            return client
+
         except DockerException as e:
-            print("❌ Error: Docker is not running or is not configured correctly.")
-            print("   Please ensure the Docker daemon is active.")
-            # Re-raise the exception to halt execution if Docker is required
-            raise e
+            raise DockerException(
+                "❌ Error: Docker is not running or is not configured correctly."
+            ) from e
+
+    def __init__(self, quiet_init: bool = True) -> None:
+        """
+        Initializes the Docker client and verifies connection to the daemon.
+
+        Parameters
+        ----------
+        quiet_init
+            If True, suppresses debug messages during initialization.
+
+        Raises
+        ------
+        DockerException
+            If the Docker daemon is not running or cannot be reached.
+        """
+        self._client = self.get_client(quiet=quiet_init)
 
     def image_exists(self, tag: str) -> bool:
         """Check if a Docker image with the given tag exists locally."""
