@@ -18,6 +18,7 @@ from rich.progress import (
 )
 
 from bench_mac.config import settings
+from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import BenchmarkInstance, EvaluationTask, RunOutcome, Submission
 from bench_mac.runner import BenchmarkRunner
 
@@ -87,6 +88,7 @@ def _run_interactive(
     tasks: Sequence[EvaluationTask],
     output_file: Path,
     logs_dir: Path,
+    run_id: str,
 ) -> None:
     """Handles the evaluation run with a rich progress bar for interactive terminals."""
     progress = Progress(
@@ -109,7 +111,11 @@ def _run_interactive(
             f.write(outcome.model_dump_json() + "\n")
 
         runner.run(
-            tasks=tasks, log_dir=logs_dir, on_result=on_result, on_progress=on_progress
+            tasks=tasks,
+            log_dir=logs_dir,
+            run_id=run_id,
+            on_result=on_result,
+            on_progress=on_progress,
         )
 
 
@@ -118,6 +124,7 @@ def _run_non_interactive(
     tasks: Sequence[EvaluationTask],
     output_file: Path,
     logs_dir: Path,
+    run_id: str,
 ) -> None:
     """Handles the evaluation run with simple line-by-line logging for CI/CD."""
     task_list = list(tasks)
@@ -143,6 +150,7 @@ def _run_non_interactive(
         runner.run(
             tasks=task_list,
             log_dir=logs_dir,
+            run_id=run_id,
             on_result=on_result,
             on_progress=on_progress,
         )
@@ -176,28 +184,8 @@ def evaluate(
     logs_dir = run_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Configure loguru global logger
-    logger.remove()  # Remove the default handler
-
-    # Sink 1: Console output (for humans)
-    logger.add(
-        sys.stderr,
-        level=settings.cli_default_log_level,
-        format="<level>{message}</level>",
-    )
-
-    # Sink 2: Central run log file (for machines/debugging)
-    logger.add(
-        logs_dir / "run.log",
-        level="DEBUG",
-        serialize=True,
-        enqueue=True,  # CRITICAL for multiprocessing
-        backtrace=True,  # Automatically log full stack traces on exceptions
-        diagnose=True,  # Adds extra details to exception traces
-    )
-
-    # 3. Add the run_id to ALL subsequent log records globally
-    logger.configure(extra={"run_id": run_id})
+    # Configure logging for the main process
+    setup_main_process_logging(run_id, logs_dir)
 
     if not submissions_file.exists():
         logger.error(f"❌ Error: Submissions file not found at '{submissions_file}'")
@@ -227,9 +215,13 @@ def evaluate(
 
     try:
         if sys.stdout.isatty():
-            _run_interactive(runner, tasks, output_file, logs_dir=logs_dir)
+            _run_interactive(
+                runner, tasks, output_file, logs_dir=logs_dir, run_id=run_id
+            )
         else:
-            _run_non_interactive(runner, tasks, output_file, logs_dir=logs_dir)
+            _run_non_interactive(
+                runner, tasks, output_file, logs_dir=logs_dir, run_id=run_id
+            )
 
         logger.info("✅ Evaluation complete.")
     except Exception as e:

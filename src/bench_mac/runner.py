@@ -1,12 +1,14 @@
 import os
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluator import evaluate_submission
+from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
 from bench_mac.models import (
     EvaluationFailure,
     EvaluationSuccess,
@@ -15,26 +17,37 @@ from bench_mac.models import (
 )
 
 
-def run_single_evaluation_task(
-    task: EvaluationTask,
-    log_dir: Path,
-) -> RunOutcome:
+@dataclass
+class WorkerContext:
+    """Context passed to each worker process."""
+
+    task: EvaluationTask
+    log_dir: Path
+    run_id: str
+
+
+def run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
     """
     A top-level function designed to be run in a separate process.
 
     It initializes its own DockerManager and calls the core evaluation logic,
     wrapping the result in a RunOutcome object to handle success or failure.
     """
-    instance_log_path = log_dir / "instances" / f"{task.instance.instance_id}.log"
+    # First thing: configure logging for this worker process
+    setup_worker_process_logging(
+        run_id=context.run_id,
+        instance_id=context.task.instance.instance_id,
+        logs_dir=context.log_dir,
+    )
 
-    handler_id = logger.add(instance_log_path, level="DEBUG", serialize=True)
-    instance_logger = logger.bind(instance_id=task.instance.instance_id)
+    # Get a logger bound with instance context
+    instance_logger = get_instance_logger(context.task.instance.instance_id)
 
     try:
         docker_manager = DockerManager(quiet_init=True)
         result = evaluate_submission(
-            task.instance,
-            task.submission,
+            context.task.instance,
+            context.task.submission,
             docker_manager,
             logger=instance_logger,
         )
@@ -42,13 +55,14 @@ def run_single_evaluation_task(
     except Exception as e:
         # Catch any unexpected crash in the worker process
         instance_logger.exception("Worker process for instance crashed unexpectedly.")
+        instance_log_path = (
+            context.log_dir / "instances" / f"{context.task.instance.instance_id}.log"
+        )
         return EvaluationFailure(
-            instance_id=task.instance.instance_id,
+            instance_id=context.task.instance.instance_id,
             error=f"Worker process crashed ({e.__class__.__name__}: {e})\n"
             f"See instance log for details in {instance_log_path}",
         )
-    finally:
-        logger.remove(handler_id)
 
 
 class BenchmarkRunner:
@@ -65,6 +79,7 @@ class BenchmarkRunner:
         self,
         tasks: Sequence[EvaluationTask],
         log_dir: Path,
+        run_id: str,
         on_result: Callable[[RunOutcome], None],
         on_progress: Callable[[int, int], None] | None = None,
     ) -> None:
@@ -94,8 +109,7 @@ class BenchmarkRunner:
             futures = {
                 executor.submit(
                     run_single_evaluation_task,
-                    task,
-                    log_dir,
+                    WorkerContext(task=task, log_dir=log_dir, run_id=run_id),
                 )
                 for task in task_list
             }

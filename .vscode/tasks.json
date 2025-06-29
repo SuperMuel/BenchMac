@@ -11,7 +11,8 @@
                 "--cov=src",
                 "--cov-report=xml",
                 "-m",
-                "unit or integration"
+                "unit or integration",
+                "-v"
             ],
             "group": {
                 "kind": "test"
