@@ -6,8 +6,8 @@ import pytest
 from bench_mac.models import (
     BenchmarkInstance,
     CommandOutput,
-    EvaluationJob,
     EvaluationReport,
+    ExecutionJob,
     ExecutionTrace,
     MetricsReport,
     RunFailure,
@@ -21,7 +21,7 @@ from bench_mac.runner import BenchmarkRunner, WorkerContext
 
 
 @pytest.fixture
-def sample_tasks() -> list[EvaluationJob]:
+def sample_tasks() -> list[ExecutionJob]:
     """Provides a simple list of two tasks for testing."""
     instance1 = BenchmarkInstance.model_validate(
         {
@@ -48,8 +48,8 @@ def sample_tasks() -> list[EvaluationJob]:
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")
 
     return [
-        EvaluationJob(instance=instance1, submission=submission1),
-        EvaluationJob(instance=instance2, submission=submission2),
+        ExecutionJob(instance=instance1, submission=submission1),
+        ExecutionJob(instance=instance2, submission=submission2),
     ]
 
 
@@ -95,7 +95,7 @@ class TestBenchmarkRunner:
     def test_run_orchestration_and_callbacks(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        sample_tasks: list[EvaluationJob],
+        sample_tasks: list[ExecutionJob],
     ):
         """
         Verify that the runner correctly executes tasks in parallel and

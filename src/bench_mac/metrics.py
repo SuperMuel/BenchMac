@@ -32,9 +32,12 @@ def calculate_metrics(trace: ExecutionTrace) -> MetricsReport:
     elif patch_apply_step:
         # Legacy: only apply step exists (older evaluation format)
         patch_application_success = patch_apply_step.success
+    elif patch_check_step:
+        # Only check step exists (apply step failed or wasn't attempted)
+        patch_application_success = patch_check_step.success
     else:
         # No patch steps found
-        patch_application_success = False
+        patch_application_success = None
 
     # TODO: Add other metrics as they are uncommented in the MetricsReport model
     # For now, we only calculate the patch_application_success metric

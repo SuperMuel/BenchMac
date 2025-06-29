@@ -19,7 +19,7 @@ from rich.progress import (
 
 from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
-from bench_mac.models import BenchmarkInstance, EvaluationJob, RunOutcome, Submission
+from bench_mac.models import BenchmarkInstance, ExecutionJob, RunOutcome, Submission
 from bench_mac.runner import BenchmarkRunner
 
 app = cyclopts.App(
@@ -60,7 +60,7 @@ def _prepare_tasks(
     submissions_path: Path,
     instances_path: Path,
     filter_ids: list[str] | None = None,
-) -> Generator[EvaluationJob, None, None]:
+) -> Generator[ExecutionJob, None, None]:
     """Matches submissions to instances and yields tasks to be run."""
     logger.info("Loading benchmark instances...")
     instances_map = _load_instances(instances_path)
@@ -72,7 +72,7 @@ def _prepare_tasks(
             continue
 
         if sub.instance_id in instances_map:
-            yield EvaluationJob(
+            yield ExecutionJob(
                 instance=instances_map[sub.instance_id],
                 submission=sub,
             )
@@ -85,7 +85,7 @@ def _prepare_tasks(
 
 def _run_interactive(
     runner: BenchmarkRunner,
-    tasks: Sequence[EvaluationJob],
+    tasks: Sequence[ExecutionJob],
     output_file: Path,
     logs_dir: Path,
     run_id: str,
@@ -142,7 +142,7 @@ def _run_interactive(
 
 def _run_non_interactive(
     runner: BenchmarkRunner,
-    tasks: Sequence[EvaluationJob],
+    tasks: Sequence[ExecutionJob],
     output_file: Path,
     logs_dir: Path,
     run_id: str,

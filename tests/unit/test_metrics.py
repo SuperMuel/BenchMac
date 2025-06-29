@@ -95,11 +95,11 @@ class TestCalculateMetrics:
         # Calculate metrics
         metrics = calculate_metrics(trace)
 
-        # Assert failed patch application (no steps means nothing succeeded)
-        assert metrics.patch_application_success is False
+        # No step probably means harness error, so we don't know.
+        assert metrics.patch_application_success is None
 
     def test_legacy_patch_apply_only(self) -> None:
-        """Test metrics calculation with only patch apply step (legacy format)."""
+        """Test metrics calculation with only patch apply step."""
         patch_apply = CommandOutput(
             command="git apply -p0 /tmp/patch.patch",
             exit_code=0,
@@ -114,7 +114,7 @@ class TestCalculateMetrics:
         # Calculate metrics
         metrics = calculate_metrics(trace)
 
-        # Assert successful patch application (legacy format support)
+        # Assert successful patch application
         assert metrics.patch_application_success is True
 
     def test_no_patch_steps(self) -> None:
@@ -133,5 +133,5 @@ class TestCalculateMetrics:
         # Calculate metrics
         metrics = calculate_metrics(trace)
 
-        # Assert failed patch application (no patch steps found)
-        assert metrics.patch_application_success is False
+        # No patch steps found, so we don't know.
+        assert metrics.patch_application_success is None

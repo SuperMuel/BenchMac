@@ -3,7 +3,7 @@ from docker.errors import DockerException
 from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
-from bench_mac.executor import evaluate_submission
+from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
 from bench_mac.models import BenchmarkInstance, Submission
 
@@ -74,7 +74,7 @@ def silver_submission(test_instance: BenchmarkInstance) -> Submission:
 
 
 @pytest.mark.integration
-class TestEvaluateSubmission:
+class TestExecuteSubmission:
     def test_successful_patch_application(
         self,
         docker_manager: DockerManager,
@@ -85,7 +85,7 @@ class TestEvaluateSubmission:
         Verify that a known-good patch is evaluated as successful.
         """
         # --- ACT ---
-        trace = evaluate_submission(
+        trace = execute_submission(
             test_instance,
             silver_submission,
             docker_manager,
@@ -126,7 +126,7 @@ class TestEvaluateSubmission:
         )
 
         # --- ACT ---
-        trace = evaluate_submission(
+        trace = execute_submission(
             test_instance,
             bad_submission,
             docker_manager,

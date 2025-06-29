@@ -7,12 +7,12 @@ from pathlib import Path
 from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
-from bench_mac.executor import evaluate_submission
+from bench_mac.executor import execute_submission
 from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
 from bench_mac.metrics import calculate_metrics
 from bench_mac.models import (
-    EvaluationJob,
     EvaluationReport,
+    ExecutionJob,
     RunFailure,
     RunOutcome,
     RunSuccess,
@@ -23,7 +23,7 @@ from bench_mac.models import (
 class WorkerContext:
     """Context passed to each worker process."""
 
-    task: EvaluationJob
+    task: ExecutionJob
     log_dir: Path
     run_id: str
 
@@ -49,7 +49,7 @@ def run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
         docker_manager = DockerManager(quiet_init=True)
 
         # 1. Get the raw execution trace
-        trace = evaluate_submission(
+        trace = execute_submission(
             context.task.instance,
             context.task.submission,
             docker_manager,
@@ -92,7 +92,7 @@ class BenchmarkRunner:
 
     def run(
         self,
-        tasks: Sequence[EvaluationJob],
+        tasks: Sequence[ExecutionJob],
         log_dir: Path,
         run_id: str,
         on_result: Callable[[RunOutcome], None],

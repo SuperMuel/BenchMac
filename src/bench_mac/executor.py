@@ -35,7 +35,7 @@ def _execute_and_capture(
     )
 
 
-def evaluate_submission(
+def execute_submission(
     instance: BenchmarkInstance,
     submission: Submission,
     docker_manager: DockerManager,

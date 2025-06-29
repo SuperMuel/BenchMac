@@ -199,7 +199,7 @@ class MetricsReport(BaseModel):
     # )
 
 
-class EvaluationJob(BaseModel):
+class ExecutionJob(BaseModel):
     """A job to evaluate a single submission."""
 
     instance: BenchmarkInstance
