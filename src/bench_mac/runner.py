@@ -7,10 +7,12 @@ from pathlib import Path
 from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
-from bench_mac.evaluator import evaluate_submission
+from bench_mac.executor import evaluate_submission
 from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
+from bench_mac.metrics import calculate_metrics
 from bench_mac.models import (
     EvaluationJob,
+    EvaluationReport,
     RunFailure,
     RunOutcome,
     RunSuccess,
@@ -45,13 +47,26 @@ def run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
 
     try:
         docker_manager = DockerManager(quiet_init=True)
-        result = evaluate_submission(
+
+        # 1. Get the raw execution trace
+        trace = evaluate_submission(
             context.task.instance,
             context.task.submission,
             docker_manager,
             logger=instance_logger,
         )
-        return RunSuccess(result=result)
+
+        # 2. Calculate metrics from the trace
+        metrics = calculate_metrics(trace)
+
+        # 3. Assemble the final, comprehensive report
+        report = EvaluationReport(
+            instance_id=context.task.instance.instance_id,
+            execution=trace,
+            metrics=metrics,
+        )
+
+        return RunSuccess(result=report)
     except Exception as e:
         # Catch any unexpected crash in the worker process
         instance_logger.exception("Worker process for instance crashed unexpectedly.")

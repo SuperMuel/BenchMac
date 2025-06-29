@@ -1,11 +1,14 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from bench_mac.models import (
     BenchmarkInstance,
+    CommandOutput,
     EvaluationJob,
     EvaluationReport,
+    ExecutionTrace,
     MetricsReport,
     RunFailure,
     RunOutcome,
@@ -56,14 +59,24 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
     It returns predictable results without any I/O or Docker calls.
     """
     if "success" in context.task.instance.instance_id:
-        # Simulate a successful evaluation
+        # Simulate a successful evaluation with a mock execution trace
+        successful_command = CommandOutput(
+            command="git apply -p0 /tmp/patch.patch",
+            exit_code=0,
+            stdout="Applied patch successfully",
+            stderr="",
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC) + timedelta(seconds=1),
+        )
+        execution = ExecutionTrace(steps=[successful_command])
+
         return RunSuccess(
             result=EvaluationReport(
                 instance_id=context.task.instance.instance_id,
+                execution=execution,
                 metrics=MetricsReport(
                     patch_application_success=True,
                 ),
-                logs={},
             ),
         )
     else:

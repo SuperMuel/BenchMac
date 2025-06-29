@@ -1,10 +1,14 @@
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
 
 from bench_mac.models import (
     BenchmarkInstance,
+    CommandOutput,
     CommandsConfig,
     EvaluationReport,
+    ExecutionTrace,
     MetricsReport,
     Submission,
 )
@@ -202,18 +206,33 @@ class TestEvaluationResult:
 
     def test_instantiation_with_valid_data(self) -> None:
         """Test successful creation of an EvaluationResult."""
+        # Create a mock execution trace
+        command_output = CommandOutput(
+            command="ng build",
+            exit_code=1,
+            stdout="",
+            stderr="Build failed with 1 error.",
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
+        )
+        execution = ExecutionTrace(steps=[command_output])
         metrics = MetricsReport(patch_application_success=False)
+
         result = EvaluationReport(
             instance_id="my-project_v15_to_v16",
+            execution=execution,
             metrics=metrics,
-            logs={"build": "Build failed with 1 error."},
         )
         assert result.instance_id == "my-project_v15_to_v16"
         assert result.metrics.patch_application_success is False
-        assert "build" in result.logs
+        assert len(result.execution.steps) == 1
+        assert result.execution.steps[0].command == "ng build"
 
-    def test_default_logs_is_empty_dict(self) -> None:
-        """Verify that the 'logs' field defaults to an empty dictionary."""
+    def test_empty_execution_trace(self) -> None:
+        """Verify that an execution trace can be empty."""
+        execution = ExecutionTrace(steps=[])
         metrics = MetricsReport(patch_application_success=True)
-        result = EvaluationReport(instance_id="some-id", metrics=metrics)
-        assert result.logs == {}
+        result = EvaluationReport(
+            instance_id="some-id", execution=execution, metrics=metrics
+        )
+        assert len(result.execution.steps) == 0

@@ -3,7 +3,8 @@ from docker.errors import DockerException
 from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
-from bench_mac.evaluator import evaluate_submission
+from bench_mac.executor import evaluate_submission
+from bench_mac.metrics import calculate_metrics
 from bench_mac.models import BenchmarkInstance, Submission
 
 # A deliberately malformed patch that is guaranteed to fail application.
@@ -84,24 +85,32 @@ class TestEvaluateSubmission:
         Verify that a known-good patch is evaluated as successful.
         """
         # --- ACT ---
-        result = evaluate_submission(
+        trace = evaluate_submission(
             test_instance,
             silver_submission,
             docker_manager,
             logger=logger,
         )
+        metrics = calculate_metrics(trace)
 
         # --- ASSERT ---
-        assert result is not None
-        assert result.instance_id == test_instance.instance_id
+        assert trace is not None
+        assert len(trace.steps) > 0
 
         # The primary metric for this test
-        assert result.metrics.patch_application_success is True
+        assert metrics.patch_application_success is True
 
-        # Check that the logs reflect success
-        patch_log = result.logs.get("patch_apply", "")
-        assert "error" not in patch_log.lower()
-        assert "fail" not in patch_log.lower()
+        # Check that the execution trace shows successful patch application
+        patch_apply_step = None
+        for step in trace.steps:
+            if "git apply -p0" in step.command and "--check" not in step.command:
+                patch_apply_step = step
+                break
+
+        assert patch_apply_step is not None
+        assert patch_apply_step.success
+        assert "error" not in patch_apply_step.stderr.lower()
+        assert "fail" not in patch_apply_step.stderr.lower()
 
     def test_failed_patch_application(
         self,
@@ -117,22 +126,32 @@ class TestEvaluateSubmission:
         )
 
         # --- ACT ---
-        result = evaluate_submission(
+        trace = evaluate_submission(
             test_instance,
             bad_submission,
             docker_manager,
             logger=logger,
         )
+        metrics = calculate_metrics(trace)
 
         # --- ASSERT ---
-        assert result is not None
-        assert result.instance_id == test_instance.instance_id
+        assert trace is not None
+        assert len(trace.steps) > 0
 
         # The primary metric for this test
-        assert result.metrics.patch_application_success is False
+        assert metrics.patch_application_success is False
 
-        # Check that the logs reflect the failure
-        patch_log = result.logs.get("patch_apply", "")
+        # Check that the execution trace shows failed patch application
+        patch_check_step = None
+        for step in trace.steps:
+            if "git apply --check" in step.command:
+                patch_check_step = step
+                break
+
+        assert patch_check_step is not None
+        assert not patch_check_step.success
         assert (
-            "error" in patch_log.lower() or "patch does not apply" in patch_log.lower()
+            "error" in patch_check_step.stderr.lower()
+            or "patch does not apply" in patch_check_step.stderr.lower()
+            or patch_check_step.exit_code != 0
         )

@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
@@ -156,8 +157,8 @@ class Submission(BaseModel):
 class MetricsReport(BaseModel):
     """A detailed, quantifiable report of the SUT's performance on an instance."""
 
-    patch_application_success: bool = Field(
-        ...,
+    patch_application_success: bool | None = Field(
+        default=None,
         description="Did the SUT's patch apply cleanly without conflicts?",
     )
     # target_version_achieved: bool = Field(
@@ -205,21 +206,59 @@ class EvaluationJob(BaseModel):
     submission: Submission
 
 
+class CommandOutput(BaseModel):
+    """
+    Represents the detailed result of a single command executed in the container.
+    """
+
+    command: str = Field(..., description="The exact command that was executed.")
+    exit_code: int = Field(
+        ..., description="The exit code of the command. 0 typically means success."
+    )
+    stdout: str = Field(
+        default="", description="The captured standard output (stdout) of the command."
+    )
+    stderr: str = Field(
+        default="", description="The captured standard error (stderr) of the command."
+    )
+    start_time: datetime = Field(
+        ..., description="The UTC timestamp when the command started."
+    )
+    end_time: datetime = Field(
+        ..., description="The UTC timestamp when the command finished."
+    )
+
+    @property
+    def duration_seconds(self) -> float:
+        """The total duration of the command execution in seconds."""
+        return (self.end_time - self.start_time).total_seconds()
+
+    @property
+    def success(self) -> bool:
+        """A convenience property to check if the command succeeded."""
+        return self.exit_code == 0
+
+
+class ExecutionTrace(BaseModel):
+    steps: list[CommandOutput]
+
+
 class EvaluationReport(BaseModel):
     """The final, comprehensive result of evaluating a single submission."""
 
-    instance_id: str = Field(
+    instance_id: str = Field(...)
+
+    # The raw, unprocessed data from the execution environment.
+    # This is the "source of truth".
+    execution: ExecutionTrace = Field(
         ...,
-        description="The unique identifier of the evaluated instance.",
+        description="A structured trace of all commands executed during the evaluation.",  # noqa: E501
     )
 
+    # The metrics derived from the execution trace.
+    # This is the "interpretation" of the raw data.
     metrics: MetricsReport = Field(
-        ...,
-        description="The detailed performance metrics for the submission.",
-    )
-    logs: dict[str, str] = Field(
-        default_factory=dict,
-        description="A dictionary containing raw logs from evaluation steps (e.g., 'build', 'test').",  # noqa: E501
+        ..., description="The detailed performance metrics for the submission."
     )
 
 
