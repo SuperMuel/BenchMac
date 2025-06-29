@@ -32,6 +32,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-slugify" },
     { name = "requests" },
+    { name = "rich" },
 ]
 
 [package.dev-dependencies]
@@ -51,6 +52,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.10.1" },
     { name = "python-slugify", specifier = ">=8.0.4" },
     { name = "requests", specifier = ">=2.32.4" },
+    { name = "rich", specifier = ">=14.0.0" },
 ]
 
 [package.metadata.requires-dev]
