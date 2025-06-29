@@ -91,31 +91,52 @@ def _run_interactive(
     run_id: str,
 ) -> None:
     """Handles the evaluation run with a rich progress bar for interactive terminals."""
+    total_tasks = len(tasks)
+    success_count = 0
+    failure_count = 0
+
     progress = Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TextColumn("({task.completed} of {task.total})"),
+        TextColumn("[bold green]{task.fields[successes]}✓[/]"),
+        TextColumn("[bold red]{task.fields[failures]}✗[/]"),
+        TextColumn("({task.completed}/{task.total})"),
         TimeRemainingColumn(),
         transient=True,  # The bar will disappear on completion
     )
 
     with progress, output_file.open("a", encoding="utf-8") as f:
-        task_id = progress.add_task("Evaluating...", total=None)
-
-        def on_progress(completed: int, total: int):
-            progress.update(task_id, total=total, completed=completed)
+        # Fix: Pass the total number of tasks at creation to avoid "(0 of None)"
+        task_id = progress.add_task(
+            "Evaluating...", total=total_tasks, successes=0, failures=0
+        )
 
         def on_result(outcome: RunOutcome):
+            nonlocal success_count, failure_count
+
+            # Update counters based on outcome
+            if outcome.status == "success":
+                success_count += 1
+            else:
+                failure_count += 1
+
+            # Write result to file
             f.write(outcome.model_dump_json() + "\n")
+
+            # Update the progress bar with new counts and advance by 1
+            progress.update(
+                task_id,
+                advance=1,
+                successes=success_count,
+                failures=failure_count,
+            )
 
         runner.run(
             tasks=tasks,
             log_dir=logs_dir,
             run_id=run_id,
             on_result=on_result,
-            on_progress=on_progress,
         )
 
 
@@ -133,10 +154,6 @@ def _run_non_interactive(
 
     with output_file.open("a", encoding="utf-8") as f:
 
-        def on_progress(completed: int, total: int):
-            # Simple print statement for progress
-            logger.info(f"Progress: {completed}/{total} instances evaluated.")
-
         def on_result(outcome: RunOutcome):
             # Write to file
             f.write(outcome.model_dump_json() + "\n")
@@ -152,7 +169,6 @@ def _run_non_interactive(
             log_dir=logs_dir,
             run_id=run_id,
             on_result=on_result,
-            on_progress=on_progress,
         )
 
 

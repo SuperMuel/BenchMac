@@ -116,7 +116,7 @@ class DockerManager:
         -------
         The built Docker Image object.
         """
-        logger.info(f"Building Docker image with tag: {tag}...")
+        logger.debug(f"Building Docker image with tag: {tag}...")
         try:
             # docker-py needs a file context, so we create a temporary one.
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -182,7 +182,7 @@ class DockerManager:
         -------
         The running Docker Container object.
         """
-        logger.info(f"Running container from image: {image_tag}...")
+        logger.debug(f"Starting container from image: {image_tag}")
         try:
             container = self._client.containers.run(
                 image_tag,

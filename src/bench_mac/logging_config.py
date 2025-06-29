@@ -48,10 +48,12 @@ def setup_main_process_logging(run_id: str, logs_dir: Path) -> None:
 
 def setup_worker_process_logging(run_id: str, instance_id: str, logs_dir: Path) -> None:
     """
-    Configure logging for a worker process.
+    Configure logging for a worker process to log *only* to files.
+
+    This prevents collision with the main process's rich progress bar by ensuring
+    worker processes never write to stderr/console directly.
 
     Sets up:
-    - Console output at INFO level
     - Central run.log at DEBUG level (append mode)
     - Instance-specific log at DEBUG level
     - Global run_id and instance_id context
@@ -59,13 +61,12 @@ def setup_worker_process_logging(run_id: str, instance_id: str, logs_dir: Path) 
     instance_log_path = logs_dir / "instances" / f"{instance_id}.log"
     instance_log_path.parent.mkdir(exist_ok=True)
 
+    # Remove the default handler to ensure a clean slate
+    logger.remove()
+
     logger.configure(
         handlers=[
-            {
-                "sink": sys.stderr,
-                "level": settings.cli_default_log_level,
-                "format": "<level>{message}</level>",
-            },
+            # NO stderr sink for worker processes - this eliminates log collision
             {
                 "sink": logs_dir / "run.log",
                 "level": "DEBUG",
@@ -76,7 +77,7 @@ def setup_worker_process_logging(run_id: str, instance_id: str, logs_dir: Path) 
             {
                 "sink": instance_log_path,
                 "level": "DEBUG",
-                "serialize": True,
+                "enqueue": True,  # Thread-safe for multiprocessing
             },
         ],
         extra={"run_id": run_id, "instance_id": instance_id},

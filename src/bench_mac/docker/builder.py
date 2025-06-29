@@ -238,9 +238,7 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     -------
     The tag of the final, ready-to-use Instance Image.
     """
-    logger.debug(
-        f"\n--- Preparing environment for instance: {instance.instance_id} ---"
-    )
+    logger.debug(f"Preparing environment for instance: {instance.instance_id}")
 
     # --- Layer 1: Base Image ---
     base_image_tag = settings.docker_base_image_name

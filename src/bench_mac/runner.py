@@ -81,7 +81,6 @@ class BenchmarkRunner:
         log_dir: Path,
         run_id: str,
         on_result: Callable[[RunOutcome], None],
-        on_progress: Callable[[int, int], None] | None = None,
     ) -> None:
         """
         Executes the evaluation for a given set of tasks.
@@ -90,8 +89,6 @@ class BenchmarkRunner:
             tasks: An iterable of (instance, submission) tuples to be evaluated.
             on_result: A callback function that is invoked with the RunOutcome
                        of each completed task.
-            on_progress: An optional callback function to report progress, taking
-                         (completed_count, total_count) as arguments.
         """
         task_list = list(tasks)
         total_tasks = len(task_list)
@@ -104,7 +101,6 @@ class BenchmarkRunner:
         # Fail if the Docker daemon is not running.
         DockerManager.get_client(quiet=False)
 
-        completed_count = 0
         with ProcessPoolExecutor(max_workers=self.workers) as executor:
             futures = {
                 executor.submit(
@@ -117,7 +113,3 @@ class BenchmarkRunner:
             for future in as_completed(futures):
                 result_outcome = future.result()
                 on_result(result_outcome)  # Invoke the result callback
-
-                completed_count += 1
-                if on_progress:
-                    on_progress(completed_count, total_tasks)

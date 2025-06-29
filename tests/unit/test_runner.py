@@ -98,15 +98,10 @@ class TestBenchmarkRunner:
 
         # 2. Prepare lists to capture the data passed to our callbacks.
         results_log: list[RunOutcome] = []
-        progress_log: list[tuple[int, int]] = []
 
         def on_result_callback(outcome: RunOutcome):
             """A fake callback that just records the result."""
             results_log.append(outcome)
-
-        def on_progress_callback(completed: int, total: int):
-            """A fake callback that just records the progress update."""
-            progress_log.append((completed, total))
 
         # 3. Instantiate the runner.
         runner = BenchmarkRunner(workers=2)
@@ -117,7 +112,6 @@ class TestBenchmarkRunner:
             log_dir=Path("test_logs"),
             run_id="test-run-123",
             on_result=on_result_callback,
-            on_progress=on_progress_callback,
         )
 
         # --- ASSERT ---
@@ -145,8 +139,3 @@ class TestBenchmarkRunner:
         assert isinstance(success_result, RunSuccess)
         assert success_result.result.instance_id == "task-1-success"
         assert success_result.result.metrics.patch_application_success is True
-
-        # 2. Assert on the progress.
-        assert len(progress_log) == 2  # The callback should have been called twice.
-        # The progress updates should be (1, 2) and (2, 2). Sort to ensure order.
-        assert sorted(progress_log) == [(1, 2), (2, 2)]
