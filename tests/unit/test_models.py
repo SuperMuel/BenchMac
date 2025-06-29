@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from bench_mac.models import (
     BenchmarkInstance,
     CommandsConfig,
-    EvaluationResult,
+    EvaluationReport,
     MetricsReport,
     Submission,
 )
@@ -203,7 +203,7 @@ class TestEvaluationResult:
     def test_instantiation_with_valid_data(self) -> None:
         """Test successful creation of an EvaluationResult."""
         metrics = MetricsReport(patch_application_success=False)
-        result = EvaluationResult(
+        result = EvaluationReport(
             instance_id="my-project_v15_to_v16",
             metrics=metrics,
             logs={"build": "Build failed with 1 error."},
@@ -215,5 +215,5 @@ class TestEvaluationResult:
     def test_default_logs_is_empty_dict(self) -> None:
         """Verify that the 'logs' field defaults to an empty dictionary."""
         metrics = MetricsReport(patch_application_success=True)
-        result = EvaluationResult(instance_id="some-id", metrics=metrics)
+        result = EvaluationReport(instance_id="some-id", metrics=metrics)
         assert result.logs == {}

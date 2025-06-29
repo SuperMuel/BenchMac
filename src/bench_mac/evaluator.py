@@ -9,7 +9,7 @@ from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import (
     BenchmarkInstance,
-    EvaluationResult,
+    EvaluationReport,
     MetricsReport,
     Submission,
 )
@@ -19,13 +19,13 @@ def _create_evaluation_result(
     instance_id: str,
     metrics_data: dict[str, bool],
     logs: dict[str, str],
-) -> EvaluationResult:
+) -> EvaluationReport:
     """Helper to assemble the final EvaluationResult object."""
     metrics = MetricsReport(
         patch_application_success=metrics_data["patch_application_success"],
         # Add other metrics here as they are implemented
     )
-    return EvaluationResult(instance_id=instance_id, metrics=metrics, logs=logs)
+    return EvaluationReport(instance_id=instance_id, metrics=metrics, logs=logs)
 
 
 def evaluate_submission(
@@ -34,7 +34,7 @@ def evaluate_submission(
     docker_manager: DockerManager,
     *,
     logger: "Logger",
-) -> EvaluationResult:
+) -> EvaluationReport:
     """
     Orchestrates the end-to-end evaluation for a single submission.
 

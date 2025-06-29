@@ -10,10 +10,10 @@ from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluator import evaluate_submission
 from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
 from bench_mac.models import (
-    EvaluationFailure,
-    EvaluationSuccess,
-    EvaluationTask,
+    EvaluationJob,
+    RunFailure,
     RunOutcome,
+    RunSuccess,
 )
 
 
@@ -21,7 +21,7 @@ from bench_mac.models import (
 class WorkerContext:
     """Context passed to each worker process."""
 
-    task: EvaluationTask
+    task: EvaluationJob
     log_dir: Path
     run_id: str
 
@@ -51,14 +51,14 @@ def run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
             docker_manager,
             logger=instance_logger,
         )
-        return EvaluationSuccess(result=result)
+        return RunSuccess(result=result)
     except Exception as e:
         # Catch any unexpected crash in the worker process
         instance_logger.exception("Worker process for instance crashed unexpectedly.")
         instance_log_path = (
             context.log_dir / "instances" / f"{context.task.instance.instance_id}.log"
         )
-        return EvaluationFailure(
+        return RunFailure(
             instance_id=context.task.instance.instance_id,
             error=f"Worker process crashed ({e.__class__.__name__}: {e})\n"
             f"See instance log for details in {instance_log_path}",
@@ -77,7 +77,7 @@ class BenchmarkRunner:
 
     def run(
         self,
-        tasks: Sequence[EvaluationTask],
+        tasks: Sequence[EvaluationJob],
         log_dir: Path,
         run_id: str,
         on_result: Callable[[RunOutcome], None],

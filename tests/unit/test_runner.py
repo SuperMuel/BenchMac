@@ -4,12 +4,12 @@ import pytest
 
 from bench_mac.models import (
     BenchmarkInstance,
-    EvaluationFailure,
-    EvaluationResult,
-    EvaluationSuccess,
-    EvaluationTask,
+    EvaluationJob,
+    EvaluationReport,
     MetricsReport,
+    RunFailure,
     RunOutcome,
+    RunSuccess,
     Submission,
 )
 from bench_mac.runner import BenchmarkRunner, WorkerContext
@@ -18,7 +18,7 @@ from bench_mac.runner import BenchmarkRunner, WorkerContext
 
 
 @pytest.fixture
-def sample_tasks() -> list[EvaluationTask]:
+def sample_tasks() -> list[EvaluationJob]:
     """Provides a simple list of two tasks for testing."""
     instance1 = BenchmarkInstance.model_validate(
         {
@@ -45,8 +45,8 @@ def sample_tasks() -> list[EvaluationTask]:
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")
 
     return [
-        EvaluationTask(instance=instance1, submission=submission1),
-        EvaluationTask(instance=instance2, submission=submission2),
+        EvaluationJob(instance=instance1, submission=submission1),
+        EvaluationJob(instance=instance2, submission=submission2),
     ]
 
 
@@ -57,8 +57,8 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
     """
     if "success" in context.task.instance.instance_id:
         # Simulate a successful evaluation
-        return EvaluationSuccess(
-            result=EvaluationResult(
+        return RunSuccess(
+            result=EvaluationReport(
                 instance_id=context.task.instance.instance_id,
                 metrics=MetricsReport(
                     patch_application_success=True,
@@ -68,7 +68,7 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
         )
     else:
         # Simulate a harness-level failure
-        return EvaluationFailure(
+        return RunFailure(
             instance_id=context.task.instance.instance_id,
             error="Simulated worker crash",
         )
@@ -82,7 +82,7 @@ class TestBenchmarkRunner:
     def test_run_orchestration_and_callbacks(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        sample_tasks: list[EvaluationTask],
+        sample_tasks: list[EvaluationJob],
     ):
         """
         Verify that the runner correctly executes tasks in parallel and
@@ -130,19 +130,19 @@ class TestBenchmarkRunner:
         sorted_results = sorted(
             results_log,
             key=lambda r: r.instance_id
-            if isinstance(r, EvaluationFailure)
+            if isinstance(r, RunFailure)
             else r.result.instance_id,
         )
 
         # Check the failure case
         failure_result = sorted_results[1]
-        assert isinstance(failure_result, EvaluationFailure)
+        assert isinstance(failure_result, RunFailure)
         assert failure_result.instance_id == "task-2-failure"
         assert failure_result.error == "Simulated worker crash"
 
         # Check the success case
         success_result = sorted_results[0]
-        assert isinstance(success_result, EvaluationSuccess)
+        assert isinstance(success_result, RunSuccess)
         assert success_result.result.instance_id == "task-1-success"
         assert success_result.result.metrics.patch_application_success is True
 

@@ -198,14 +198,14 @@ class MetricsReport(BaseModel):
     # )
 
 
-class EvaluationTask(BaseModel):
-    """A task to evaluate a single submission."""
+class EvaluationJob(BaseModel):
+    """A job to evaluate a single submission."""
 
     instance: BenchmarkInstance
     submission: Submission
 
 
-class EvaluationResult(BaseModel):
+class EvaluationReport(BaseModel):
     """The final, comprehensive result of evaluating a single submission."""
 
     instance_id: str = Field(
@@ -223,14 +223,14 @@ class EvaluationResult(BaseModel):
     )
 
 
-class EvaluationSuccess(BaseModel):
+class RunSuccess(BaseModel):
     """Represents a successfully completed evaluation run for an instance."""
 
     status: Literal["success"] = "success"
-    result: EvaluationResult
+    result: EvaluationReport
 
 
-class EvaluationFailure(BaseModel):
+class RunFailure(BaseModel):
     """Represents a harness-level failure during an evaluation run."""
 
     status: Literal["failure"] = "failure"
@@ -238,6 +238,4 @@ class EvaluationFailure(BaseModel):
     error: str
 
 
-RunOutcome = EvaluationSuccess | EvaluationFailure
-# TODO: Rename EvaluationSuccess to EvaluationRunSuccess and EvaluationFailure
-# to EvaluationRunFailure to distinguish an EvaluationRun from an Evaluation
+RunOutcome = RunSuccess | RunFailure
