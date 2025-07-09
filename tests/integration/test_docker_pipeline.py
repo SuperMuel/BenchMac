@@ -15,7 +15,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from docker.errors import DockerException
 from docker.models.containers import Container
 
 from bench_mac.config import settings
@@ -29,20 +28,6 @@ from bench_mac.models import BenchmarkInstance
 
 # A simple, minimal Dockerfile for testing the manager in isolation.
 SIMPLE_DOCKERFILE = 'FROM alpine:latest\nCMD ["echo", "container is running"]'
-
-
-@pytest.fixture(scope="module")
-def docker_manager() -> DockerManager:
-    """
-    Provides a DockerManager instance for the test module.
-
-    Skips all tests in this module if the Docker daemon is not running.
-    """
-    try:
-        manager = DockerManager()
-        return manager
-    except DockerException:
-        pytest.skip("Docker daemon is not running. Skipping integration tests.")
 
 
 @pytest.fixture
