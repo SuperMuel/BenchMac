@@ -44,19 +44,19 @@ class CommandsConfig(BaseModel):
     """Specifies custom evaluation commands, overriding harness defaults."""
 
     install: str = Field(
-        default="npm ci",
+        ...,
         description="The command to install dependencies.",
     )
     build: str = Field(
-        default="ng build --configuration production",
+        ...,
         description="The command to build the target project.",
     )
     lint: str = Field(
-        default="ng lint",
+        ...,
         description="The command to lint the target project.",
     )
     test: str = Field(
-        default="ng test --watch=false --browsers=ChromeHeadless",
+        ...,
         description="The command to run tests for the target project.",
     )
 
@@ -128,7 +128,7 @@ class BenchmarkInstance(BaseModel):
     )
 
     commands: CommandsConfig = Field(
-        default_factory=lambda: CommandsConfig(),
+        ...,
         description="Custom commands for evaluation, overriding defaults.",
     )
 

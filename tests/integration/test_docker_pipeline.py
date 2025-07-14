@@ -24,7 +24,7 @@ from bench_mac.docker.builder import (
     prepare_environment,
 )
 from bench_mac.docker.manager import DockerManager
-from bench_mac.models import BenchmarkInstance
+from bench_mac.models import BenchmarkInstance, CommandsConfig
 
 # A simple, minimal Dockerfile for testing the manager in isolation.
 SIMPLE_DOCKERFILE = 'FROM alpine:latest\nCMD ["echo", "container is running"]'
@@ -131,6 +131,12 @@ class TestImageBuilder:
             source_angular_version="10.2.5",
             target_angular_version="11.2.14",
             target_node_version="16.20.2",
+            commands=CommandsConfig(
+                install="npm install",
+                build="ng build --prod",
+                lint="ng lint",
+                test="ng test --watch=false --browsers=ChromeHeadless",
+            ),
         )
 
     def test_prepare_environment_full_lifecycle(

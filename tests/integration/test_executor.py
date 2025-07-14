@@ -5,7 +5,7 @@ from loguru import logger
 from bench_mac.docker.manager import DockerManager
 from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
-from bench_mac.models import BenchmarkInstance, Submission
+from bench_mac.models import BenchmarkInstance, CommandsConfig, Submission
 
 # A deliberately malformed patch that is guaranteed to fail application.
 # It tries to remove a line that is unlikely to exist in that exact form.
@@ -40,6 +40,12 @@ def test_instance() -> BenchmarkInstance:
         source_angular_version="18",
         target_angular_version="19",
         target_node_version="20.11.0",
+        commands=CommandsConfig(
+            install="npm install",
+            build="ng build --prod",
+            lint="ng lint",
+            test="ng test --watch=false --browsers=ChromeHeadless",
+        ),
     )
 
 
