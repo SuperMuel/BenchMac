@@ -38,6 +38,7 @@ import cyclopts
 
 from bench_mac.config import settings
 from bench_mac.models import BenchmarkInstance
+from bench_mac.utils import load_instances
 
 # --- Configuration ---
 
@@ -65,39 +66,6 @@ def run_command(command: list[str], cwd: Path | None = None) -> str:
         print(f"  Exit Code: {e.returncode}")
         print(f"  Stderr: {e.stderr.strip()}")
         raise
-
-
-def load_instances(file_path: Path) -> dict[str, BenchmarkInstance]:
-    """Load instances from JSONL file into a dictionary keyed by instance_id."""
-    instances_map: dict[str, BenchmarkInstance] = {}
-    print(f"  > Loading instances from {file_path}...")
-    try:
-        with file_path.open("r", encoding="utf-8") as f:
-            for line_number, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-
-                # Parse JSON and create BenchmarkInstance
-                instance_data = json.loads(line)
-                try:
-                    instance = BenchmarkInstance.model_validate(instance_data)
-                    instances_map[instance.instance_id] = instance
-                except Exception as e:
-                    instance_id = instance_data.get("instance_id", "unknown")
-                    print(
-                        f"  ⚠️ Warning: Failed to validate instance {instance_id} (line {line_number}): {e}"  # noqa: E501
-                    )
-                    continue
-
-    except FileNotFoundError:
-        print(f"  ❌ Error: Instances file not found at {file_path}")
-        raise
-    except json.JSONDecodeError as e:
-        print(f"  ❌ Error parsing JSON in {file_path}: {e}")
-        raise
-    print(f"  ✅ Loaded {len(instances_map)} instances.")
-    return instances_map
 
 
 def generate_patch_for_instance(
@@ -199,10 +167,11 @@ def main(instance_id: str | None = None) -> None:
     output_dir.mkdir(exist_ok=True)
 
     # Load all instance definitions
-    try:
-        instances_map = load_instances(instances_file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return  # Error message is printed in the helper
+    print(f"  > Loading instances from {instances_file}...")
+    instances_map = load_instances(
+        instances_file,
+        strict=True,
+    )
 
     # Determine which instances to process
     if instance_id:

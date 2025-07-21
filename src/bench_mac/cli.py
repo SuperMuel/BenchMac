@@ -24,7 +24,6 @@ from rich.text import Text
 from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
-    BenchmarkInstance,
     ExecutionJob,
     RunFailure,
     RunOutcome,
@@ -32,6 +31,7 @@ from bench_mac.models import (
     Submission,
 )
 from bench_mac.runner import BenchmarkRunner
+from bench_mac.utils import load_instances
 
 app = cyclopts.App(
     help="BenchMAC: A benchmark for evaluating AI on Angular Codebase Migrations."
@@ -56,17 +56,6 @@ def _load_submissions(
                 )
 
 
-def _load_instances(instances_path: Path) -> dict[str, BenchmarkInstance]:
-    """Loads benchmark instances into a dict for fast lookup."""
-    instances: dict[str, BenchmarkInstance] = {}
-    with instances_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            data = json.loads(line)
-            instance = BenchmarkInstance.model_validate(data)
-            instances[instance.instance_id] = instance
-    return instances
-
-
 def _prepare_tasks(
     submissions_path: Path,
     instances_path: Path,
@@ -74,7 +63,7 @@ def _prepare_tasks(
 ) -> Generator[ExecutionJob, None, None]:
     """Matches submissions to instances and yields tasks to be run."""
     logger.info("Loading benchmark instances...")
-    instances_map = _load_instances(instances_path)
+    instances_map = load_instances(instances_path)
     logger.info(f"Loaded {len(instances_map)} instances.")
 
     logger.debug("Loading and matching submissions...")
