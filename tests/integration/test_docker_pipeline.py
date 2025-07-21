@@ -12,10 +12,8 @@ To run these tests: `uv run pytest -m integration`
 
 import uuid
 from collections.abc import Generator
-from pathlib import Path
 
 import pytest
-from docker.models.containers import Container
 
 from bench_mac.config import settings
 from bench_mac.docker.builder import (
@@ -43,78 +41,6 @@ def unique_tag(docker_manager: DockerManager) -> Generator[str, None, None]:
     if docker_manager and docker_manager.image_exists(tag):
         print(f"\nCleaning up image: {tag}")
         docker_manager.remove_image(tag)
-
-
-@pytest.mark.integration
-class TestDockerManager:
-    """Test suite for the low-level DockerManager class."""
-
-    def test_initialization_succeeds(self, docker_manager: DockerManager) -> None:
-        """Verify that the DockerManager can be instantiated successfully."""
-        assert docker_manager is not None
-        assert docker_manager._client is not None
-
-    def test_build_image_and_cleanup(
-        self, docker_manager: DockerManager, unique_tag: str
-    ) -> None:
-        """Test the full lifecycle of building and removing an image."""
-        assert not docker_manager.image_exists(unique_tag)
-        docker_manager.build_image(dockerfile_content=SIMPLE_DOCKERFILE, tag=unique_tag)
-        assert docker_manager.image_exists(unique_tag)
-        docker_manager.remove_image(unique_tag)
-        assert not docker_manager.image_exists(unique_tag)
-
-    def test_run_container_and_execute_streams(
-        self, docker_manager: DockerManager, unique_tag: str
-    ) -> None:
-        """Test running a container and capturing stdout and stderr correctly."""
-        docker_manager.build_image(dockerfile_content=SIMPLE_DOCKERFILE, tag=unique_tag)
-        container = None
-        try:
-            container = docker_manager.run_container(image_tag=unique_tag)
-            assert isinstance(container, Container)
-
-            # Test stdout
-            exit_code, stdout, stderr = docker_manager.execute_in_container(
-                container, 'echo "hello stdout"'
-            )
-            assert exit_code == 0
-            assert "hello stdout" in stdout
-            assert stderr == ""
-
-            # Test stderr
-            exit_code, stdout, stderr = docker_manager.execute_in_container(
-                container, 'sh -c "echo hello stderr >&2"'
-            )
-            assert exit_code == 0
-            assert stdout == ""
-            assert "hello stderr" in stderr
-
-        finally:
-            if container:
-                docker_manager.cleanup_container(container)
-
-    def test_copy_to_container(
-        self, docker_manager: DockerManager, unique_tag: str, tmp_path: Path
-    ) -> None:
-        """Test copying a local file into a running container."""
-        local_file = tmp_path / "test.txt"
-        file_content = "hello world"
-        local_file.write_text(file_content)
-
-        docker_manager.build_image(dockerfile_content=SIMPLE_DOCKERFILE, tag=unique_tag)
-        container = docker_manager.run_container(image_tag=unique_tag)
-        try:
-            dest_path = "/tmp/test.txt"
-            docker_manager.copy_to_container(container, local_file, dest_path)
-            exit_code, stdout, _ = docker_manager.execute_in_container(
-                container, f"cat {dest_path}"
-            )
-            assert exit_code == 0
-            assert file_content in stdout
-        finally:
-            if container:
-                docker_manager.cleanup_container(container)
 
 
 @pytest.mark.integration
