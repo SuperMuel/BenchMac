@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from bench_mac.docker.builder import (
@@ -5,7 +7,6 @@ from bench_mac.docker.builder import (
     _get_instance_image_tag,
     _normalize_repo_url,
 )
-from bench_mac.models import BenchmarkInstance
 
 
 @pytest.mark.unit
@@ -78,23 +79,12 @@ class TestGetEnvironmentImageTag:
 class TestGetInstanceImageTag:
     """Tests for the _get_instance_image_tag function."""
 
-    def test_short_commit_hash(self) -> None:
+    def test_short_commit_hash(self, instance_factory: Any) -> None:
         """Test handling of short commit hashes."""
-        instance = BenchmarkInstance.model_validate(
-            {
-                "instance_id": "test-instance",
-                "repo": "user/repo",
-                "base_commit": "a1b2c3d",
-                "source_angular_version": "15.0.0",
-                "target_angular_version": "16.1.0",
-                "target_node_version": "18.13.0",
-                "commands": {
-                    "install": "npm install",
-                    "build": "ng build --prod",
-                    "lint": "ng lint",
-                    "test": "ng test --watch=false --browsers=ChromeHeadless",
-                },
-            }
+        instance = instance_factory.create_instance(
+            instance_id="test-instance",
+            repo="user/repo",
+            base_commit="a1b2c3d",
         )
 
         result = _get_instance_image_tag(instance)
@@ -114,51 +104,29 @@ class TestGetInstanceImageTag:
         ],
     )
     def test_various_repo_commit_combinations(
-        self, repo: str, commit: str, expected_suffix: str
+        self, repo: str, commit: str, expected_suffix: str, instance_factory: Any
     ) -> None:
         """Test various combinations of repository names and commit hashes."""
-        instance = BenchmarkInstance.model_validate(
-            {
-                "instance_id": "test-instance",
-                "repo": repo,
-                "base_commit": commit,
-                "source_angular_version": "15.0.0",
-                "target_angular_version": "16.1.0",
-                "target_node_version": "18.13.0",
-                "commands": {
-                    "install": "npm install",
-                    "build": "ng build --prod",
-                    "lint": "ng lint",
-                    "test": "ng test --watch=false --browsers=ChromeHeadless",
-                },
-            }
+        instance = instance_factory.create_instance(
+            instance_id="test-instance",
+            repo=repo,
+            base_commit=commit,
         )
 
         result = _get_instance_image_tag(instance)
 
         assert result == f"benchmac-instance:{expected_suffix}"
 
-    def test_tag_length_exceeds_limit_raises_error(self) -> None:
+    def test_tag_length_exceeds_limit_raises_error(self, instance_factory: Any) -> None:
         """Test that a tag longer than 128 characters raises a ValueError."""
         # Create an instance that will generate a very long tag
         very_long_repo = "https://github.com/very-long-organization-name/extremely-long-repository-name-that-goes-on-and-on.git"
         very_long_commit = "a" * 40  # 40-character commit hash
 
-        instance = BenchmarkInstance.model_validate(
-            {
-                "instance_id": "test-instance-with-very-long-name",
-                "repo": very_long_repo,
-                "base_commit": very_long_commit,
-                "source_angular_version": "15.0.0",
-                "target_angular_version": "16.1.0",
-                "target_node_version": "18.13.0",
-                "commands": {
-                    "install": "npm install",
-                    "build": "ng build --prod",
-                    "lint": "ng lint",
-                    "test": "ng test --watch=false --browsers=ChromeHeadless",
-                },
-            }
+        instance = instance_factory.create_instance(
+            instance_id="test-instance-with-very-long-name",
+            repo=very_long_repo,
+            base_commit=very_long_commit,
         )
 
         with pytest.raises(ValueError, match="Generated image tag is too long"):

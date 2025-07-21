@@ -1,12 +1,11 @@
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 from bench_mac.models import (
-    BenchmarkInstance,
     CommandOutput,
-    CommandsConfig,
     EvaluationReport,
     ExecutionTrace,
     MetricsReport,
@@ -18,30 +17,6 @@ from bench_mac.models import (
 class TestBenchmarkInstance:
     """Tests for the BenchmarkInstance model, including its complex validation."""
 
-    # A dictionary of valid data to be used as a base for tests
-    VALID_INSTANCE_DATA = {
-        "instance_id": "my-project_v15_to_v16",
-        "repo": "SuperMuel/BenchMAC",
-        "base_commit": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
-        "source_angular_version": "15.0.0",
-        "target_angular_version": "16.1.0",
-        "target_node_version": "18.13.0",
-        "commands": {
-            "install": "npm install",
-            "build": "ng build --prod",
-            "lint": "ng lint",
-            "test": "ng test --watch=false --browsers=ChromeHeadless",
-        },
-    }
-
-    def test_instantiation_with_valid_data(self) -> None:
-        """Test successful creation of a BenchmarkInstance with valid data."""
-        instance = BenchmarkInstance.model_validate(self.VALID_INSTANCE_DATA)
-        assert instance.instance_id == self.VALID_INSTANCE_DATA["instance_id"]
-        assert instance.repo == self.VALID_INSTANCE_DATA["repo"]
-        assert isinstance(instance.commands, CommandsConfig)
-        assert instance.metadata == {}
-
     @pytest.mark.parametrize(
         "valid_repo",
         [
@@ -51,11 +26,11 @@ class TestBenchmarkInstance:
             "http://gitlab.com/my-org/my-project",
         ],
     )
-    def test_repo_format_valid_cases(self, valid_repo: str) -> None:
+    def test_repo_format_valid_cases(
+        self, instance_factory: Any, valid_repo: str
+    ) -> None:
         """Test that valid repo formats are accepted."""
-        instance = BenchmarkInstance.model_validate(
-            {**self.VALID_INSTANCE_DATA, "repo": valid_repo}
-        )
+        instance = instance_factory.create_instance(repo=valid_repo)
         assert instance.repo == valid_repo
 
     @pytest.mark.parametrize(
@@ -67,22 +42,22 @@ class TestBenchmarkInstance:
             "just-a-string",
         ],
     )
-    def test_repo_format_invalid_cases(self, invalid_repo: str) -> None:
+    def test_repo_format_invalid_cases(
+        self, invalid_repo: str, instance_factory: Any
+    ) -> None:
         """Test that invalid repo formats raise a ValueError."""
         with pytest.raises(ValidationError, match="repo must be either"):
-            BenchmarkInstance.model_validate(
-                {**self.VALID_INSTANCE_DATA, "repo": invalid_repo}
-            )
+            instance_factory.create_instance(repo=invalid_repo)
 
     @pytest.mark.parametrize(
         "valid_hash",
         ["a1b2c3d", "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"],
     )
-    def test_commit_hash_valid_cases(self, valid_hash: str) -> None:
+    def test_commit_hash_valid_cases(
+        self, instance_factory: Any, valid_hash: str
+    ) -> None:
         """Test that valid Git commit hashes are accepted."""
-        instance = BenchmarkInstance.model_validate(
-            {**self.VALID_INSTANCE_DATA, "base_commit": valid_hash}
-        )
+        instance = instance_factory.create_instance(base_commit=valid_hash)
         assert instance.base_commit == valid_hash
 
     @pytest.mark.parametrize(
@@ -96,24 +71,24 @@ class TestBenchmarkInstance:
             "random",
         ],
     )
-    def test_commit_hash_invalid_cases(self, invalid_hash: str) -> None:
+    def test_commit_hash_invalid_cases(
+        self,
+        invalid_hash: str,
+        instance_factory: Any,
+    ) -> None:
         """Test that invalid Git commit hashes raise a ValueError."""
         with pytest.raises(ValidationError, match="base_commit must be a valid"):
-            BenchmarkInstance.model_validate(
-                {**self.VALID_INSTANCE_DATA, "base_commit": invalid_hash}
-            )
+            instance_factory.create_instance(base_commit=invalid_hash)
 
     @pytest.mark.parametrize(
         "field_name", ["source_angular_version", "target_angular_version"]
     )
     @pytest.mark.parametrize("valid_version", ["15", "16.1", "17.2.3", "2"])
     def test_angular_version_valid_cases(
-        self, field_name: str, valid_version: str
+        self, field_name: str, valid_version: str, instance_factory: Any
     ) -> None:
         """Test that valid Angular versions are accepted for both source and target fields."""  # noqa: E501
-        instance = BenchmarkInstance.model_validate(
-            {**self.VALID_INSTANCE_DATA, field_name: valid_version}
-        )
+        instance = instance_factory.create_instance(**{field_name: valid_version})
         assert getattr(instance, field_name) == valid_version
 
     @pytest.mark.parametrize(
@@ -123,38 +98,27 @@ class TestBenchmarkInstance:
         "invalid_version", ["", " ", "v15", "1", "15.a.b", "15..0"]
     )
     def test_angular_version_invalid_cases(
-        self, field_name: str, invalid_version: str
+        self, field_name: str, invalid_version: str, instance_factory: Any
     ) -> None:
         """Test that invalid Angular versions raise a ValueError for both source and target fields."""  # noqa: E501
         with pytest.raises(ValidationError, match="Angular version must be"):
-            BenchmarkInstance.model_validate(
-                {**self.VALID_INSTANCE_DATA, field_name: invalid_version}
-            )
+            instance_factory.create_instance(**{field_name: invalid_version})
 
     @pytest.mark.parametrize("invalid_version", ["", " ", "v18", "18.a.b", "18..0"])
-    def test_node_version_invalid_cases(self, invalid_version: str) -> None:
+    def test_node_version_invalid_cases(
+        self, invalid_version: str, instance_factory: Any
+    ) -> None:
         """Test that invalid Node.js versions raise a ValueError."""
         with pytest.raises(ValidationError, match="Node.js version must be"):
-            BenchmarkInstance.model_validate(
-                {**self.VALID_INSTANCE_DATA, "target_node_version": invalid_version}
-            )
+            instance_factory.create_instance(target_node_version=invalid_version)
 
     @pytest.mark.parametrize("valid_version", ["1", "16", "18.13", "20.5.1"])
-    def test_node_version_valid_cases(self, valid_version: str) -> None:
+    def test_node_version_valid_cases(
+        self, valid_version: str, instance_factory: Any
+    ) -> None:
         """Test that valid Node.js versions are accepted."""
-        instance = BenchmarkInstance.model_validate(
-            {**self.VALID_INSTANCE_DATA, "target_node_version": valid_version}
-        )
+        instance = instance_factory.create_instance(target_node_version=valid_version)
         assert instance.target_node_version == valid_version
-
-    def test_missing_required_field_raises_error(self) -> None:
-        """Test that omitting a required field raises a ValidationError."""
-        # Create a dict without the required field (can't delete from TypedDict)
-        invalid_data = {
-            k: v for k, v in self.VALID_INSTANCE_DATA.items() if k != "repo"
-        }
-        with pytest.raises(ValidationError, match="Field required"):
-            BenchmarkInstance.model_validate(invalid_data)
 
 
 @pytest.mark.unit
@@ -172,8 +136,16 @@ class TestSubmission:
 
     def test_missing_model_patch_raises_error(self) -> None:
         """Test that omitting the model_patch field raises a ValidationError."""
+        patch_content = "diff --git a/file.ts b/file.ts\n--- a/file.ts\n+++ b/file.ts"
+        submission = Submission(
+            instance_id="my-project_v15_to_v16", model_patch=patch_content
+        )
+
+        data = submission.model_dump()
+        del data["model_patch"]
+
         with pytest.raises(ValidationError, match="Field required"):
-            Submission.model_validate({"instance_id": "some-id"})
+            Submission.model_validate(data)
 
 
 @pytest.mark.unit

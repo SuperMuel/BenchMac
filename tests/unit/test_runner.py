@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from bench_mac.models import (
-    BenchmarkInstance,
     CommandOutput,
     EvaluationReport,
     ExecutionJob,
@@ -21,41 +21,25 @@ from bench_mac.runner import BenchmarkRunner, WorkerContext
 
 
 @pytest.fixture
-def sample_tasks() -> list[ExecutionJob]:
+def sample_tasks(instance_factory: Any) -> list[ExecutionJob]:
     """Provides a simple list of two tasks for testing."""
-    instance1 = BenchmarkInstance.model_validate(
-        {
-            "instance_id": "task-1-success",
-            "repo": "owner/repo",
-            "base_commit": "1234567890",
-            "source_angular_version": "15",
-            "target_angular_version": "16",
-            "target_node_version": "18.10.0",
-            "commands": {
-                "install": "npm install",
-                "build": "ng build --prod",
-                "lint": "ng lint",
-                "test": "ng test --watch=false --browsers=ChromeHeadless",
-            },
-        }
+    instance1 = instance_factory.create_instance(
+        instance_id="task-1-success",
+        repo="owner/repo",
+        base_commit="1234567890",
+        source_angular_version="15",
+        target_angular_version="16",
+        target_node_version="18.10.0",
     )
     submission1 = Submission(instance_id="task-1-success", model_patch="...")
 
-    instance2 = BenchmarkInstance.model_validate(
-        {
-            "instance_id": "task-2-failure",
-            "repo": "owner/repo",
-            "base_commit": "1234567890",
-            "source_angular_version": "16",
-            "target_angular_version": "17",
-            "target_node_version": "18.13.0",
-            "commands": {
-                "install": "npm install",
-                "build": "ng build --prod",
-                "lint": "ng lint",
-                "test": "ng test --watch=false --browsers=ChromeHeadless",
-            },
-        }
+    instance2 = instance_factory.create_instance(
+        instance_id="task-2-failure",
+        repo="owner/repo",
+        base_commit="1234567890",
+        source_angular_version="16",
+        target_angular_version="17",
+        target_node_version="18.13.0",
     )
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")
 
