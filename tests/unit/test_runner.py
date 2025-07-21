@@ -17,6 +17,15 @@ from bench_mac.models import (
 )
 from bench_mac.runner import BenchmarkRunner, WorkerContext
 
+# Default commands for testing
+DEFAULT_COMMANDS = {
+    "install": "npm install",
+    "build": "npm run build",
+    "lint": "npm run lint",
+    "test": "npm test",
+}
+
+
 # --- Test Fixtures and Fake Data ---
 
 
@@ -31,6 +40,7 @@ def sample_tasks() -> list[ExecutionJob]:
             "source_angular_version": "15",
             "target_angular_version": "16",
             "target_node_version": "18.10.0",
+            "commands": DEFAULT_COMMANDS,
         }
     )
     submission1 = Submission(instance_id="task-1-success", model_patch="...")
@@ -43,6 +53,7 @@ def sample_tasks() -> list[ExecutionJob]:
             "source_angular_version": "16",
             "target_angular_version": "17",
             "target_node_version": "18.13.0",
+            "commands": DEFAULT_COMMANDS,
         }
     )
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")

@@ -13,25 +13,13 @@ from bench_mac.models import (
     Submission,
 )
 
-
-@pytest.mark.unit
-class TestCommandsConfig:
-    """Tests for the CommandsConfig model."""
-
-    def test_instantiation_with_defaults(self) -> None:
-        """Verify that CommandsConfig instantiates with correct default values."""
-        config = CommandsConfig()
-        assert config.install == "npm ci"
-        assert config.build == "ng build --configuration production"
-        assert config.lint == "ng lint"
-        assert config.test == "ng test --watch=false --browsers=ChromeHeadless"
-
-    def test_instantiation_with_overrides(self) -> None:
-        """Verify that default values can be overridden at instantiation."""
-        custom_build_command = "nx build my-app"
-        config = CommandsConfig(build=custom_build_command)
-        assert config.install == "npm ci"  # Should remain default
-        assert config.build == custom_build_command  # Should be overridden
+# Default commands for testing
+DEFAULT_COMMANDS = {
+    "install": "npm install",
+    "build": "npm run build",
+    "lint": "npm run lint",
+    "test": "npm test",
+}
 
 
 @pytest.mark.unit
@@ -46,6 +34,7 @@ class TestBenchmarkInstance:
         "source_angular_version": "15.0.0",
         "target_angular_version": "16.1.0",
         "target_node_version": "18.13.0",
+        "commands": DEFAULT_COMMANDS,
     }
 
     def test_instantiation_with_valid_data(self) -> None:

@@ -1,5 +1,6 @@
 # Project-specific ignores
 .benchmac/
+curation/
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,macos,dotenv,windows
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,visualstudiocode,macos,dotenv,windows

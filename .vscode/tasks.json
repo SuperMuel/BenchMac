@@ -44,6 +44,43 @@
                 "panel": "shared"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "BenchMAC: Purge Docker images",
+            "type": "shell",
+            // Use bash -c so we can run several commands in sequence
+            "command": "/bin/bash",
+            "args": [
+                "-c",
+                "set -euo pipefail; docker ps -a --filter ancestor=benchmac-base -q | xargs -r docker rm -f; docker ps -a --filter ancestor='benchmac-*' -q | xargs -r docker rm -f; docker images --filter reference='benchmac-*' -a -q | xargs -r docker rmi -f; docker images --filter ancestor=benchmac-base -a -q | xargs -r docker rmi -f; docker rmi -f benchmac-base || true; docker image prune -f; docker builder prune -f"
+            ],
+            // Show output in a new terminal panel every time
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean BenchMAC Docker Images",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "echo 'Stopping and removing BenchMAC containers...' && docker ps -a --filter ancestor=benchmac-base --filter ancestor=benchmac-env --filter ancestor=benchmac-instance -q | xargs -r docker rm -f && echo 'Removing BenchMAC images...' && docker images --filter 'reference=benchmac-*' -q | xargs -r docker rmi -f && echo 'BenchMAC cleanup complete!'"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Remove all BenchMAC containers and images to force rebuild when Dockerfiles change"
         }
     ]
 }

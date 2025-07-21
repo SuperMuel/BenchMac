@@ -191,6 +191,12 @@ RUN . "$NVM_DIR/nvm.sh" && \\
     nvm alias default $NODE_VERSION && \\
     npm install -g @angular/cli@{angular_cli_version}
 
+RUN npx --yes puppeteer@19 install --browser=chromium \
+ && export CHROME_BIN=$(npx puppeteer@19 print-browser-path) \
+ && ln -sf "$CHROME_BIN" /usr/local/bin/chrome
+
+ENV CHROME_BIN=/usr/local/bin/chrome
+
 # Verify installations to catch errors early
 RUN . "$NVM_DIR/nvm.sh" && node -v && ng version
 """
