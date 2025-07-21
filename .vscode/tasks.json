@@ -34,7 +34,7 @@
             "command": "bash",
             "args": [
                 "-c",
-                "source .env && uvx --from codecov-cli codecov upload-process --file coverage.xml"
+                "source .env && uvx --from codecov-cli codecov upload-process --file ./coverage.xml --disable-search"
             ],
             "group": "build",
             "presentation": {
