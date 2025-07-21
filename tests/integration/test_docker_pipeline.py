@@ -6,8 +6,6 @@ for the image builder.
 
 These tests require a running Docker daemon to be present on the host machine.
 They are marked as 'integration' and will be skipped by default.
-
-To run these tests: `uv run pytest -m integration`
 """
 
 import uuid
@@ -60,8 +58,6 @@ class TestImageBuilder:
             commands=CommandsConfig(
                 install="npm install",
                 build="ng build --prod",
-                lint="ng lint",
-                test="ng test --watch=false --browsers=ChromeHeadless",
             ),
         )
 

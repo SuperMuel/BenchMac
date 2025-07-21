@@ -49,7 +49,7 @@ def execute_submission(
     1. Prepares the specific Docker environment for the instance.
     2. Runs a container from the environment.
     3. Copies and applies the submitted patch.
-    4. Runs install, build, lint, and test commands.
+    4. Runs install and build commands.
     5. Returns a structured execution trace.
 
     Parameters
@@ -139,30 +139,6 @@ def execute_submission(
                 return ExecutionTrace(steps=steps)
 
             logger.info("✅ Build completed successfully.")
-
-            # 8. Lint
-            logger.debug(f"Executing lint command: {instance.commands.lint}")
-            lint_out = _execute_and_capture(
-                docker_manager, container, instance.commands.lint
-            )
-            steps.append(lint_out)
-
-            if not lint_out.success:
-                logger.info("⚠️ Lint failed. Continuing with tests.")
-            else:
-                logger.info("✅ Lint completed successfully.")
-
-            # 9. Test
-            logger.debug(f"Executing test command: {instance.commands.test}")
-            test_out = _execute_and_capture(
-                docker_manager, container, instance.commands.test
-            )
-            steps.append(test_out)
-
-            if not test_out.success:
-                logger.info("❌ Tests failed.")
-            else:
-                logger.info("✅ Tests completed successfully.")
 
         except Exception as e:
             logger.exception(

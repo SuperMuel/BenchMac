@@ -51,14 +51,6 @@ class CommandsConfig(BaseModel):
         ...,
         description="The command to build the target project.",
     )
-    lint: str = Field(
-        ...,
-        description="The command to lint the target project.",
-    )
-    test: str = Field(
-        ...,
-        description="The command to run tests for the target project.",
-    )
 
 
 # --- Core Benchmark & SUT Models ---

@@ -11,8 +11,6 @@ def default_commands() -> CommandsConfig:
     return CommandsConfig(
         install="npm install",
         build="ng build --configuration production",
-        lint="ng lint",
-        test="ng test --watch=false --browsers=ChromeHeadless",
     )
 
 
