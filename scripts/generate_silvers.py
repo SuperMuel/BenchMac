@@ -45,18 +45,7 @@ from bench_mac.models import BenchmarkInstance
 # The key is the instance_id, and the value is the commit hash that represents
 # the state of the repository *after* the migration for that instance was
 # successfully completed.
-SILVER_SOLUTIONS = {
-    "angular2-hn_v9_to_v10": "60ed37f",
-    "angular2-hn_v10_to_v11": "16c8a35",
-    "angular2-hn_v11_to_v12": "c73a6a7",
-    "angular2-hn_v12_to_v13": "cb10fa5",
-    "angular2-hn_v13_to_v14": "6dc7037",
-    "angular2-hn_v14_to_v15": "52b2ec9",
-    "angular2-hn_v15_to_v16": "83db8bd",
-    "angular2-hn_v16_to_v17": "c6d3b8c",
-    "angular2-hn_v17_to_v18": "e5a358f",
-    "angular2-hn_v18_to_v19": "30529e8",
-}
+SILVER_SOLUTIONS = {"simple-benchmac-instance_v15_to_v16": "5b5f6a7"}
 
 
 def run_command(command: list[str], cwd: Path | None = None) -> str:

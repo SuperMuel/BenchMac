@@ -1,11 +1,14 @@
+import json
+
 import pytest
 from docker.errors import DockerException
 from loguru import logger
 
+from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
-from bench_mac.models import BenchmarkInstance, CommandsConfig, Submission
+from bench_mac.models import BenchmarkInstance, Submission
 
 # A deliberately malformed patch that is guaranteed to fail application.
 # It tries to remove a line that is unlikely to exist in that exact form.
@@ -33,18 +36,19 @@ def docker_manager() -> DockerManager:
 def test_instance() -> BenchmarkInstance:
     """Provides a real, known-good benchmark instance for testing."""
     # This instance is simple and its repository is small, making it ideal for testing.
-    return BenchmarkInstance(
-        instance_id="angular2-hn_v18_to_v19",
-        repo="SuperMuel/angular2-hn",
-        base_commit="e5a358f",  # Corresponds to v18
-        source_angular_version="18",
-        target_angular_version="19",
-        target_node_version="20.11.0",
-        commands=CommandsConfig(
-            install="npm install",
-            build="ng build --configuration production",
-        ),
-    )
+
+    # Read the instances.jsonl file
+    instances_file = settings.instances_file
+    target_id = "simple-benchmac-instance_v15_to_v16"
+
+    with instances_file.open("r") as f:
+        for line in f:
+            if line.strip():  # Skip empty lines
+                instance_data = json.loads(line.strip())
+                if instance_data["instance_id"] == target_id:
+                    return BenchmarkInstance(**instance_data)
+
+    raise ValueError(f"Instance with ID '{target_id}' not found in {instances_file}")
 
 
 @pytest.fixture(scope="module")
@@ -115,6 +119,30 @@ class TestExecuteSubmission:
         assert patch_apply_step.success
         assert "error" not in patch_apply_step.stderr.lower()
         assert "fail" not in patch_apply_step.stderr.lower()
+
+        # Check that the execution trace shows successful install
+        install_step = None
+        for step in trace.steps:
+            if "npm install" in step.command:
+                install_step = step
+                break
+
+        assert install_step is not None
+        assert install_step.success
+        assert "error" not in install_step.stderr.lower()
+        assert "fail" not in install_step.stderr.lower()
+
+        # Check that the execution trace shows successful build
+        build_step = None
+        for step in trace.steps:
+            if "npm run build" in step.command:
+                build_step = step
+                break
+
+        assert build_step is not None
+        assert build_step.success
+        assert "error" not in build_step.stderr.lower()
+        assert "fail" not in build_step.stderr.lower()
 
     def test_failed_patch_application(
         self,

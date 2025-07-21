@@ -227,7 +227,9 @@ class CommandOutput(BaseModel):
 
     @property
     def success(self) -> bool:
-        """A convenience property to check if the command succeeded."""
+        """A convenience property to check if the command succeeded
+        (exit_code == 0)
+        """
         return self.exit_code == 0
 
 
