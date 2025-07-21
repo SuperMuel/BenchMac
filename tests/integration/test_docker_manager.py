@@ -113,6 +113,63 @@ class TestDockerManager:
                 print(f"Cleaning up container: {container.short_id}")
                 docker_manager.cleanup_container(container)
 
+    def test_execute_in_container_with_workdir(
+        self, docker_manager: DockerManager, unique_tag: str
+    ) -> None:
+        """
+        Verify that the `workdir` parameter correctly sets the execution context.
+        """
+        # A Dockerfile that creates a specific file structure for testing
+        workdir_dockerfile = """
+        FROM alpine:latest
+        RUN mkdir -p /app
+        RUN echo "root_content" > /test_root.txt
+        RUN echo "app_content" > /app/test_app.txt
+        CMD ["/bin/sh"]
+        """
+        docker_manager.build_image(
+            dockerfile_content=workdir_dockerfile, tag=unique_tag
+        )
+        container = docker_manager.run_container(image_tag=unique_tag)
+
+        try:
+            # 1. Test execution in the default root directory
+            print("Testing execution in default workdir ('/')")
+            exit_code, stdout, _ = docker_manager.execute_in_container(container, "pwd")
+            assert exit_code == 0
+            assert stdout.strip() == "/"
+
+            exit_code, stdout, _ = docker_manager.execute_in_container(
+                container, "cat test_root.txt"
+            )
+            assert exit_code == 0
+            assert "root_content" in stdout
+
+            # 2. Test execution in the specified subdirectory
+            print("Testing execution in specified workdir ('/app')")
+            exit_code, stdout, _ = docker_manager.execute_in_container(
+                container, "pwd", workdir="/app"
+            )
+            assert exit_code == 0
+            assert stdout.strip() == "/app"
+
+            exit_code, stdout, _ = docker_manager.execute_in_container(
+                container, "cat test_app.txt", workdir="/app"
+            )
+            assert exit_code == 0
+            assert "app_content" in stdout
+
+            # 3. Verify that a file from another directory is not found
+            exit_code, _, stderr = docker_manager.execute_in_container(
+                container, "cat test_root.txt", workdir="/app"
+            )
+            assert exit_code != 0
+            assert "No such file or directory" in stderr
+
+        finally:
+            if container:
+                docker_manager.cleanup_container(container)
+
     def test_copy_to_container(
         self, docker_manager: DockerManager, unique_tag: str, tmp_path: Path
     ) -> None:

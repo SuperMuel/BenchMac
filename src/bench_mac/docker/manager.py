@@ -200,7 +200,7 @@ class DockerManager:
             raise
 
     def execute_in_container(
-        self, container: Container, command: str
+        self, container: Container, command: str, workdir: str | None = None
     ) -> tuple[int, str, str]:
         """
         Executes a shell command inside a running container.
@@ -211,13 +211,29 @@ class DockerManager:
             The Container object to execute the command in.
         command
             The shell command to execute.
+        workdir
+            The working directory inside the container to run the command from.
 
         Returns
         -------
         A tuple containing (exit_code, stdout, stderr).
         """
-        logger.debug(f"Executing in {container.short_id}: {command}")
-        exit_code, output = container.exec_run(command, demux=True)  # type: ignore[reportUnknownMemberType]
+        # Ensure the command is run within a shell to handle operators like &&
+        # and shell builtins like cd.
+        shell_command = ["/bin/sh", "-c", command]
+
+        logger.debug(
+            f"Executing in {container.short_id}"
+            f" (workdir: {workdir or '/'}): {shell_command}"
+        )
+        exit_code, output = container.exec_run(  # type: ignore[reportUnknownMemberType]
+            shell_command,
+            # demux=True returns (stdout, stderr) as separate byte streams, not combined
+            # For example, running 'sh -c "echo out && echo err >&2"' will yield:
+            #   output = (b'out\n', b'err\n')
+            demux=True,
+            workdir=workdir,
+        )
 
         logger.debug(f"  > Exit code: {exit_code}")
 
