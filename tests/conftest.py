@@ -10,7 +10,7 @@ def default_commands() -> CommandsConfig:
     """Provides a standard CommandsConfig for testing."""
     return CommandsConfig(
         install="npm install",
-        build="ng build --prod",
+        build="ng build --configuration production",
         lint="ng lint",
         test="ng test --watch=false --browsers=ChromeHeadless",
     )

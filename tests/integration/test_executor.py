@@ -42,7 +42,7 @@ def test_instance() -> BenchmarkInstance:
         target_node_version="20.11.0",
         commands=CommandsConfig(
             install="npm install",
-            build="ng build --prod",
+            build="ng build --configuration production",
             lint="ng lint",
             test="ng test --watch=false --browsers=ChromeHeadless",
         ),
