@@ -26,6 +26,12 @@ class TestBenchmarkInstance:
         "source_angular_version": "15.0.0",
         "target_angular_version": "16.1.0",
         "target_node_version": "18.13.0",
+        "commands": {
+            "install": "npm install",
+            "build": "ng build --prod",
+            "lint": "ng lint",
+            "test": "ng test --watch=false --browsers=ChromeHeadless",
+        },
     }
 
     def test_instantiation_with_valid_data(self) -> None:

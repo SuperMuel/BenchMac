@@ -31,6 +31,12 @@ def sample_tasks() -> list[ExecutionJob]:
             "source_angular_version": "15",
             "target_angular_version": "16",
             "target_node_version": "18.10.0",
+            "commands": {
+                "install": "npm install",
+                "build": "ng build --prod",
+                "lint": "ng lint",
+                "test": "ng test --watch=false --browsers=ChromeHeadless",
+            },
         }
     )
     submission1 = Submission(instance_id="task-1-success", model_patch="...")
@@ -43,6 +49,12 @@ def sample_tasks() -> list[ExecutionJob]:
             "source_angular_version": "16",
             "target_angular_version": "17",
             "target_node_version": "18.13.0",
+            "commands": {
+                "install": "npm install",
+                "build": "ng build --prod",
+                "lint": "ng lint",
+                "test": "ng test --watch=false --browsers=ChromeHeadless",
+            },
         }
     )
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")
