@@ -1,9 +1,11 @@
 import re
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
+
+from bench_mac.config import settings
 
 
 def validate_angular_version(value: str) -> str:
@@ -122,6 +124,45 @@ class BenchmarkInstance(BaseModel):
         default_factory=dict,
         description="Optional metadata like tags, difficulty, etc.",
     )
+
+    override_dockerfile_content: str | None = Field(
+        default=None,
+        description="The Dockerfile content for the instance, overriding any "
+        "Dockerfile in `.data/dockerfiles/<instance_id>`",
+    )
+
+    @model_validator(mode="after")
+    def validate_dockerfile_availability(self) -> Self:
+        """Validate that either dockerfile_content is provided or
+        dockerfile file exists.
+        """
+        if self.override_dockerfile_content is not None:
+            return self
+
+        # Check if dockerfile file exists at ./data/dockerfiles/<instance_id>
+        dockerfile_path = settings.dockerfiles_dir / self.instance_id
+        if not dockerfile_path.exists():
+            raise ValueError(
+                "Either override_dockerfile_content must be provided"
+                f" or dockerfile must exist at {dockerfile_path}"
+            )
+
+        return self
+
+    @property
+    def dockerfile_content(self) -> str:
+        """The Dockerfile content for the instance."""
+        if self.override_dockerfile_content is not None:
+            return self.override_dockerfile_content
+
+        dockerfile_path = settings.dockerfiles_dir / self.instance_id
+        assert dockerfile_path.exists(), (
+            "Dockerfile should exist at .data/dockerfiles/<instance_id>"
+            " since override_dockerfile_content wasn't provided. It indicates"
+            " a programming error in the Pydantic model validation."
+        )
+
+        return dockerfile_path.read_text()
 
 
 class Submission(BaseModel):

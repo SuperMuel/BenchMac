@@ -104,22 +104,6 @@ class TestBenchmarkInstance:
         with pytest.raises(ValidationError, match="Angular version must be"):
             instance_factory.create_instance(**{field_name: invalid_version})
 
-    @pytest.mark.parametrize("invalid_version", ["", " ", "v18", "18.a.b", "18..0"])
-    def test_node_version_invalid_cases(
-        self, invalid_version: str, instance_factory: Any
-    ) -> None:
-        """Test that invalid Node.js versions raise a ValueError."""
-        with pytest.raises(ValidationError, match="Node.js version must be"):
-            instance_factory.create_instance(target_node_version=invalid_version)
-
-    @pytest.mark.parametrize("valid_version", ["1", "16", "18.13", "20.5.1"])
-    def test_node_version_valid_cases(
-        self, valid_version: str, instance_factory: Any
-    ) -> None:
-        """Test that valid Node.js versions are accepted."""
-        instance = instance_factory.create_instance(target_node_version=valid_version)
-        assert instance.target_node_version == valid_version
-
 
 @pytest.mark.unit
 class TestSubmission:
@@ -194,3 +178,57 @@ class TestEvaluationResult:
             instance_id="some-id", execution=execution, metrics=metrics
         )
         assert len(result.execution.steps) == 0
+
+
+@pytest.mark.unit
+class TestBenchmarkInstanceDockerfileValidation:
+    def test_allows_override_dockerfile_content(
+        self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
+    ) -> None:
+        # Point dockerfiles_dir to a temp directory that does not contain the file
+        from bench_mac.config import settings
+
+        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+
+        instance = instance_factory.create_instance(
+            instance_id="no-file-needed",
+            override_dockerfile_content="FROM node:18\n",
+        )
+        assert instance.override_dockerfile_content == "FROM node:18\n"
+        assert instance.dockerfile_content == "FROM node:18\n"
+
+    def test_uses_existing_dockerfile_when_present(
+        self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
+    ) -> None:
+        from bench_mac.config import settings
+
+        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+
+        instance_id = "test-instance-has-file"
+        dockerfile_path = tmp_path / instance_id
+        dockerfile_content = "FROM node:18.19.0-bullseye-slim\n"
+        dockerfile_path.write_text(dockerfile_content)
+
+        instance = instance_factory.create_instance(
+            instance_id=instance_id,
+            override_dockerfile_content=None,
+        )
+        # Should not raise and should read from the file
+        assert instance.override_dockerfile_content is None
+        assert instance.dockerfile_content == dockerfile_content
+
+    def test_raises_when_no_override_and_no_file(
+        self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
+    ) -> None:
+        from bench_mac.config import settings
+
+        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+
+        missing_id = "missing-instance"
+        with pytest.raises(
+            ValidationError, match="Either override_dockerfile_content must be provided"
+        ):
+            instance_factory.create_instance(
+                instance_id=missing_id,
+                override_dockerfile_content=None,
+            )

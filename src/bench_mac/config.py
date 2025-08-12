@@ -34,6 +34,13 @@ class Settings(BaseSettings):
         description="The absolute path to the project's root directory.",
     )
 
+    dockerfiles_dir: Path = Field(
+        default_factory=lambda: Path(__file__).parent.parent.parent
+        / "data"
+        / "dockerfiles",
+        description="The default directory containing per-instance Dockerfiles.",
+    )
+
     @property
     def data_dir(self) -> Path:
         """Path to the directory containing benchmark data."""
@@ -98,8 +105,23 @@ class Settings(BaseSettings):
         settings.cache_dir.mkdir(exist_ok=True)
         settings.silver_patches_repos_dir.mkdir(exist_ok=True)
         settings.results_dir.mkdir(exist_ok=True)
+        settings.dockerfiles_dir.mkdir(exist_ok=True)
         logger.info("✅ Directories initialized.")
 
 
 # Create a single, importable instance of the settings
 settings = Settings()
+
+# Log the full settings configuration
+logger.info("BenchMAC Settings Configuration:")
+logger.info(f"{settings.model_dump_json(indent=2)}")
+
+# Log the directory paths
+
+logger.info("Directory paths:")
+logger.info(f"  Data directory: {settings.data_dir}")
+logger.info(f"  Cache directory: {settings.cache_dir}")
+logger.info(f"  Silver patches directory: {settings.silver_patches_dir}")
+logger.info(f"  Silver patches repos directory: {settings.silver_patches_repos_dir}")
+logger.info(f"  Results directory: {settings.results_dir}")
+logger.info(f"  Dockerfiles directory: {settings.dockerfiles_dir}")
