@@ -60,8 +60,7 @@ def load_all_benchmark_instances() -> list[BenchmarkInstance]:
     return instances_list
 
 
-@pytest.mark.integration
-@pytest.mark.slow
+@pytest.mark.baseline_validation
 class TestBaselineInstanceValidation:
     """
     Validates that every benchmark instance starts from a known-good state.

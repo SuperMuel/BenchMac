@@ -16,6 +16,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run with coverage**: `uv run pytest --cov=src --cov-report=html`
 - **Run specific test file**: `uv run pytest tests/unit/test_models.py`
 
+### Data Validation
+These tests are very slow and validate the correctness of the benchmark instances.
+They should be run manually after adding or changing instances in `data/`.
+**Run baseline data validation**: `uv run pytest -m baseline_validation`
+
+
+
 ### Code Quality
 - **Format and lint code**: `uv run ruff format` and `uv run ruff check`
 - **Fix linting issues**: `uv run ruff check --fix`
