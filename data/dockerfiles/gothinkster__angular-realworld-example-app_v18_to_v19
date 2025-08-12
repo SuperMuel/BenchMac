@@ -1,0 +1,47 @@
+# Base image: Node 18 LTS on Debian slim
+FROM node:18-bookworm-slim
+
+# Set environment variables for CI
+ENV CI=true \
+    TZ=UTC \
+    LANG=C.UTF-8 \
+    NG_CLI_ANALYTICS=false \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_FUND=false \
+    CHROME_BIN=/usr/bin/chromium
+
+# Install system packages needed for Angular CI
+# - git: for repository cloning
+# - ca-certificates: for SSL certificate verification
+# - chromium and chromium-driver: for Angular testing with ChromeHeadless
+RUN apt-get update && \
+    apt-get install -y \
+        git \
+        ca-certificates \
+        chromium \
+        chromium-driver \
+        --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
+# Create project directory and give ownership to non-root user
+RUN mkdir -p /app/project && chown -R node:node /app
+
+# Switch to non-root 'node' user for safer container execution
+USER node
+
+# Set working directory to the expected project path
+WORKDIR /app/project
+
+# Use a writable npm cache location for the non-root user
+ENV NPM_CONFIG_CACHE=/home/node/.npm
+
+# Clone repository and checkout specific commit (Angular 18)
+RUN git clone https://github.com/gothinkster/angular-realworld-example-app.git . && \
+    git checkout 2555e2f
+
+# Mark the repo as safe to avoid Git ownership warnings
+RUN git config --global --add safe.directory /app/project
+
+# Default command - idle state for external harness
+CMD ["bash", "-lc", "sleep infinity"]
