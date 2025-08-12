@@ -25,21 +25,8 @@ def validate_angular_version(value: str) -> str:
     return value
 
 
-def validate_node_version(value: str) -> str:
-    """Validate Node.js version format."""
-    # Allow semantic versions (e.g., "18.13.0") or partial versions (e.g., "18", "18.13")  # noqa: E501
-    semver_pattern = r"^\d+(\.\d+){0,2}$"
-    if not re.match(semver_pattern, value):
-        raise ValueError(
-            "Node.js version must be in semantic version format (e.g., '18', '18.13', '18.13.0')"  # noqa: E501
-        )
-
-    return value
-
-
 # Custom types for versions
 AngularVersion = Annotated[str, BeforeValidator(validate_angular_version)]
-NodeVersion = Annotated[str, BeforeValidator(validate_node_version)]
 
 
 class CommandsConfig(BaseModel):
