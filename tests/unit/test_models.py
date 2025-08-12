@@ -232,3 +232,20 @@ class TestBenchmarkInstanceDockerfileValidation:
                 instance_id=missing_id,
                 override_dockerfile_content=None,
             )
+
+    def test_raises_when_dockerfile_is_empty(
+        self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
+    ) -> None:
+        from bench_mac.config import settings
+
+        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+
+        instance_id = "empty-dockerfile-instance"
+        dockerfile_path = tmp_path / instance_id
+        dockerfile_path.write_text("  \n  ")
+
+        with pytest.raises(ValidationError, match=r"is empty\."):
+            instance_factory.create_instance(
+                instance_id=instance_id,
+                override_dockerfile_content=None,
+            )
