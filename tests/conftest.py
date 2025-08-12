@@ -23,7 +23,6 @@ def sample_instance(default_commands: CommandsConfig) -> BenchmarkInstance:
         base_commit="a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
         source_angular_version="15.0.0",
         target_angular_version="16.1.0",
-        target_node_version="18.13.0",
         commands=default_commands,
     )
 
@@ -41,9 +40,9 @@ class InstanceFactory:
         base_commit: str = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
         source_angular_version: str = "15.0.0",
         target_angular_version: str = "16.1.0",
-        target_node_version: str = "18.13.0",
         commands: CommandsConfig | None = None,
         metadata: dict[str, str] | None = None,
+        override_dockerfile_content: str | None = None,
     ) -> BenchmarkInstance:
         """Create a BenchmarkInstance with custom parameters."""
         return BenchmarkInstance(
@@ -52,9 +51,9 @@ class InstanceFactory:
             base_commit=base_commit,
             source_angular_version=source_angular_version,
             target_angular_version=target_angular_version,
-            target_node_version=target_node_version,
             commands=commands or self.default_commands,
             metadata=metadata or {},
+            override_dockerfile_content=override_dockerfile_content,
         )
 
 
