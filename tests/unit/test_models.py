@@ -249,3 +249,24 @@ class TestBenchmarkInstanceDockerfileValidation:
                 instance_id=instance_id,
                 override_dockerfile_content=None,
             )
+
+    def test_raises_when_override_dockerfile_content_is_empty(
+        self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
+    ) -> None:
+        from bench_mac.config import settings
+
+        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+
+        # Test empty string
+        with pytest.raises(ValidationError, match=r"is empty\."):
+            instance_factory.create_instance(
+                instance_id="test-instance",
+                override_dockerfile_content="",
+            )
+
+        # Test whitespace only
+        with pytest.raises(ValidationError, match=r"is empty\."):
+            instance_factory.create_instance(
+                instance_id="test-instance",
+                override_dockerfile_content="  \n  \t  ",
+            )

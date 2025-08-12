@@ -124,12 +124,19 @@ class BenchmarkInstance(BaseModel):
         default_factory=dict,
         description="Optional metadata like tags, difficulty, etc.",
     )
-
     override_dockerfile_content: str | None = Field(
         default=None,
         description="The Dockerfile content for the instance, overriding any "
         "Dockerfile in `.data/dockerfiles/<instance_id>`",
     )
+
+    @field_validator("override_dockerfile_content")
+    @classmethod
+    def validate_override_dockerfile_content(cls, v: str | None) -> str | None:
+        """Validate that override_dockerfile_content is not empty if provided."""
+        if v is not None and not v.strip():
+            raise ValueError("override_dockerfile_content is empty.")
+        return v
 
     @model_validator(mode="after")
     def validate_dockerfile_availability(self) -> Self:
