@@ -13,17 +13,9 @@ from collections.abc import Generator
 
 import pytest
 
-from bench_mac.config import settings
-from bench_mac.docker.builder import (
-    _get_environment_image_tag,
-    _get_instance_image_tag,
-    prepare_environment,
-)
+from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import BenchmarkInstance, CommandsConfig
-
-# A simple, minimal Dockerfile for testing the manager in isolation.
-SIMPLE_DOCKERFILE = 'FROM alpine:latest\nCMD ["echo", "container is running"]'
 
 
 @pytest.fixture
@@ -48,16 +40,16 @@ class TestImageBuilder:
     @pytest.fixture
     def test_instance(self) -> BenchmarkInstance:
         """Provides a standard, real-world benchmark instance for testing."""
+
         return BenchmarkInstance(
-            instance_id="angular2-hn-v10_to_v11",
-            repo="SuperMuel/angular2-hn",
-            base_commit="60ed37f",
-            source_angular_version="10.2.5",
-            target_angular_version="11.2.14",
-            target_node_version="16.20.2",
+            instance_id="gothinkster__angular-realworld-example-app_v11_to_v12",
+            repo="gothinkster/angular-realworld-example-app",
+            base_commit="4f29e0e",
+            source_angular_version="11.2.8",
+            target_angular_version="12",
             commands=CommandsConfig(
-                install="npm install",
-                build="ng build --prod",
+                install="npm ci",
+                build="npx ng build --configuration production",
             ),
         )
 
@@ -68,12 +60,7 @@ class TestImageBuilder:
         Tests the full, end-to-end creation of a hierarchical environment.
         This is the primary test for the entire infrastructure pipeline.
         """
-        # Predict the tags that will be generated for cleanup
-        target_cli_major_version = test_instance.target_angular_version.split(".")[0]
-        env_image_tag = _get_environment_image_tag(
-            test_instance.target_node_version, target_cli_major_version
-        )
-        instance_image_tag = _get_instance_image_tag(test_instance)
+        instance_image_tag = prepare_environment(test_instance, docker_manager)
 
         container = None
         try:
@@ -81,9 +68,7 @@ class TestImageBuilder:
             final_tag = prepare_environment(test_instance, docker_manager)
             assert final_tag == instance_image_tag
 
-            # 2. Verify all images were created
-            assert docker_manager.image_exists(settings.docker_base_image_name)
-            assert docker_manager.image_exists(env_image_tag)
+            # 2. Verify the instance image was created
             assert docker_manager.image_exists(instance_image_tag)
 
             # 3. Run a container and verify the project was cloned correctly
@@ -101,9 +86,3 @@ class TestImageBuilder:
             # Remove images in reverse order of creation
             if docker_manager.image_exists(instance_image_tag):
                 docker_manager.remove_image(instance_image_tag)
-            if docker_manager.image_exists(env_image_tag):
-                docker_manager.remove_image(env_image_tag)
-            # Note: We typically don't remove the base image in a real run,
-            # but we do here to ensure the test is fully isolated.
-            if docker_manager.image_exists(settings.docker_base_image_name):
-                docker_manager.remove_image(settings.docker_base_image_name)

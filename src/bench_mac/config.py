@@ -83,11 +83,6 @@ class Settings(BaseSettings):
         "If None, the library will try to auto-detect.",
     )
 
-    docker_base_image_name: str = Field(
-        default="benchmac-base",
-        description="The name for the foundational Docker base image.",
-    )
-
     # --- Pydantic-Settings Configuration ---
     model_config = SettingsConfigDict(
         # Prefix for environment variables (e.g., BENCHMAC_LOG_LEVEL)

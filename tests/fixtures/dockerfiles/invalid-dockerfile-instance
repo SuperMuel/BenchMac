@@ -1,5 +1,0 @@
-# Invalid Dockerfile for testing error handling
-FROM nonexistent:image
-
-# This should fail to build
-RUN this-command-does-not-exist

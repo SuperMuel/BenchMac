@@ -1,4 +1,0 @@
-{"instance_id":"test-instance-v15-to-v16","repo":"owner/test-repo","base_commit":"a1b2c3d","source_angular_version":"15.0.0","target_angular_version":"16.0.0","commands":{"install":"npm ci","build":"npx ng build --configuration production"}}
-{"instance_id":"test-instance-v16-to-v17","repo":"owner/test-repo","base_commit":"b2c3d4e","source_angular_version":"16.0.0","target_angular_version":"17.0.0","commands":{"install":"npm ci","build":"npx ng build --configuration production"}}
-{"instance_id":"invalid-dockerfile-instance","repo":"owner/test-repo","base_commit":"c3d4e5f","source_angular_version":"15.0.0","target_angular_version":"16.0.0","commands":{"install":"npm ci","build":"npx ng build"}}
-{"instance_id":"missing-dockerfile-instance","repo":"owner/test-repo","base_commit":"d4e5f6a","source_angular_version":"15.0.0","target_angular_version":"16.0.0","commands":{"install":"npm ci","build":"npx ng build"}}
