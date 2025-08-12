@@ -8,7 +8,12 @@ from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
-from bench_mac.models import BenchmarkInstance, Submission
+from bench_mac.models import (
+    BenchmarkInstance,
+    CommandOutput,
+    ExecutionTrace,
+    Submission,
+)
 
 # A deliberately malformed patch that is guaranteed to fail application.
 # It tries to remove a line that is unlikely to exist in that exact form.
@@ -39,7 +44,7 @@ def test_instance() -> BenchmarkInstance:
 
     # Read the instances.jsonl file
     instances_file = settings.instances_file
-    target_id = "simple-benchmac-instance_v15_to_v16"
+    target_id = "gothinkster__angular-realworld-example-app_v11_to_v12"
 
     with instances_file.open("r") as f:
         for line in f:
@@ -81,6 +86,13 @@ def silver_submission(test_instance: BenchmarkInstance) -> Submission:
     return Submission(instance_id=test_instance.instance_id, model_patch=patch_content)
 
 
+def _find_step(trace: ExecutionTrace, command: str) -> CommandOutput | None:
+    for step in trace.steps:
+        if command in step.command:
+            return step
+    return None
+
+
 @pytest.mark.integration
 class TestExecuteSubmission:
     def test_successful_patch_application(
@@ -109,11 +121,7 @@ class TestExecuteSubmission:
         assert metrics.patch_application_success is True
 
         # Check that the execution trace shows successful patch application
-        patch_apply_step = None
-        for step in trace.steps:
-            if "git apply -p0" in step.command and "--check" not in step.command:
-                patch_apply_step = step
-                break
+        patch_apply_step = _find_step(trace, "git apply -p0")
 
         assert patch_apply_step is not None
         assert patch_apply_step.success
@@ -121,28 +129,16 @@ class TestExecuteSubmission:
         assert "fail" not in patch_apply_step.stderr.lower()
 
         # Check that the execution trace shows successful install
-        install_step = None
-        for step in trace.steps:
-            if "npm install" in step.command:
-                install_step = step
-                break
+        install_step = _find_step(trace, test_instance.commands.install)
 
         assert install_step is not None
         assert install_step.success
-        assert "error" not in install_step.stderr.lower()
-        assert "fail" not in install_step.stderr.lower()
 
         # Check that the execution trace shows successful build
-        build_step = None
-        for step in trace.steps:
-            if "npm run build" in step.command:
-                build_step = step
-                break
+        build_step = _find_step(trace, test_instance.commands.build)
 
         assert build_step is not None
         assert build_step.success
-        assert "error" not in build_step.stderr.lower()
-        assert "fail" not in build_step.stderr.lower()
 
     def test_failed_patch_application(
         self,

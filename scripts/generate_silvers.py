@@ -46,7 +46,16 @@ from bench_mac.utils import load_instances
 # The key is the instance_id, and the value is the commit hash that represents
 # the state of the repository *after* the migration for that instance was
 # successfully completed.
-SILVER_SOLUTIONS = {"simple-benchmac-instance_v15_to_v16": "5b5f6a7"}
+SILVER_SOLUTIONS = {
+    "gothinkster__angular-realworld-example-app_v11_to_v12": "57eeb6a",
+    "gothinkster__angular-realworld-example-app_v12_to_v13": "db8c6b0",
+    "gothinkster__angular-realworld-example-app_v13_to_v14": "e2f6f4c",
+    "gothinkster__angular-realworld-example-app_v14_to_v15": "e28c896",
+    "gothinkster__angular-realworld-example-app_v15_to_v16": "bd914dc",
+    "gothinkster__angular-realworld-example-app_v16_to_v17": "f218b2f",
+    "gothinkster__angular-realworld-example-app_v17_to_v18": "2555e2f",
+    "gothinkster__angular-realworld-example-app_v18_to_v19": "a6f16d0",
+}  # TODO: export this in config file
 
 
 def run_command(command: list[str], cwd: Path | None = None) -> str:

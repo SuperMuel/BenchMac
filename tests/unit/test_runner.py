@@ -29,7 +29,6 @@ def sample_tasks(instance_factory: Any) -> list[ExecutionJob]:
         base_commit="1234567890",
         source_angular_version="15",
         target_angular_version="16",
-        target_node_version="18.10.0",
     )
     submission1 = Submission(instance_id="task-1-success", model_patch="...")
 
@@ -39,7 +38,6 @@ def sample_tasks(instance_factory: Any) -> list[ExecutionJob]:
         base_commit="1234567890",
         source_angular_version="16",
         target_angular_version="17",
-        target_node_version="18.13.0",
     )
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")
 
