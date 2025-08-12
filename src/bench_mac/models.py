@@ -113,12 +113,6 @@ class BenchmarkInstance(BaseModel):
         description="The desired target major Angular version (e.g., '16').",
     )
 
-    target_node_version: NodeVersion = Field(
-        ...,
-        description="The Node.js version for the evaluation environment "
-        "(e.g., '18.13.0').",
-    )
-
     commands: CommandsConfig = Field(
         ...,
         description="Custom commands for evaluation, overriding defaults.",
