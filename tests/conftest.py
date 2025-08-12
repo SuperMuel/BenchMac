@@ -1,8 +1,12 @@
 """Shared test fixtures and utilities."""
 
+from typing import cast
+
 import pytest
 
 from bench_mac.models import BenchmarkInstance, CommandsConfig, Submission
+
+_UNSET = object()
 
 
 @pytest.fixture
@@ -12,6 +16,12 @@ def default_commands() -> CommandsConfig:
         install="npm install",
         build="ng build --configuration production",
     )
+
+
+@pytest.fixture
+def default_dockerfile_content() -> str:
+    """Provides a standard Dockerfile content for testing."""
+    return "FROM node:18\n"
 
 
 @pytest.fixture
@@ -30,8 +40,11 @@ def sample_instance(default_commands: CommandsConfig) -> BenchmarkInstance:
 class InstanceFactory:
     """Factory for creating test instances with custom parameters."""
 
-    def __init__(self, default_commands: CommandsConfig):
+    def __init__(
+        self, default_commands: CommandsConfig, default_dockerfile_content: str
+    ):
         self.default_commands = default_commands
+        self.default_dockerfile_content = default_dockerfile_content
 
     def create_instance(
         self,
@@ -42,9 +55,15 @@ class InstanceFactory:
         target_angular_version: str = "16.1.0",
         commands: CommandsConfig | None = None,
         metadata: dict[str, str] | None = None,
-        override_dockerfile_content: str | None = None,
+        override_dockerfile_content: str | None | object = _UNSET,
     ) -> BenchmarkInstance:
         """Create a BenchmarkInstance with custom parameters."""
+
+        if override_dockerfile_content is _UNSET:
+            value: str | None = self.default_dockerfile_content
+        else:
+            value = cast(str | None, override_dockerfile_content)
+
         return BenchmarkInstance(
             instance_id=instance_id,
             repo=repo,
@@ -53,14 +72,20 @@ class InstanceFactory:
             target_angular_version=target_angular_version,
             commands=commands or self.default_commands,
             metadata=metadata or {},
-            override_dockerfile_content=override_dockerfile_content,
+            override_dockerfile_content=value,
         )
 
 
 @pytest.fixture
-def instance_factory(default_commands: CommandsConfig) -> InstanceFactory:
+def instance_factory(
+    default_commands: CommandsConfig,
+    default_dockerfile_content: str,
+) -> InstanceFactory:
     """Factory fixture for creating custom BenchmarkInstance objects."""
-    return InstanceFactory(default_commands)
+    return InstanceFactory(
+        default_commands,
+        default_dockerfile_content,
+    )
 
 
 @pytest.fixture

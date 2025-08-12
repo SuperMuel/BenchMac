@@ -173,8 +173,8 @@ class BenchmarkInstance(BaseModel):
             " since override_dockerfile_content wasn't provided. It indicates"
             " a programming error in the Pydantic model validation."
         )
-        content = dockerfile_path.read_text().strip()
-        if not content:
+        content = dockerfile_path.read_text()
+        if not content.strip():
             raise ValueError(f"Dockerfile at {dockerfile_path} is empty.")
 
         return content
