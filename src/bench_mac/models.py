@@ -190,10 +190,10 @@ class MetricsReport(BaseModel):
         default=None,
         description="Did the SUT's patch apply cleanly without conflicts?",
     )
-    # target_version_achieved: bool = Field(
-    #     ...,
-    #     description="Do key @angular/* packages match the target version?",
-    # )
+    target_version_achieved: bool | None = Field(
+        default=None,
+        description="Do key @angular/* packages match the target version?",
+    )
     # build_success: bool = Field(
     #     ...,
     #     description="Did the 'ng build' command complete successfully?",

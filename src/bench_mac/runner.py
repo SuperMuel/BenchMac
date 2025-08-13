@@ -57,7 +57,7 @@ def run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
         )
 
         # 2. Calculate metrics from the trace
-        metrics = calculate_metrics(trace)
+        metrics = calculate_metrics(trace, context.task.instance)
 
         # 3. Assemble the final, comprehensive report
         report = EvaluationReport(

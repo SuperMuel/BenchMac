@@ -1,4 +1,11 @@
-from .models import CommandOutput, ExecutionTrace, MetricsReport
+import json
+from logging import getLogger
+
+from packaging.version import parse as parse_version
+
+from .models import BenchmarkInstance, CommandOutput, ExecutionTrace, MetricsReport
+
+logger = getLogger(__name__)
 
 
 def _find_step(trace: ExecutionTrace, command_part: str) -> CommandOutput | None:
@@ -9,7 +16,100 @@ def _find_step(trace: ExecutionTrace, command_part: str) -> CommandOutput | None
     return None
 
 
-def calculate_metrics(trace: ExecutionTrace) -> MetricsReport:
+def _calculate_patch_application_success(
+    patch_check_step: CommandOutput | None,
+    patch_apply_step: CommandOutput | None,
+) -> bool | None:
+    """
+    Calculates the definitive success of patch application based on the outcomes
+    of the 'git apply --check' and 'git apply' steps.
+
+    This function follows a clear, hierarchical logic:
+    1. If both check and apply steps ran, success requires both to pass.
+    2. If only the check step ran, its outcome determines the result (as a failure
+       would have halted the process).
+    3. If only the apply step ran (a legacy or simplified case), its outcome
+       determines the result.
+    4. If neither step ran, the outcome is unknown.
+
+    Parameters
+    ----------
+    patch_check_step
+        The result of the `git apply --check` command, or None if not executed.
+    patch_apply_step
+        The result of the `git apply` command, or None if not executed.
+
+    Returns
+    -------
+    bool | None
+        - True: The patch was successfully applied.
+        - False: The patch application failed at either the check or apply stage.
+        - None: There is not enough information to determine the outcome.
+    """
+    # Case 1: The standard, modern evaluation path was followed.
+    # This is the most common and robust scenario.
+    if patch_check_step and patch_apply_step:
+        # For a patch to be considered truly successful, the non-destructive
+        # check must pass, AND the actual application must also pass.
+        return patch_check_step.success and patch_apply_step.success
+
+    # Case 2: Only the check step was executed.
+    # This implies the harness ran the check but halted before applying,
+    # almost certainly because the check itself failed.
+    elif patch_check_step:
+        # The success of the whole operation is determined solely by the
+        # success of this single, failed step.
+        return patch_check_step.success
+
+    # Case 3: Only the apply step was executed.
+    # This might represent a legacy evaluation or a simplified run
+    # that skips the '--check' optimization.
+    elif patch_apply_step:
+        # With no check step available, our only source of truth is whether
+        # the apply command itself succeeded.
+        return patch_apply_step.success
+
+    # Case 4: Neither patch-related step was found in the execution trace.
+    else:
+        # Without any relevant steps, we cannot determine the outcome.
+        # This signals an issue with the harness execution or that the
+        # evaluation failed long before the patch stage.
+        return None
+
+
+def _calculate_target_version_achieved(
+    version_check_step: CommandOutput | None, target_version: str
+) -> bool | None:
+    if not version_check_step:
+        return None
+
+    try:
+        version_data = json.loads(version_check_step.stdout)
+
+        # The structure can vary, but @angular/core is the key
+        angular_core_version_str = version_data.get("@angular/core")
+        if not angular_core_version_str:
+            return False  # Key not found in JSON output
+
+        # Use packaging.version for robust semantic version comparison
+        parsed_achieved_version = parse_version(angular_core_version_str)
+        parsed_target_version = parse_version(target_version)
+
+        # Compare only the major version
+        return parsed_achieved_version.major == parsed_target_version.major
+
+    except (json.JSONDecodeError, TypeError, ValueError):
+        # Handle cases where stdout is not valid JSON or version is malformed
+        logger.warning(
+            "Failed to parse version for @angular/core in the string: "
+            f'"""{version_check_step.stdout}"""'
+        )
+        return None
+
+
+def calculate_metrics(
+    trace: ExecutionTrace, instance: BenchmarkInstance
+) -> MetricsReport:
     """
     Analyzes an ExecutionTrace and computes the final performance metrics.
 
@@ -23,27 +123,21 @@ def calculate_metrics(trace: ExecutionTrace) -> MetricsReport:
     # Check both the patch check and patch apply steps
     patch_check_step = _find_step(trace, "git apply --check")
     patch_apply_step = _find_step(trace, "git apply -p0")
+    version_check_step = _find_step(trace, "npx ng version --json")
 
-    # Only successful if both check and apply succeeded
-    if patch_check_step and patch_apply_step:
-        patch_application_success = (
-            patch_check_step.success and patch_apply_step.success
-        )
-    elif patch_apply_step:
-        # Legacy: only apply step exists (older evaluation format)
-        patch_application_success = patch_apply_step.success
-    elif patch_check_step:
-        # Only check step exists (apply step failed or wasn't attempted)
-        patch_application_success = patch_check_step.success
-    else:
-        # No patch steps found
-        patch_application_success = None
+    patch_application_success = _calculate_patch_application_success(
+        patch_check_step, patch_apply_step
+    )
+
+    target_version_achieved = _calculate_target_version_achieved(
+        version_check_step, instance.target_angular_version
+    )
 
     # TODO: Add other metrics as they are uncommented in the MetricsReport model
-    # For now, we only calculate the patch_application_success metric
     # Future metrics to implement:
     # - build_success: based on ng build step
-    # - no_new_critical_lint_errors: based on ng lint step
-    # - test_pass_rate: based on ng test step
 
-    return MetricsReport(patch_application_success=patch_application_success)
+    return MetricsReport(
+        patch_application_success=patch_application_success,
+        target_version_achieved=target_version_achieved,
+    )

@@ -114,7 +114,27 @@ def execute_submission(
 
             logger.info("✅ Patch applied successfully.")
 
-            # 6. Install Dependencies
+            # 6. Check Version
+            version_command = (
+                "npx ng version --json"  # Use npx to ensure we use the local CLI
+            )
+            logger.debug(f"Executing version check command: {version_command}")
+            version_check_out = _execute_and_capture(
+                docker_manager, container, version_command
+            )
+            steps.append(version_check_out)
+
+            # We can perform a preliminary check here to halt early.
+            # The final metric calculation will happen in `metrics.py`.
+            if not version_check_out.success:
+                logger.info("❌ 'ng version' command failed. Halting evaluation.")
+                return ExecutionTrace(steps=steps)
+            # TODO: should we verify the version matches the target version here?
+            #  and stop if it doesn't ?
+            # continuing the evaluation makes no sense if the angular version is
+            # not even  the target version
+
+            # 7. Install Dependencies
             logger.debug(f"Executing install command: {instance.commands.install}")
             install_out = _execute_and_capture(
                 docker_manager, container, instance.commands.install
@@ -127,7 +147,7 @@ def execute_submission(
 
             logger.info("✅ Dependencies installed successfully.")
 
-            # 7. Build
+            # 8. Build
             logger.debug(f"Executing build command: {instance.commands.build}")
             build_out = _execute_and_capture(
                 docker_manager, container, instance.commands.build

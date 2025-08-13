@@ -111,7 +111,7 @@ class TestExecuteSubmission:
             docker_manager,
             logger=logger,
         )
-        metrics = calculate_metrics(trace)
+        metrics = calculate_metrics(trace, test_instance)
 
         # --- ASSERT ---
         assert trace is not None
@@ -160,7 +160,7 @@ class TestExecuteSubmission:
             docker_manager,
             logger=logger,
         )
-        metrics = calculate_metrics(trace)
+        metrics = calculate_metrics(trace, test_instance)
 
         # --- ASSERT ---
         assert trace is not None
