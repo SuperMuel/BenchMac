@@ -2,6 +2,8 @@
     "python.analysis.typeCheckingMode": "strict",
     "python.analysis.diagnosticMode": "workspace",
     "python.testing.pytestArgs": [
+        "-o",
+        "addopts=",
         "tests"
     ],
     "python.testing.unittestEnabled": false,
