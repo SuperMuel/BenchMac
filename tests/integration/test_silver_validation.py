@@ -114,39 +114,45 @@ def test_silver_patch_passes_full_evaluation(
         logger=logger,  # Use the global logger configured by pytest
     )
 
-    # --- ASSERT ---
-    # Define the sequence of commands that MUST succeed for a silver patch.
-    # We dynamically pull the commands from the instance definition to ensure
-    # this test respects any custom commands.
-    required_successful_commands = [
-        "git apply -p0",  # The patch must apply.
-        task.instance.commands.install,
-        task.instance.commands.build,
-    ]
-
-    # Verify each required command was executed and was successful.
-    for command_substring in required_successful_commands:
-        # Find the corresponding step in the execution trace.
-        step_found = next(
-            (s for s in trace.steps if command_substring in s.command),
-            None,
-        )
-
-        # 1. Assert that the command was actually run.
-        # If it's None, the evaluation halted prematurely.
-        assert step_found is not None, (
-            f"Validation failed: "
-            f"Command containing '{command_substring}' was not executed."
-        )
-
-        # 2. Assert that the command succeeded.
-        # Provide a rich failure message for easy debugging.
-        assert step_found.success, f"""
-Validation failed: Command '{step_found.command}' failed.
+    # 1. The patch MUST apply cleanly. This is non-negotiable.
+    patch_apply_step = next(
+        (s for s in trace.steps if "git apply -p0" in s.command), None
+    )
+    assert patch_apply_step is not None, (
+        "Validation failed: Patch apply command was not executed."
+    )
+    assert patch_apply_step.success, f"""
+Validation failed: Silver patch command '{patch_apply_step.command}' failed.
   - Instance ID: {task.instance.instance_id}
-  - Exit Code: {step_found.exit_code}
-  - Stdout:
-{step_found.stdout[-500:]}
+  - Exit Code: {patch_apply_step.exit_code}
   - Stderr:
-{step_found.stderr[-1000:]}
+{patch_apply_step.stderr[-1000:]}
 """
+
+    # 2. An install command MUST succeed. This can be the original or the fallback.
+    install_steps = [s for s in trace.steps if "npm ci" in s.command]
+    assert len(install_steps) > 0, "Validation failed: No install command was executed."
+
+    assert any(step.success for step in install_steps), f"""
+Validation failed: All install attempts failed for the silver patch.
+  - Instance ID: {task.instance.instance_id}
+  - Last attempt command: '{install_steps[-1].command}'
+  - Last attempt exit code: {install_steps[-1].exit_code}
+  - Last attempt stderr:
+{install_steps[-1].stderr[-1000:]}
+"""
+
+    # 3. The build command MUST be reached and succeed. This is also non-negotiable.
+    build_step = next(
+        (s for s in trace.steps if task.instance.commands.build in s.command), None
+    )
+    assert build_step is not None, "Validation failed: Build command was not executed."
+    assert build_step.success, f"""
+Validation failed: Silver patch build command '{build_step.command}' failed.
+  - Instance ID: {task.instance.instance_id}
+  - Exit Code: {build_step.exit_code}
+  - Stderr:
+{build_step.stderr[-1000:]}
+"""
+
+    # TODO : verify TargetVersion

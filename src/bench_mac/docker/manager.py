@@ -46,19 +46,19 @@ class DockerManager:
         DockerException
             If the Docker daemon is not running or cannot be reached.
         """
-        try:
+
+        def maybe_log(msg: str) -> None:
             if not quiet:
-                logger.info("Attempting to connect to Docker daemon...")
+                logger.info(msg)
+
+        try:
+            maybe_log("Attempting to connect to Docker daemon...")
 
             if settings.docker_host:
-                if not quiet:
-                    logger.info(f"  > Using configured host: {settings.docker_host}")
+                maybe_log(f"  > Using configured host: {settings.docker_host}")
                 client = docker.DockerClient(base_url=settings.docker_host)
             else:
-                if not quiet:
-                    logger.info(
-                        "  > No host configured, using auto-detection (from_env)."
-                    )
+                maybe_log("  > No host configured, using auto-detection (from_env).")
                 client = docker.from_env()  # type: ignore[reportUnknownMemberType]
 
             # A low-timeout ping is a fast way to check for a running daemon
@@ -67,8 +67,7 @@ class DockerManager:
                     "Docker daemon responded to ping, but in a failed state."
                 )
 
-            if not quiet:
-                logger.info("✅ Docker client initialized successfully.")
+            maybe_log("✅ Docker client initialized successfully.")
 
             return client
 

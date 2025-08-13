@@ -17,6 +17,14 @@ from bench_mac.models import (
 )
 
 
+def _is_peer_dep_error(install_output: CommandOutput) -> bool:
+    """Checks if a failed command output indicates a peer dependency conflict."""
+    if install_output.success:
+        return False
+    stderr = install_output.stderr.lower()
+    return "eresolve" in stderr and "conflicting peer dependency" in stderr
+
+
 def _execute_and_capture(
     manager: DockerManager,
     container: "Container",
@@ -138,8 +146,45 @@ def execute_submission(
             steps.append(install_out)
 
             if not install_out.success:
-                logger.info("❌ Install failed. Halting evaluation.")
-                return ExecutionTrace(steps=steps)
+                is_peer_dep_error = _is_peer_dep_error(install_out)
+                if not is_peer_dep_error:
+                    logger.info("❌ Install failed. Halting evaluation.")
+                    return ExecutionTrace(steps=steps)
+                logger.info("❌ Install failed due to peer dependency conflict.")
+
+                # TODO: implement the logic to retry with the peer dep fix
+                original_install_command = instance.commands.install
+                if "--legacy-peer-deps" in original_install_command:
+                    logger.warning(
+                        "❌ Halting evaluation as the original install command "
+                        "already had --legacy-peer-deps flag."
+                    )
+                    return ExecutionTrace(steps=steps)
+
+                fixed_install_command = original_install_command + " --legacy-peer-deps"
+                logger.info(
+                    f"Trying to install dependencies with --legacy-peer-deps flag: "
+                    f"{fixed_install_command}"
+                )
+                install_out = _execute_and_capture(
+                    docker_manager,
+                    container,
+                    fixed_install_command,
+                    workdir=project_dir,
+                )
+                steps.append(install_out)
+
+                if not install_out.success:
+                    logger.info(
+                        "❌ Install failed even with --legacy-peer-deps flag. "
+                        "Halting evaluation."
+                    )
+                    return ExecutionTrace(steps=steps)
+
+                logger.info(
+                    "✅ Dependencies installed successfully with "
+                    "--legacy-peer-deps flag."
+                )
 
             logger.info("✅ Dependencies installed successfully.")
 
@@ -156,11 +201,10 @@ def execute_submission(
             )
             steps.append(version_check_out)
 
-            # We can perform a preliminary check here to halt early.
-            # The final metric calculation will happen in `metrics.py`.
             if not version_check_out.success:
-                logger.info("❌ 'ng version' command failed. Halting evaluation.")
-                return ExecutionTrace(steps=steps)
+                logger.info(
+                    f"❌ '{version_command}' command failed. Continuing execution."
+                )
             # TODO: should we verify the version matches the target version here?
             #  and stop if it doesn't ?
             # continuing the evaluation makes no sense if the angular version is
