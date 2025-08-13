@@ -18,11 +18,16 @@ from bench_mac.models import (
 
 
 def _execute_and_capture(
-    manager: DockerManager, container: "Container", command: str
+    manager: DockerManager,
+    container: "Container",
+    command: str,
+    workdir: str | None = None,
 ) -> CommandOutput:
     """Executes a command and captures all relevant output in a CommandOutput object."""
     start_time = datetime.now(UTC)
-    exit_code, stdout, stderr = manager.execute_in_container(container, command)
+    exit_code, stdout, stderr = manager.execute_in_container(
+        container, command, workdir
+    )
     end_time = datetime.now(UTC)
 
     return CommandOutput(
@@ -68,6 +73,8 @@ def execute_submission(
     steps: list[CommandOutput] = []
     container = None
 
+    project_dir = "/app/project"  # TODO: make this configurable
+
     with tempfile.TemporaryDirectory() as tmpdir:
         submission_patch_file_name = f"{instance.instance_id}.patch"
         patch_file_path = Path(tmpdir) / submission_patch_file_name
@@ -92,7 +99,10 @@ def execute_submission(
             check_command = f"git apply --check -p0 {container_patch_path}"
             logger.debug(f"Executing patch check command: {check_command}")
             patch_check_out = _execute_and_capture(
-                docker_manager, container, check_command
+                docker_manager,
+                container,
+                check_command,
+                workdir=project_dir,
             )
             steps.append(patch_check_out)
 
@@ -104,7 +114,10 @@ def execute_submission(
             apply_command = f"git apply -p0 {container_patch_path}"
             logger.debug(f"Executing patch apply command: {apply_command}")
             patch_apply_out = _execute_and_capture(
-                docker_manager, container, apply_command
+                docker_manager,
+                container,
+                apply_command,
+                workdir=project_dir,
             )
             steps.append(patch_apply_out)
 
@@ -114,13 +127,32 @@ def execute_submission(
 
             logger.info("✅ Patch applied successfully.")
 
-            # 6. Check Version
+            # 6. Install Dependencies
+            logger.debug(f"Executing install command: {instance.commands.install}")
+            install_out = _execute_and_capture(
+                docker_manager,
+                container,
+                instance.commands.install,
+                workdir=project_dir,
+            )
+            steps.append(install_out)
+
+            if not install_out.success:
+                logger.info("❌ Install failed. Halting evaluation.")
+                return ExecutionTrace(steps=steps)
+
+            logger.info("✅ Dependencies installed successfully.")
+
+            # 7. Check Version
             version_command = (
                 "npx ng version --json"  # Use npx to ensure we use the local CLI
             )
             logger.debug(f"Executing version check command: {version_command}")
             version_check_out = _execute_and_capture(
-                docker_manager, container, version_command
+                docker_manager,
+                container,
+                version_command,
+                workdir=project_dir,
             )
             steps.append(version_check_out)
 
@@ -134,23 +166,13 @@ def execute_submission(
             # continuing the evaluation makes no sense if the angular version is
             # not even  the target version
 
-            # 7. Install Dependencies
-            logger.debug(f"Executing install command: {instance.commands.install}")
-            install_out = _execute_and_capture(
-                docker_manager, container, instance.commands.install
-            )
-            steps.append(install_out)
-
-            if not install_out.success:
-                logger.info("❌ Install failed. Halting evaluation.")
-                return ExecutionTrace(steps=steps)
-
-            logger.info("✅ Dependencies installed successfully.")
-
             # 8. Build
             logger.debug(f"Executing build command: {instance.commands.build}")
             build_out = _execute_and_capture(
-                docker_manager, container, instance.commands.build
+                docker_manager,
+                container,
+                instance.commands.build,
+                workdir=project_dir,
             )
             steps.append(build_out)
 
