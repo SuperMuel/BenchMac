@@ -1,5 +1,3 @@
-import json
-
 import pytest
 from docker.errors import DockerException
 from loguru import logger
@@ -14,6 +12,7 @@ from bench_mac.models import (
     ExecutionTrace,
     Submission,
 )
+from bench_mac.utils import load_instances
 
 # A deliberately malformed patch that is guaranteed to fail application.
 # It tries to remove a line that is unlikely to exist in that exact form.
@@ -46,14 +45,14 @@ def test_instance() -> BenchmarkInstance:
     instances_file = settings.instances_file
     target_id = "gothinkster__angular-realworld-example-app_v11_to_v12"
 
-    with instances_file.open("r") as f:
-        for line in f:
-            if line.strip():  # Skip empty lines
-                instance_data = json.loads(line.strip())
-                if instance_data["instance_id"] == target_id:
-                    return BenchmarkInstance(**instance_data)
+    instances_map = load_instances(instances_file, strict=True)
 
-    raise ValueError(f"Instance with ID '{target_id}' not found in {instances_file}")
+    if target_id not in instances_map:
+        raise ValueError(
+            f"Instance with ID '{target_id}' not found in {instances_file}"
+        )
+
+    return instances_map[target_id]
 
 
 @pytest.fixture(scope="module")

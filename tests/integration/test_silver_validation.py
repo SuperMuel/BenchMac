@@ -16,8 +16,6 @@ correct and that our harness integration tests can reliably use them as
 a baseline for success.
 """
 
-import json
-
 import pytest
 from loguru import logger
 
@@ -25,28 +23,10 @@ from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
-from bench_mac.models import BenchmarkInstance, ExecutionJob, Submission
+from bench_mac.models import ExecutionJob, Submission
+from bench_mac.utils import load_instances
 
 # --- Test Data Generation ---
-
-
-def _load_all_instances() -> dict[str, BenchmarkInstance]:
-    """
-    Loads all benchmark instances from the instances.jsonl file into a
-    dictionary, keyed by instance_id for efficient lookups.
-    """
-    instances_map: dict[str, BenchmarkInstance] = {}
-    instances_file = settings.instances_file
-    if not instances_file.exists():
-        # Use pytest.fail for clear test setup errors
-        pytest.fail(f"Instances file not found at: {instances_file}")
-
-    with instances_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            data = json.loads(line)
-            instance = BenchmarkInstance.model_validate(data)
-            instances_map[instance.instance_id] = instance
-    return instances_map
 
 
 def discover_silver_tasks() -> list[ExecutionJob]:
@@ -56,7 +36,7 @@ def discover_silver_tasks() -> list[ExecutionJob]:
     ExecutionJob objects for pytest to parameterize.
     """
     tasks: list[ExecutionJob] = []
-    instances_map = _load_all_instances()
+    instances_map = load_instances(settings.instances_file, strict=True)
     silver_patch_dir = settings.silver_patches_dir
 
     if not silver_patch_dir.exists() or not any(silver_patch_dir.iterdir()):

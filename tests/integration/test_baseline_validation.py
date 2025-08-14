@@ -12,8 +12,6 @@ successfully installed, built, linted, and tested.
   the harness logic.
 """
 
-import json
-
 import pytest
 from loguru import logger
 
@@ -21,43 +19,7 @@ from bench_mac.config import settings
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import BenchmarkInstance
-
-
-def load_all_benchmark_instances() -> list[BenchmarkInstance]:
-    """
-    Reads 'data/instances.jsonl' and yields BenchmarkInstance objects
-    to be used for pytest parameterization.
-    """
-    instances_file = settings.instances_file
-    instances_list: list[BenchmarkInstance] = []
-
-    if not instances_file.is_file():
-        # If the file doesn't exist, pytest will report a skip.
-        logger.warning(
-            f"Instances file not found at {instances_file}, "
-            "skipping baseline validation tests."
-        )
-        return instances_list
-
-    with instances_file.open("r", encoding="utf-8") as f:
-        for line_num, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                instance = BenchmarkInstance.model_validate(data)
-                instances_list.append(instance)
-            except (json.JSONDecodeError, Exception) as e:
-                logger.error(
-                    f"Failed to load instance from line {line_num} "
-                    f"in {instances_file}: {e}"
-                )
-                # This test should indicate when instances are invalid.
-                # Therefore, we raise the error to fail the test.
-                raise e
-
-    return instances_list
+from bench_mac.utils import load_instances
 
 
 @pytest.mark.baseline_validation
@@ -68,7 +30,7 @@ class TestBaselineInstanceValidation:
 
     @pytest.mark.parametrize(
         "instance",
-        load_all_benchmark_instances(),
+        load_instances(settings.instances_file, strict=True).values(),
         ids=lambda inst: inst.instance_id,  # Use instance_id for readable test names
     )
     def test_instance_baseline_is_green(
@@ -116,11 +78,10 @@ class TestBaselineInstanceValidation:
                     f"  --- STDOUT (last 1000 chars) ---\n{stdout[-1000:]}\n\n"
                     f"  --- STDERR (last 1000 chars) ---\n{stderr[-1000:]}\n"
                 )
-                logger.success(
-                    f"✅ Step '{step_name}' PASSED for instance"
-                    f" '{instance.instance_id}'."
-                )
-
+                logger.success(f"✅ Step '{step_name}' PASSED")
+            logger.success(
+                f"✅ Baseline validation PASSED for instance: {instance.instance_id}"
+            )
         finally:
             # === 4. CLEANUP: Always remove the container ===
             if container:
