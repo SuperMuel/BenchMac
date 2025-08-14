@@ -300,8 +300,8 @@ class DockerManager:
             logger.debug(f"Removing container: {container.short_id}")
             container.remove()
             logger.debug(f"✅ Container {container.short_id} cleaned up.")
-        except NotFound:
+        except NotFound:  # pragma: no cover
             # The container was already removed (e.g., with auto_remove=True)
             logger.debug(f"Container {container.short_id} already removed.")
-        except DockerException as e:
+        except DockerException as e:  # pragma: no cover
             logger.error(f"⚠️  Could not clean up container {container.short_id}: {e}")
