@@ -176,9 +176,11 @@ class TestCalculateMetrics:
                 CommandOutput(command="git apply --check", exit_code=0),
                 CommandOutput(command="git apply -p0", exit_code=0),
                 CommandOutput(
-                    command="npx ng version --json",
+                    command="npm ls @angular/cli @angular/core --json",
                     exit_code=0,
-                    stdout=json.dumps({"@angular/core": "16.2.1"}),
+                    stdout=json.dumps(
+                        {"dependencies": {"@angular/core": {"version": "16.2.1"}}}
+                    ),
                 ),
             ]
         )
@@ -197,9 +199,11 @@ class TestCalculateMetrics:
                 CommandOutput(command="git apply --check", exit_code=0),
                 CommandOutput(command="git apply -p0", exit_code=0),
                 CommandOutput(
-                    command="npx ng version --json",
+                    command="npm ls @angular/cli @angular/core --json",
                     exit_code=0,
-                    stdout='{"@angular/core": "15.0.0"}',  # Wrong version
+                    stdout=json.dumps(
+                        {"dependencies": {"@angular/core": {"version": "15.0.0"}}}
+                    ),
                 ),
             ]
         )
