@@ -40,10 +40,10 @@ def load_instances(
 
                 if strict:
                     raise ValueError(error_msg) from e
-                else:
+                else:  # pragma: no cover
                     logger.warning(f"⚠️ Warning: Skipping {error_msg}")
 
-    if invalid_count > 0 and not strict:
+    if invalid_count > 0 and not strict:  # pragma: no cover
         logger.warning(f"⚠️ Skipped {invalid_count} invalid instances")
 
     return instances

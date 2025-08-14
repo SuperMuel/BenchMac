@@ -133,6 +133,27 @@ class TestSubmission:
 
 
 @pytest.mark.unit
+class TestCommandOutput:
+    """Tests for the CommandOutput model."""
+
+    def test_duration_seconds_calculation(self) -> None:
+        """Test that duration_seconds correctly calculates the time difference."""
+        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 1, 12, 0, 5, 500000, tzinfo=UTC)  # 5.5 seconds later
+
+        command_output = CommandOutput(
+            command="npm install",
+            exit_code=0,
+            stdout="Dependencies installed",
+            stderr="",
+            start_time=start,
+            end_time=end,
+        )
+
+        assert command_output.duration_seconds == 5.5
+
+
+@pytest.mark.unit
 class TestMetricsReport:
     """Tests for the MetricsReport model."""
 
