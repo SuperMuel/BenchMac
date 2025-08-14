@@ -9,7 +9,7 @@ from typing import Annotated
 import cyclopts
 from cyclopts import Parameter
 from loguru import logger
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -122,8 +122,10 @@ def _run_interactive(
             # Update counters based on outcome
             if outcome.status == "success":
                 success_count += 1
+                logger.info(f"✅ SUCCESS: {outcome.result.instance_id}")
             else:
                 failure_count += 1
+                logger.error(f"❌ FAILURE: {outcome.instance_id} - {outcome.error}")
 
             # Write result to file
             f.write(outcome.model_dump_json() + "\n")
@@ -214,6 +216,46 @@ def _load_outcomes_from_file(results_file: Path) -> list[RunOutcome]:
     return outcomes
 
 
+def _collect_network_error_details(outcomes: list[RunOutcome]) -> dict[str, list[str]]:
+    """Return mapping of instance_id -> list of step commands impacted
+     by network-like errors.
+
+    Includes harness-level failures (no steps) under a synthetic "harness" entry.
+    """
+    network_error_keywords = [
+        "socket timeout",
+        "econnreset",
+        "etimedout",
+        "network is unreachable",
+        "failed to fetch",
+        "proxy",
+    ]
+
+    details: dict[str, list[str]] = {}
+
+    for outcome in outcomes:
+        if outcome.status == "success":
+            instance_id = outcome.result.instance_id
+            for step in outcome.result.execution.steps:
+                if not step.success:
+                    stderr_lower = step.stderr.lower()
+                    if any(
+                        keyword in stderr_lower for keyword in network_error_keywords
+                    ):
+                        details.setdefault(instance_id, [])
+                        if step.command not in details[instance_id]:
+                            details[instance_id].append(step.command)
+        else:  # failure at harness level
+            instance_id = outcome.instance_id
+            error_lower = outcome.error.lower()
+            if any(keyword in error_lower for keyword in network_error_keywords):
+                details.setdefault(instance_id, [])
+                if "harness" not in details[instance_id]:
+                    details[instance_id].append("harness")
+
+    return details
+
+
 def _print_evaluation_summary(
     outcomes: list[RunOutcome],
     run_id: str | None = None,
@@ -228,17 +270,43 @@ def _print_evaluation_summary(
     successful_jobs = sum(1 for outcome in outcomes if outcome.status == "success")
     failed_jobs = total_jobs - successful_jobs
 
-    # Metrics breakdown
+    # Metrics breakdown - initialize counters for all metrics
     patch_success_count = 0
     patch_total_count = 0
+    target_version_success_count = 0
+    target_version_total_count = 0
+    build_success_count = 0
+    build_total_count = 0
+    install_success_count = 0
+    install_total_count = 0
 
     for outcome in outcomes:
         if outcome.status == "success":
             metrics = outcome.result.metrics
+
+            # Patch application metrics
             if metrics.patch_application_success is not None:
                 patch_total_count += 1
                 if metrics.patch_application_success:
                     patch_success_count += 1
+
+            # Target version metrics
+            if metrics.target_version_achieved is not None:
+                target_version_total_count += 1
+                if metrics.target_version_achieved:
+                    target_version_success_count += 1
+
+            # Build success metrics
+            if metrics.build_success is not None:
+                build_total_count += 1
+                if metrics.build_success:
+                    build_success_count += 1
+
+            # Install success metrics
+            if metrics.install_success is not None:
+                install_total_count += 1
+                if metrics.install_success:
+                    install_success_count += 1
 
     # Create summary table
     summary_table = Table(title="🎯 BenchMAC Evaluation Summary", show_header=False)
@@ -279,16 +347,28 @@ def _print_evaluation_summary(
     metrics_table.add_column("Total", justify="right")
     metrics_table.add_column("Success Rate", justify="right")
 
-    if patch_total_count > 0:
-        patch_success_rate = (patch_success_count / patch_total_count) * 100
-        metrics_table.add_row(
-            "Patch Application",
-            str(patch_success_count),
-            str(patch_total_count),
-            f"{patch_success_rate:.1f}%",
-        )
-    else:
-        metrics_table.add_row("Patch Application", "N/A", "N/A", "N/A")
+    # Helper function to add metric rows
+    def add_metric_row(name: str, success_count: int, total_count: int):
+        if total_count > 0:
+            success_rate = (success_count / total_count) * 100
+            metrics_table.add_row(
+                name,
+                str(success_count),
+                str(total_count),
+                f"{success_rate:.1f}%",
+            )
+        else:
+            metrics_table.add_row(name, "N/A", "N/A", "N/A")
+
+    # Add all metric rows
+    add_metric_row("Patch Application", patch_success_count, patch_total_count)
+    add_metric_row(
+        "Target Version Achieved",
+        target_version_success_count,
+        target_version_total_count,
+    )
+    add_metric_row("Build Success", build_success_count, build_total_count)
+    add_metric_row("Install Success", install_success_count, install_total_count)
 
     # Print all tables
     console.print()
@@ -298,6 +378,32 @@ def _print_evaluation_summary(
     console.print()
     console.print(Panel(metrics_table, expand=False))
     console.print()
+
+    network_error_details = _collect_network_error_details(outcomes)
+    if network_error_details:
+        details_table = Table(title="Affected instances and steps", show_header=True)
+        details_table.add_column("Instance", style="bold")
+        details_table.add_column("Step(s)")
+        for instance_id, commands in network_error_details.items():
+            details_table.add_row(instance_id, "\n".join(commands))
+
+        combined_panel = Panel(
+            Group(
+                Text(
+                    "One or more steps failed due to a potential network issue "
+                    "(e.g., 'Socket timeout'). These failures may be transient "
+                    "and not reflective of the submission's quality. Consider "
+                    "re-running the evaluation with a stable network connection.",
+                    justify="center",
+                ),
+                "\n",
+                details_table,
+            ),
+            title="[bold yellow]⚠️ Network Error Detected[/bold yellow]",
+            border_style="yellow",
+            expand=False,
+        )
+        console.print(combined_panel)
 
 
 # --- Main CLI Command (The Dispatcher) ---

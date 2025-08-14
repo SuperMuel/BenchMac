@@ -106,17 +106,3 @@ class Settings(BaseSettings):
 
 # Create a single, importable instance of the settings
 settings = Settings()
-
-# Log the full settings configuration
-logger.info("BenchMAC Settings Configuration:")
-logger.info(f"{settings.model_dump_json(indent=2)}")
-
-# Log the directory paths
-
-logger.info("Directory paths:")
-logger.info(f"  Data directory: {settings.data_dir}")
-logger.info(f"  Cache directory: {settings.cache_dir}")
-logger.info(f"  Silver patches directory: {settings.silver_patches_dir}")
-logger.info(f"  Silver patches repos directory: {settings.silver_patches_repos_dir}")
-logger.info(f"  Results directory: {settings.results_dir}")
-logger.info(f"  Dockerfiles directory: {settings.dockerfiles_dir}")
