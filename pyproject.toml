@@ -36,7 +36,14 @@ dev = [
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["tests/*", "src/**/__init__.py", "scripts/*", "src/bench_mac/config.py"]
+omit = [
+    "tests/*",
+    "src/**/__init__.py",
+    "scripts/*",
+    "src/bench_mac/config.py",
+    "src/bench_mac/logging_config.py",
+    "src/bench_mac/cli.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [
