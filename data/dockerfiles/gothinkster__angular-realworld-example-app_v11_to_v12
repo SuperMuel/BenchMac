@@ -1,5 +1,4 @@
-# Base image: Node 14 LTS on Debian slim (Angular 11 supports Node 12.14.0+ or 14.15.0+)
-FROM node:14.21.3-bullseye-slim
+FROM node:16.20.2-bullseye-slim
 
 # Set environment variables for CI
 ENV CI=true \

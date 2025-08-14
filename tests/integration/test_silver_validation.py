@@ -24,6 +24,7 @@ from loguru import logger
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.executor import execute_submission
+from bench_mac.metrics import calculate_metrics
 from bench_mac.models import BenchmarkInstance, ExecutionJob, Submission
 
 # --- Test Data Generation ---
@@ -155,4 +156,12 @@ Validation failed: Silver patch build command '{build_step.command}' failed.
 {build_step.stderr[-1000:]}
 """
 
-    # TODO : verify TargetVersion
+    # 4. The target version MUST be achieved.
+    # We run the same metrics calculation that the main runner would.
+    metrics = calculate_metrics(trace, task.instance)
+    assert metrics.target_version_achieved is True, f"""
+Validation failed: Target version was not achieved for the silver patch.
+  - Instance ID: {task.instance.instance_id}
+  - Expected Major Version: {task.instance.target_angular_version}
+  - Metric Result from Trace: {metrics.target_version_achieved}
+"""

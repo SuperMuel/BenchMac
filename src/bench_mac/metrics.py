@@ -80,31 +80,47 @@ def _calculate_patch_application_success(
 def _calculate_target_version_achieved(
     version_check_step: CommandOutput | None, target_version: str
 ) -> bool | None:
+    """
+    Calculates if the target version was achieved by parsing `npm ls --json` output.
+    This function INTENTIONALLY ignores the command's exit code, as `npm ls`
+    can exit with 1 due to peer dependency issues while still providing valid JSON.
+    """
     if not version_check_step:
-        return None
+        return None  # The step was not executed
+
+    if not version_check_step.stdout.strip():
+        return None  # No JSON output to parse
 
     try:
-        version_data = json.loads(version_check_step.stdout)
+        data = json.loads(version_check_step.stdout)
+    except json.JSONDecodeError:
+        logger.warning(
+            f"Failed to parse JSON from version check command. Output was:\n"
+            f"{version_check_step.stdout}"
+        )
+        return None  # Outcome is uncertain
 
-        # The structure can vary, but @angular/core is the key
-        angular_core_version_str = version_data.get("@angular/core")
-        if not angular_core_version_str:
-            return False  # Key not found in JSON output
+    # Safely navigate the dependency tree from `npm ls` output
+    dependencies = data.get("dependencies", {})
+    angular_core_info = dependencies.get("@angular/core")
 
-        # Use packaging.version for robust semantic version comparison
-        parsed_achieved_version = parse_version(angular_core_version_str)
+    if not angular_core_info or "version" not in angular_core_info:
+        # The command ran but @angular/core was not found in the dependency tree.
+        return False
+
+    try:
+        achieved_version_str = angular_core_info["version"]
+        parsed_achieved_version = parse_version(achieved_version_str)
         parsed_target_version = parse_version(target_version)
 
-        # Compare only the major version
+        # The core logic: compare major versions.
         return parsed_achieved_version.major == parsed_target_version.major
-
-    except (json.JSONDecodeError, TypeError, ValueError):
-        # Handle cases where stdout is not valid JSON or version is malformed
+    except (TypeError, ValueError) as e:
+        # Handle malformed version strings
         logger.warning(
-            "Failed to parse version for @angular/core in the string: "
-            f'"""{version_check_step.stdout}"""'
+            f"Could not parse version string '{angular_core_info.get('version')}': {e}"
         )
-        return None
+        return None  # Outcome is uncertain
 
 
 def calculate_metrics(
@@ -123,7 +139,7 @@ def calculate_metrics(
     # Check both the patch check and patch apply steps
     patch_check_step = _find_step(trace, "git apply --check")
     patch_apply_step = _find_step(trace, "git apply -p0")
-    version_check_step = _find_step(trace, "npx ng version --json")
+    version_check_step = _find_step(trace, "npm ls @angular/cli @angular/core --json")
 
     patch_application_success = _calculate_patch_application_success(
         patch_check_step, patch_apply_step

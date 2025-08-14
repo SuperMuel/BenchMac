@@ -189,9 +189,8 @@ def execute_submission(
             logger.info("✅ Dependencies installed successfully.")
 
             # 7. Check Version
-            version_command = (
-                "npx ng version --json"  # Use npx to ensure we use the local CLI
-            )
+            # TODO: make the command configurable
+            version_command = "npm ls @angular/cli @angular/core --json"
             logger.debug(f"Executing version check command: {version_command}")
             version_check_out = _execute_and_capture(
                 docker_manager,
