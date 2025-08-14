@@ -139,21 +139,25 @@ def calculate_metrics(
     # Check both the patch check and patch apply steps
     patch_check_step = _find_step(trace, "git apply --check")
     patch_apply_step = _find_step(trace, "git apply -p0")
+    install_steps = [s for s in trace.steps if "npm ci" in s.command]
+    final_install_step = install_steps[-1] if install_steps else None
     version_check_step = _find_step(trace, "npm ls @angular/cli @angular/core --json")
+    build_step = _find_step(trace, instance.commands.build)
 
     patch_application_success = _calculate_patch_application_success(
         patch_check_step, patch_apply_step
     )
+    install_success = final_install_step.success if final_install_step else None
 
     target_version_achieved = _calculate_target_version_achieved(
         version_check_step, instance.target_angular_version
     )
 
-    # TODO: Add other metrics as they are uncommented in the MetricsReport model
-    # Future metrics to implement:
-    # - build_success: based on ng build step
+    build_success = build_step.success if build_step else None
 
     return MetricsReport(
         patch_application_success=patch_application_success,
+        install_success=install_success,
         target_version_achieved=target_version_achieved,
+        build_success=build_success,
     )

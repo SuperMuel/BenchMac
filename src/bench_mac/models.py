@@ -194,10 +194,14 @@ class MetricsReport(BaseModel):
         default=None,
         description="Do key @angular/* packages match the target version?",
     )
-    # build_success: bool = Field(
-    #     ...,
-    #     description="Did the 'ng build' command complete successfully?",
-    # )
+    build_success: bool | None = Field(
+        default=None,
+        description="Did the build command complete successfully?",
+    )
+    install_success: bool | None = Field(
+        default=None,
+        description="Did the install command complete successfully?",
+    )
     # no_new_critical_lint_errors: bool = Field(
     #     ...,
     #     description="Did the 'ng lint' command pass without new critical errors?",

@@ -3,7 +3,6 @@ Unit tests for the metrics calculation module.
 """
 
 import json
-from datetime import UTC, datetime
 
 import pytest
 
@@ -17,31 +16,8 @@ from bench_mac.models import (
     CommandsConfig,
     ExecutionTrace,
 )
-from bench_mac.models import (
-    CommandOutput as _RealCommandOutput,
-)
 
-
-def CommandOutput(  # noqa: N802 [invalid-function-name]
-    command: str,
-    exit_code: int,
-    stdout: str = "",
-    stderr: str = "",
-    start_time: datetime | None = None,
-    end_time: datetime | None = None,
-) -> _RealCommandOutput:
-    """Test helper to auto-fill required timestamps for CommandOutput."""
-    now = datetime.now(UTC)
-    start = start_time or now
-    end = end_time or start
-    return _RealCommandOutput(
-        command=command,
-        exit_code=exit_code,
-        stdout=stdout,
-        stderr=stderr,
-        start_time=start,
-        end_time=end,
-    )
+from ..utils import create_command_output
 
 
 @pytest.mark.unit
@@ -49,26 +25,26 @@ class TestCalculatePatchApplicationSuccess:
     """Unit tests for the _calculate_patch_application_success helper function."""
 
     def test_returns_true_when_both_steps_succeed(self) -> None:
-        patch_check = CommandOutput(command="git apply --check", exit_code=0)
-        patch_apply = CommandOutput(command="git apply -p0", exit_code=0)
+        patch_check = create_command_output(command="git apply --check", exit_code=0)
+        patch_apply = create_command_output(command="git apply -p0", exit_code=0)
         assert _calculate_patch_application_success(patch_check, patch_apply) is True
 
     def test_returns_false_when_check_fails(self) -> None:
-        patch_check = CommandOutput(command="git apply --check", exit_code=1)
-        patch_apply = CommandOutput(command="git apply -p0", exit_code=0)
+        patch_check = create_command_output(command="git apply --check", exit_code=1)
+        patch_apply = create_command_output(command="git apply -p0", exit_code=0)
         assert _calculate_patch_application_success(patch_check, patch_apply) is False
 
     def test_returns_false_when_apply_fails(self) -> None:
-        patch_check = CommandOutput(command="git apply --check", exit_code=0)
-        patch_apply = CommandOutput(command="git apply -p0", exit_code=1)
+        patch_check = create_command_output(command="git apply --check", exit_code=0)
+        patch_apply = create_command_output(command="git apply -p0", exit_code=1)
         assert _calculate_patch_application_success(patch_check, patch_apply) is False
 
     def test_returns_false_when_only_failed_check_is_present(self) -> None:
-        patch_check = CommandOutput(command="git apply --check", exit_code=1)
+        patch_check = create_command_output(command="git apply --check", exit_code=1)
         assert _calculate_patch_application_success(patch_check, None) is False
 
     def test_returns_true_when_only_successful_apply_is_present(self) -> None:
-        patch_apply = CommandOutput(command="git apply -p0", exit_code=0)
+        patch_apply = create_command_output(command="git apply -p0", exit_code=0)
         assert _calculate_patch_application_success(None, patch_apply) is True
 
     def test_returns_none_when_no_steps_are_present(self) -> None:
@@ -86,7 +62,7 @@ class TestCalculateTargetVersionAchieved:
 
     def test_returns_true_on_major_version_match(self) -> None:
         version_output = {"dependencies": {"@angular/core": {"version": "16.1.5"}}}
-        version_step = CommandOutput(
+        version_step = create_command_output(
             command=self.NPM_LS_COMMAND,
             exit_code=0,
             stdout=json.dumps(version_output),
@@ -96,7 +72,7 @@ class TestCalculateTargetVersionAchieved:
     def test_returns_true_even_if_exit_code_is_1_but_json_is_valid(self) -> None:
         # This is the critical test case reflecting reality.
         version_output = {"dependencies": {"@angular/core": {"version": "13.3.12"}}}
-        version_step = CommandOutput(
+        version_step = create_command_output(
             command=self.NPM_LS_COMMAND,
             exit_code=1,  # Command failed due to peer deps
             stdout=json.dumps(version_output),
@@ -106,27 +82,27 @@ class TestCalculateTargetVersionAchieved:
 
     def test_returns_false_on_major_version_mismatch(self) -> None:
         version_output = {"dependencies": {"@angular/core": {"version": "15.2.9"}}}
-        version_step = CommandOutput(
+        version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
         )
         assert _calculate_target_version_achieved(version_step, "16") is False
 
     def test_returns_false_if_angular_core_key_is_missing(self) -> None:
         version_output = {"dependencies": {"@angular/cli": {"version": "16.0.0"}}}
-        version_step = CommandOutput(
+        version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
         )
         assert _calculate_target_version_achieved(version_step, "16") is False
 
     def test_returns_false_if_dependencies_key_is_missing(self) -> None:
         version_output = {"name": "my-project"}  # Missing top-level 'dependencies'
-        version_step = CommandOutput(
+        version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
         )
         assert _calculate_target_version_achieved(version_step, "16") is False
 
     def test_returns_none_if_json_is_invalid(self) -> None:
-        version_step = CommandOutput(
+        version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout="this is not json"
         )
         assert _calculate_target_version_achieved(version_step, "16") is None
@@ -135,7 +111,7 @@ class TestCalculateTargetVersionAchieved:
         assert _calculate_target_version_achieved(None, "16") is None
 
     def test_returns_none_if_stdout_is_empty(self) -> None:
-        version_step = CommandOutput(
+        version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=1, stdout=""
         )
         assert _calculate_target_version_achieved(version_step, "16") is None
@@ -165,59 +141,71 @@ class TestCalculateMetrics:
     composes the results from its helper functions.
     """
 
+    VERSION_CHECK_COMMAND = "npm ls @angular/cli @angular/core --json"
+
     def test_successful_run_calculates_all_metrics_correctly(
         self, sample_instance: BenchmarkInstance
     ) -> None:
-        """
-        Tests a successful trace where all relevant steps passed.
-        """
+        """Tests a successful trace where all relevant steps passed."""
         trace = ExecutionTrace(
             steps=[
-                CommandOutput(command="git apply --check", exit_code=0),
-                CommandOutput(command="git apply -p0", exit_code=0),
-                CommandOutput(
-                    command="npm ls @angular/cli @angular/core --json",
+                create_command_output(command="git apply --check", exit_code=0),
+                create_command_output(command="git apply -p0", exit_code=0),
+                create_command_output(
+                    command="npm ci", exit_code=0
+                ),  # Successful install
+                create_command_output(
+                    command=self.VERSION_CHECK_COMMAND,
                     exit_code=0,
                     stdout=json.dumps(
                         {"dependencies": {"@angular/core": {"version": "16.2.1"}}}
                     ),
                 ),
+                create_command_output(
+                    command="ng build", exit_code=0
+                ),  # Successful build
             ]
         )
         metrics = calculate_metrics(trace, sample_instance)
         assert metrics.patch_application_success is True
+        assert metrics.install_success is True
         assert metrics.target_version_achieved is True
+        assert metrics.build_success is True
 
     def test_partial_failure_run_is_captured(
         self, sample_instance: BenchmarkInstance
     ) -> None:
-        """
-        Tests a trace where the patch succeeded but the version is wrong.
-        """
+        """Tests a trace where build fails but other steps succeed."""
         trace = ExecutionTrace(
             steps=[
-                CommandOutput(command="git apply --check", exit_code=0),
-                CommandOutput(command="git apply -p0", exit_code=0),
-                CommandOutput(
-                    command="npm ls @angular/cli @angular/core --json",
+                create_command_output(command="git apply --check", exit_code=0),
+                create_command_output(command="git apply -p0", exit_code=0),
+                create_command_output(command="npm ci", exit_code=0),
+                create_command_output(
+                    command=self.VERSION_CHECK_COMMAND,
                     exit_code=0,
                     stdout=json.dumps(
-                        {"dependencies": {"@angular/core": {"version": "15.0.0"}}}
+                        {"dependencies": {"@angular/core": {"version": "16.0.0"}}}
                     ),
                 ),
+                create_command_output(
+                    command="ng build", exit_code=1, stderr="Build failed!"
+                ),  # Failed build
             ]
         )
         metrics = calculate_metrics(trace, sample_instance)
         assert metrics.patch_application_success is True
-        assert metrics.target_version_achieved is False
+        assert metrics.install_success is True
+        assert metrics.target_version_achieved is True
+        assert metrics.build_success is False
 
     def test_empty_trace_returns_all_none(
         self, sample_instance: BenchmarkInstance
     ) -> None:
-        """
-        Tests that an empty trace results in all metrics being None.
-        """
+        """Tests that an empty trace results in all metrics being None."""
         trace = ExecutionTrace(steps=[])
         metrics = calculate_metrics(trace, sample_instance)
         assert metrics.patch_application_success is None
+        assert metrics.install_success is None
         assert metrics.target_version_achieved is None
+        assert metrics.build_success is None
