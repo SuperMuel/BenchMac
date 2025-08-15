@@ -95,12 +95,12 @@ class Settings(BaseSettings):
     def initialize_directories(self) -> None:
         """Creates all necessary cache and data directories."""
         logger.info("Initializing BenchMAC directories...")
-        settings.data_dir.mkdir(exist_ok=True)
-        settings.silver_patches_dir.mkdir(exist_ok=True)
-        settings.cache_dir.mkdir(exist_ok=True)
-        settings.silver_patches_repos_dir.mkdir(exist_ok=True)
-        settings.results_dir.mkdir(exist_ok=True)
-        settings.dockerfiles_dir.mkdir(exist_ok=True)
+        self.data_dir.mkdir(exist_ok=True)
+        self.silver_patches_dir.mkdir(exist_ok=True)
+        self.cache_dir.mkdir(exist_ok=True)
+        self.silver_patches_repos_dir.mkdir(exist_ok=True)
+        self.results_dir.mkdir(exist_ok=True)
+        self.dockerfiles_dir.mkdir(exist_ok=True)
         logger.info("✅ Directories initialized.")
 
 
