@@ -11,7 +11,7 @@
 
 Migrating Angular applications across major versions is a nuanced task that goes beyond simple dependency updates. It requires adapting to breaking API changes, refactoring code and tests, and ensuring the entire project remains buildable, lint-free, and functionally correct.
 
-BenchMAC provides a standardized, robust, and realistic methodology to evaluate and compare AI Systems Under Test (SUTs) on their capability to perform these comprehensive Angular version migrations.
+BenchMAC provides a standardized, automated, and reproducible way to measure the performance of any AI system on these tasks.
 
 ### Key Features
 
@@ -19,7 +19,6 @@ BenchMAC provides a standardized, robust, and realistic methodology to evaluate 
 *   **Holistic Evaluation:** Measures success through a suite of metrics including build success, linting integrity, and test pass rates.
 *   **Reproducible Environments:** Uses a containerized Docker environment to ensure every evaluation is isolated and scientifically valid.
 *   **Decoupled Evaluation:** Employs a post-hoc model where the harness evaluates a static patch file, making it easy to test any SUT.
-*   **Anti-Cheating Mechanisms:** Actively detects and penalizes superficial fixes like commenting out failing tests or disabling lint rules.
 
 ## ⚙️ Installation
 
