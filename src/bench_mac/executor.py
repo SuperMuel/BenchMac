@@ -152,7 +152,6 @@ def execute_submission(
                     return ExecutionTrace(steps=steps)
                 logger.info("❌ Install failed due to peer dependency conflict.")
 
-                # TODO: implement the logic to retry with the peer dep fix
                 original_install_command = instance.commands.install
                 if "--legacy-peer-deps" in original_install_command:
                     logger.warning(

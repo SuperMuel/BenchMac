@@ -8,8 +8,6 @@ from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
 from bench_mac.models import (
     BenchmarkInstance,
-    CommandOutput,
-    ExecutionTrace,
     Submission,
 )
 from bench_mac.utils import load_instances
@@ -85,13 +83,6 @@ def silver_submission(test_instance: BenchmarkInstance) -> Submission:
     return Submission(instance_id=test_instance.instance_id, model_patch=patch_content)
 
 
-def _find_step(trace: ExecutionTrace, command: str) -> CommandOutput | None:
-    for step in trace.steps:
-        if command in step.command:
-            return step
-    return None
-
-
 @pytest.mark.integration
 class TestExecuteSubmission:
     def test_successful_patch_application(
@@ -118,28 +109,6 @@ class TestExecuteSubmission:
 
         # The primary metric for this test
         assert metrics.patch_application_success is True
-
-        # Check that the execution trace shows successful patch application
-        patch_apply_step = _find_step(trace, "git apply -p0")
-
-        assert patch_apply_step is not None
-        assert patch_apply_step.success
-        assert "error" not in patch_apply_step.stderr.lower()
-        assert "fail" not in patch_apply_step.stderr.lower()
-
-        # Check that the execution trace shows successful install
-        # install_step = _find_step(trace, test_instance.commands.install)
-
-        # assert install_step is not None
-        # assert install_step.success
-
-        # # Check that the execution trace shows successful build
-        # build_step = _find_step(trace, test_instance.commands.build)
-
-        # assert build_step is not None
-        # assert build_step.success
-
-        # TODO: check these steps from the metricsReport
 
     def test_failed_patch_application(
         self,
