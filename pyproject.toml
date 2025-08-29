@@ -170,13 +170,13 @@ markers = [
     "integration: cross-component or external-resource tests",
     "e2e: end-to-end tests",
     "slow: slow tests",
-    "baseline_validation: validates the baseline state of benchmark data; very slow and runs manually",
+    "instance_validation: validates the baseline state of benchmark data as well as silvers; very slow and runs manually",
 ]
 addopts = [
     "--strict-markers",
     "-ra",                                                                  # extra summary
     "-m",
-    "not integration and not e2e and not slow and not baseline_validation", # run only unit tests by default
+    "not integration and not e2e and not slow and not instance_validation", # run only unit tests by default
 ]
 
 

@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Data Validation
 These tests are very slow and validate the correctness of the benchmark instances.
 They should be run manually after adding or changing instances in `data/`.
-**Run baseline data validation**: `uv run pytest -m baseline_validation`
+**Run baseline data validation**: `uv run pytest -m instance_validation`
 
 
 

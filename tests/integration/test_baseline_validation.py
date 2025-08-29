@@ -22,7 +22,7 @@ from bench_mac.models import BenchmarkInstance
 from bench_mac.utils import load_instances
 
 
-@pytest.mark.baseline_validation
+@pytest.mark.instance_validation
 class TestBaselineInstanceValidation:
     """
     Validates that every benchmark instance starts from a known-good state.

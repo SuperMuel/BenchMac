@@ -72,6 +72,7 @@ def discover_silver_tasks() -> list[EvaluationTask]:
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.instance_validation
 @pytest.mark.parametrize(
     "task",
     discover_silver_tasks(),
