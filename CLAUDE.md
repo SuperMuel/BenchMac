@@ -46,7 +46,7 @@ BenchMAC is a benchmark for evaluating AI agents on Angular version migration ta
    - `ExecutionJob`: Pairs an instance with a submission for evaluation
    - `ExecutionTrace`: Records all command outputs during evaluation
    - `MetricsReport`: Calculated performance metrics
-   - `RunOutcome`: Success/failure result with details
+   - `EvaluationResult`: Success/failure result with details
 
 3. **Executor** (`executor.py`): Core evaluation logic that:
    - Prepares Docker environment for each instance

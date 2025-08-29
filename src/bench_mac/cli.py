@@ -24,9 +24,9 @@ from rich.text import Text
 from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
+    EvaluationResult,
     ExecutionJob,
     RunFailure,
-    RunOutcome,
     RunSuccess,
     Submission,
 )
@@ -89,12 +89,12 @@ def _run_interactive(
     output_file: Path,
     logs_dir: Path,
     run_id: str,
-) -> list[RunOutcome]:
+) -> list[EvaluationResult]:
     """Handles the evaluation run with a rich progress bar for interactive terminals."""
     total_tasks = len(tasks)
     success_count = 0
     failure_count = 0
-    outcomes: list[RunOutcome] = []
+    outcomes: list[EvaluationResult] = []
 
     progress = Progress(
         SpinnerColumn(),
@@ -113,7 +113,7 @@ def _run_interactive(
             "Evaluating...", total=total_tasks, successes=0, failures=0
         )
 
-        def on_result(outcome: RunOutcome):
+        def on_result(outcome: EvaluationResult):
             nonlocal success_count, failure_count
 
             # Collect outcome for summary
@@ -154,16 +154,16 @@ def _run_non_interactive(
     output_file: Path,
     logs_dir: Path,
     run_id: str,
-) -> list[RunOutcome]:
+) -> list[EvaluationResult]:
     """Handles the evaluation run with simple line-by-line logging for CI/CD."""
     task_list = list(tasks)
     total_tasks = len(task_list)
-    outcomes: list[RunOutcome] = []
+    outcomes: list[EvaluationResult] = []
     logger.info(f"Running in non-interactive mode. Evaluating {total_tasks} tasks.")
 
     with output_file.open("a", encoding="utf-8") as f:
 
-        def on_result(outcome: RunOutcome):
+        def on_result(outcome: EvaluationResult):
             # Collect outcome for summary
             outcomes.append(outcome)
 
@@ -186,9 +186,9 @@ def _run_non_interactive(
     return outcomes
 
 
-def _load_outcomes_from_file(results_file: Path) -> list[RunOutcome]:
-    """Load RunOutcome objects from a JSONL results file."""
-    outcomes: list[RunOutcome] = []
+def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
+    """Load EvaluationResult objects from a JSONL results file."""
+    outcomes: list[EvaluationResult] = []
     if not results_file.exists():
         logger.error(f"❌ Results file not found: {results_file}")
         return outcomes
@@ -216,7 +216,9 @@ def _load_outcomes_from_file(results_file: Path) -> list[RunOutcome]:
     return outcomes
 
 
-def _collect_network_error_details(outcomes: list[RunOutcome]) -> dict[str, list[str]]:
+def _collect_network_error_details(
+    outcomes: list[EvaluationResult],
+) -> dict[str, list[str]]:
     """Return mapping of instance_id -> list of step commands impacted
      by network-like errors.
 
@@ -257,7 +259,7 @@ def _collect_network_error_details(outcomes: list[RunOutcome]) -> dict[str, list
 
 
 def _print_evaluation_summary(
-    outcomes: list[RunOutcome],
+    outcomes: list[EvaluationResult],
     run_id: str | None = None,
     results_file: Path | None = None,
     logs_dir: Path | None = None,

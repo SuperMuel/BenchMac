@@ -12,9 +12,9 @@ from bench_mac.logging_config import get_instance_logger, setup_worker_process_l
 from bench_mac.metrics import calculate_metrics
 from bench_mac.models import (
     EvaluationReport,
+    EvaluationResult,
     ExecutionJob,
     RunFailure,
-    RunOutcome,
     RunSuccess,
 )
 
@@ -28,12 +28,12 @@ class WorkerContext:
     run_id: str
 
 
-def run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
+def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
     """
     A top-level function designed to be run in a separate process.
 
     It initializes its own DockerManager and calls the core evaluation logic,
-    wrapping the result in a RunOutcome object to handle success or failure.
+    wrapping the result in a EvaluationResult object to handle success or failure.
     """
     # First thing: configure logging for this worker process
     setup_worker_process_logging(
@@ -95,14 +95,14 @@ class BenchmarkRunner:
         tasks: Sequence[ExecutionJob],
         log_dir: Path,
         run_id: str,
-        on_result: Callable[[RunOutcome], None],
+        on_result: Callable[[EvaluationResult], None],
     ) -> None:
         """
         Executes the evaluation for a given set of tasks.
 
         Args:
             tasks: An iterable of (instance, submission) tuples to be evaluated.
-            on_result: A callback function that is invoked with the RunOutcome
+            on_result: A callback function that is invoked with the EvaluationResult
                        of each completed task.
         """
         task_list = list(tasks)

@@ -7,11 +7,11 @@ import pytest
 from bench_mac.models import (
     CommandOutput,
     EvaluationReport,
+    EvaluationResult,
     ExecutionJob,
     ExecutionTrace,
     MetricsReport,
     RunFailure,
-    RunOutcome,
     RunSuccess,
     Submission,
 )
@@ -47,7 +47,7 @@ def sample_tasks(instance_factory: Any) -> list[ExecutionJob]:
     ]
 
 
-def fake_run_single_evaluation_task(context: WorkerContext) -> RunOutcome:
+def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
     """
     A fake worker function that replaces the real one during tests.
     It returns predictable results without any I/O or Docker calls.
@@ -104,9 +104,9 @@ class TestBenchmarkRunner:
         )
 
         # 2. Prepare lists to capture the data passed to our callbacks.
-        results_log: list[RunOutcome] = []
+        results_log: list[EvaluationResult] = []
 
-        def on_result_callback(outcome: RunOutcome):
+        def on_result_callback(outcome: EvaluationResult):
             """A fake callback that just records the result."""
             results_log.append(outcome)
 

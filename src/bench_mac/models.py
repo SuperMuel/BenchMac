@@ -312,6 +312,4 @@ class RunFailure(BaseModel):
     error: str
 
 
-RunOutcome = RunSuccess | RunFailure
-# TODO: "success" is a bit misleading here.
-# User might wonder: Is it a harness success or a SUT success ?
+EvaluationResult = RunSuccess | RunFailure
