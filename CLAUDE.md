@@ -43,7 +43,7 @@ BenchMAC is a benchmark for evaluating AI agents on Angular version migration ta
 2. **Models** (`models.py`): Pydantic models defining the data structures:
    - `BenchmarkInstance`: Defines a migration task (repo, versions, commands)
    - `Submission`: Contains the patch submitted by an AI agent
-   - `ExecutionJob`: Pairs an instance with a submission for evaluation
+   - `EvaluationTask`: Pairs an instance with a submission for evaluation
    - `ExecutionTrace`: Records all command outputs during evaluation
    - `MetricsReport`: Calculated performance metrics
    - `EvaluationResult`: Success/failure result with details

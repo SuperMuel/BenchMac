@@ -15,7 +15,7 @@ from bench_mac.models import (
     EvaluationFailed,
     EvaluationReport,
     EvaluationResult,
-    ExecutionJob,
+    EvaluationTask,
 )
 
 
@@ -23,7 +23,7 @@ from bench_mac.models import (
 class WorkerContext:
     """Context passed to each worker process."""
 
-    task: ExecutionJob
+    task: EvaluationTask
     log_dir: Path
     run_id: str
 
@@ -92,7 +92,7 @@ class BenchmarkRunner:
 
     def run(
         self,
-        tasks: Sequence[ExecutionJob],
+        tasks: Sequence[EvaluationTask],
         log_dir: Path,
         run_id: str,
         on_result: Callable[[EvaluationResult], None],

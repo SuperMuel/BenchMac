@@ -23,19 +23,19 @@ from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
-from bench_mac.models import ExecutionJob, Submission
+from bench_mac.models import EvaluationTask, Submission
 from bench_mac.utils import load_instances
 
 # --- Test Data Generation ---
 
 
-def discover_silver_tasks() -> list[ExecutionJob]:
+def discover_silver_tasks() -> list[EvaluationTask]:
     """
     Scans the silver_patches directory, matches each patch with its
     corresponding benchmark instance, and returns a list of executable
-    ExecutionJob objects for pytest to parameterize.
+    EvaluationTask objects for pytest to parameterize.
     """
-    tasks: list[ExecutionJob] = []
+    tasks: list[EvaluationTask] = []
     instances_map = load_instances(settings.instances_file, strict=True)
     silver_patch_dir = settings.silver_patches_dir
 
@@ -55,7 +55,9 @@ def discover_silver_tasks() -> list[ExecutionJob]:
                 instance_id=instance_id, model_patch=patch_file.read_text()
             )
             tasks.append(
-                ExecutionJob(instance=instances_map[instance_id], submission=submission)
+                EvaluationTask(
+                    instance=instances_map[instance_id], submission=submission
+                )
             )
         else:
             logger.warning(
@@ -74,10 +76,10 @@ def discover_silver_tasks() -> list[ExecutionJob]:
     "task",
     discover_silver_tasks(),
     # This lambda function provides clean, readable test names in the output
-    ids=lambda t: t.instance.instance_id if isinstance(t, ExecutionJob) else "",
+    ids=lambda t: t.instance.instance_id if isinstance(t, EvaluationTask) else "",
 )
 def test_silver_patch_passes_full_evaluation(
-    task: ExecutionJob, docker_manager: DockerManager
+    task: EvaluationTask, docker_manager: DockerManager
 ) -> None:
     """
     Verifies that a specific silver patch successfully completes the entire

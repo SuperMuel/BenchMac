@@ -10,7 +10,7 @@ from bench_mac.models import (
     EvaluationFailed,
     EvaluationReport,
     EvaluationResult,
-    ExecutionJob,
+    EvaluationTask,
     ExecutionTrace,
     MetricsReport,
     Submission,
@@ -21,7 +21,7 @@ from bench_mac.runner import BenchmarkRunner, WorkerContext
 
 
 @pytest.fixture
-def sample_tasks(instance_factory: Any) -> list[ExecutionJob]:
+def sample_tasks(instance_factory: Any) -> list[EvaluationTask]:
     """Provides a simple list of two tasks for testing."""
     instance1 = instance_factory.create_instance(
         instance_id="task-1-success",
@@ -42,8 +42,8 @@ def sample_tasks(instance_factory: Any) -> list[ExecutionJob]:
     submission2 = Submission(instance_id="task-2-failure", model_patch="...")
 
     return [
-        ExecutionJob(instance=instance1, submission=submission1),
-        ExecutionJob(instance=instance2, submission=submission2),
+        EvaluationTask(instance=instance1, submission=submission1),
+        EvaluationTask(instance=instance2, submission=submission2),
     ]
 
 
@@ -89,7 +89,7 @@ class TestBenchmarkRunner:
     def test_run_orchestration_and_callbacks(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        sample_tasks: list[ExecutionJob],
+        sample_tasks: list[EvaluationTask],
     ):
         """
         Verify that the runner correctly executes tasks in parallel and

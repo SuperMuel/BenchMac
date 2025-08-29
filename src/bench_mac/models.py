@@ -9,7 +9,12 @@ from bench_mac.config import settings
 
 
 def validate_angular_version(value: str) -> str:
-    """Validate Angular version format."""
+    """
+    Validate an Angular version string.
+
+    Accepts either a bare major (e.g., "16") or a semantic version with up to
+    three numeric components (e.g., "16.2" or "16.2.1"). Major must be >= 2.
+    """
     # Allow semantic versions (e.g., "16.2.1") or just major versions (e.g., "16")
     semver_pattern = r"^\d+(\.\d+){0,2}$"
     if not re.match(semver_pattern, value):
@@ -30,8 +35,6 @@ AngularVersion = Annotated[str, BeforeValidator(validate_angular_version)]
 
 
 class InstanceCommands(BaseModel):
-    """Specifies custom evaluation commands, overriding harness defaults."""
-
     install: str = Field(
         ...,
         description="The command to install dependencies.",
@@ -46,7 +49,14 @@ class InstanceCommands(BaseModel):
 
 
 class BenchmarkInstance(BaseModel):
-    """Represents a single, specific task within the benchmark."""
+    """
+    A single migration task to evaluate.
+
+    Captures the repository, the starting commit/version, the target version,
+    and the per-instance commands used during evaluation. Docker build context
+    comes from either `override_dockerfile_content` or a file located at
+    `data/dockerfiles/<instance_id>`.
+    """
 
     instance_id: str = Field(
         ...,
@@ -61,7 +71,6 @@ class BenchmarkInstance(BaseModel):
     @field_validator("repo")
     @classmethod
     def validate_repo_format(cls, v: str) -> str:
-        """Validate that repo is either a valid URL or owner/repo format."""
         # Check if it's a valid URL
         parsed = urlparse(v)
         if parsed.scheme in ("http", "https") and parsed.netloc:
@@ -84,7 +93,6 @@ class BenchmarkInstance(BaseModel):
     @field_validator("base_commit")
     @classmethod
     def validate_commit_hash(cls, v: str) -> str:
-        """Validate that base_commit is a valid Git commit hash."""
         # Git commit hashes are hexadecimal and typically 7-40 characters
         commit_hash_pattern = r"^[a-fA-F0-9]{7,40}$"
         if not re.match(commit_hash_pattern, v):
@@ -120,16 +128,12 @@ class BenchmarkInstance(BaseModel):
     @field_validator("override_dockerfile_content")
     @classmethod
     def validate_override_dockerfile_content(cls, v: str | None) -> str | None:
-        """Validate that override_dockerfile_content is not empty if provided."""
         if v is not None and not v.strip():
             raise ValueError("override_dockerfile_content is empty.")
         return v
 
     @model_validator(mode="after")
     def validate_dockerfile_availability(self) -> Self:
-        """Validate that either dockerfile_content is provided or
-        dockerfile file exists.
-        """
         if self.override_dockerfile_content is not None:
             return self
 
@@ -150,7 +154,6 @@ class BenchmarkInstance(BaseModel):
 
     @property
     def dockerfile_content(self) -> str:
-        """The Dockerfile content for the instance."""
         if self.override_dockerfile_content is not None:
             return self.override_dockerfile_content
 
@@ -168,7 +171,12 @@ class BenchmarkInstance(BaseModel):
 
 
 class Submission(BaseModel):
-    """Represents a single solution submitted by a SUT for a task instance."""
+    """
+    A solution candidate for a specific instance.
+
+    `model_patch` must be a unified diff (git patch) applying all changes that
+    implement the migration from source to target.
+    """
 
     instance_id: str = Field(
         ...,
@@ -179,12 +187,20 @@ class Submission(BaseModel):
         description="A string containing the full, unified diff (.patch format) of all changes.",  # noqa: E501
     )
 
+    # TODO: validate model_patch that it's not empty ?
+
 
 # --- Evaluation & Metrics Models ---
 
 
 class MetricsReport(BaseModel):
-    """A detailed, quantifiable report of the SUT's performance on an instance."""
+    """
+    Quantitative evaluation outcomes derived from an `ExecutionTrace`.
+
+    Fields are tri-state:
+      - True/False when the harness can determine success or failure;
+      - None when indeterminate (step not run or insufficient data).
+    """
 
     patch_application_success: bool | None = Field(
         default=None,
@@ -232,8 +248,12 @@ class MetricsReport(BaseModel):
     # )
 
 
-class ExecutionJob(BaseModel):
-    """A job to evaluate a single submission."""
+class EvaluationTask(BaseModel):
+    """
+    A schedulable unit of work: (instance, submission).
+
+    The runner distributes these to worker processes for execution.
+    """
 
     instance: BenchmarkInstance
     submission: Submission
@@ -241,7 +261,10 @@ class ExecutionJob(BaseModel):
 
 class CommandResult(BaseModel):
     """
-    Represents the detailed result of a single command executed in the container.
+    Result of a single command executed inside the container.
+
+    Timestamps are expected to be timezone-aware (UTC). Use `.success` for a
+    semantic success check (exit_code == 0).
     """
 
     command: str = Field(..., description="The exact command that was executed.")
@@ -263,23 +286,38 @@ class CommandResult(BaseModel):
 
     @property
     def duration_seconds(self) -> float:
-        """The total duration of the command execution in seconds."""
         return (self.end_time - self.start_time).total_seconds()
 
     @property
     def success(self) -> bool:
-        """A convenience property to check if the command succeeded
-        (exit_code == 0)
-        """
+        """Convenience predicate: True iff `exit_code == 0`."""
         return self.exit_code == 0
 
 
 class ExecutionTrace(BaseModel):
+    """
+    Ordered list of `CommandOutput` steps produced during evaluation.
+
+    Typical order on the happy path:
+      1) git apply --check
+      2) git apply -p0
+      3) install command(s)
+      4) version check (npm ls … --json)
+      5) build command
+    """
+
     steps: list[CommandResult]
+
+    # TODO: verify order of steps ?
 
 
 class EvaluationReport(BaseModel):
-    """The final, comprehensive result of evaluating a single submission."""
+    """
+    Final structured record for a completed evaluation.
+
+    Contains the raw `ExecutionTrace` (source of truth) and the derived
+    `MetricsReport` (interpretation).
+    """
 
     instance_id: str = Field(...)
 
@@ -299,8 +337,10 @@ class EvaluationReport(BaseModel):
 
 class EvaluationCompleted(BaseModel):
     """
-    Indicates the harness successfully completed its evaluation process
-    and produced a final, graded record for the submission.
+    Wrapper for a successful harness run.
+
+    Use this when the evaluation executed to completion (regardless of
+    metric values) and produced an `EvaluationReport`.
     """
 
     status: Literal["success"] = "success"
@@ -309,8 +349,10 @@ class EvaluationCompleted(BaseModel):
 
 class EvaluationFailed(BaseModel):
     """
-    Indicates the harness encountered a system-level error and could not
-    complete the evaluation for a given task.
+    Wrapper for a harness/system failure.
+
+    Use this when the evaluation could not be completed (e.g., Docker not
+    available, process crash). No `ExecutionTrace` is available here.
     """
 
     status: Literal["failure"] = "failure"

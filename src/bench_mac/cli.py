@@ -27,7 +27,7 @@ from bench_mac.models import (
     EvaluationCompleted,
     EvaluationFailed,
     EvaluationResult,
-    ExecutionJob,
+    EvaluationTask,
     Submission,
 )
 from bench_mac.runner import BenchmarkRunner
@@ -60,7 +60,7 @@ def _prepare_tasks(
     submissions_path: Path,
     instances_path: Path,
     filter_ids: list[str] | None = None,
-) -> Generator[ExecutionJob, None, None]:
+) -> Generator[EvaluationTask, None, None]:
     """Matches submissions to instances and yields tasks to be run."""
     logger.info("Loading benchmark instances...")
     instances_map = load_instances(instances_path)
@@ -72,7 +72,7 @@ def _prepare_tasks(
             continue
 
         if sub.instance_id in instances_map:
-            yield ExecutionJob(
+            yield EvaluationTask(
                 instance=instances_map[sub.instance_id],
                 submission=sub,
             )
@@ -85,7 +85,7 @@ def _prepare_tasks(
 
 def _run_interactive(
     runner: BenchmarkRunner,
-    tasks: Sequence[ExecutionJob],
+    tasks: Sequence[EvaluationTask],
     output_file: Path,
     logs_dir: Path,
     run_id: str,
@@ -150,7 +150,7 @@ def _run_interactive(
 
 def _run_non_interactive(
     runner: BenchmarkRunner,
-    tasks: Sequence[ExecutionJob],
+    tasks: Sequence[EvaluationTask],
     output_file: Path,
     logs_dir: Path,
     run_id: str,
