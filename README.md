@@ -7,6 +7,8 @@
 
 **BenchMAC** is a benchmark for evaluating AI agents on their ability to perform complex, real-world **M**igration tasks for **A**ngular **C**odebases.
 
+Developped as part of my Master's thesis in collaboration with **[onepoint](https://groupeonepoint.com/)**.
+
 ## 🚀 Introduction
 
 Migrating Angular applications across major versions is a nuanced task that goes beyond simple dependency updates. It requires adapting to breaking API changes, refactoring code and tests, and ensuring the entire project remains buildable, lint-free, and functionally correct.
