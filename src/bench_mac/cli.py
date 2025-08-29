@@ -25,9 +25,9 @@ from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
     EvaluationCompleted,
+    EvaluationFailed,
     EvaluationResult,
     ExecutionJob,
-    RunFailure,
     Submission,
 )
 from bench_mac.runner import BenchmarkRunner
@@ -204,7 +204,7 @@ def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
                 if data.get("status") == "success":
                     outcome = EvaluationCompleted.model_validate(data)
                 elif data.get("status") == "failure":
-                    outcome = RunFailure.model_validate(data)
+                    outcome = EvaluationFailed.model_validate(data)
                 else:
                     raise ValueError(f"Unknown status: {data.get('status')}")
                 outcomes.append(outcome)

@@ -7,12 +7,12 @@ import pytest
 from bench_mac.models import (
     CommandOutput,
     EvaluationCompleted,
+    EvaluationFailed,
     EvaluationReport,
     EvaluationResult,
     ExecutionJob,
     ExecutionTrace,
     MetricsReport,
-    RunFailure,
     Submission,
 )
 from bench_mac.runner import BenchmarkRunner, WorkerContext
@@ -75,7 +75,7 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         )
     else:
         # Simulate a harness-level failure
-        return RunFailure(
+        return EvaluationFailed(
             instance_id=context.task.instance.instance_id,
             error="Simulated worker crash",
         )
@@ -131,13 +131,13 @@ class TestBenchmarkRunner:
         sorted_results = sorted(
             results_log,
             key=lambda r: r.instance_id
-            if isinstance(r, RunFailure)
+            if isinstance(r, EvaluationFailed)
             else r.result.instance_id,
         )
 
         # Check the failure case
         failure_result = sorted_results[1]
-        assert isinstance(failure_result, RunFailure)
+        assert isinstance(failure_result, EvaluationFailed)
         assert failure_result.instance_id == "task-2-failure"
         assert failure_result.error == "Simulated worker crash"
 

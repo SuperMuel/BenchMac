@@ -307,12 +307,15 @@ class EvaluationCompleted(BaseModel):
     result: EvaluationReport
 
 
-class RunFailure(BaseModel):
-    """Represents a harness-level failure during an evaluation run."""
+class EvaluationFailed(BaseModel):
+    """
+    Indicates the harness encountered a system-level error and could not
+    complete the evaluation for a given task.
+    """
 
     status: Literal["failure"] = "failure"
     instance_id: str
     error: str
 
 
-EvaluationResult = EvaluationCompleted | RunFailure
+EvaluationResult = EvaluationCompleted | EvaluationFailed

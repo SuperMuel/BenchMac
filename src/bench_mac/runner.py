@@ -12,10 +12,10 @@ from bench_mac.logging_config import get_instance_logger, setup_worker_process_l
 from bench_mac.metrics import calculate_metrics
 from bench_mac.models import (
     EvaluationCompleted,
+    EvaluationFailed,
     EvaluationReport,
     EvaluationResult,
     ExecutionJob,
-    RunFailure,
 )
 
 
@@ -73,7 +73,7 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         instance_log_path = (
             context.log_dir / "instances" / f"{context.task.instance.instance_id}.log"
         )
-        return RunFailure(
+        return EvaluationFailed(
             instance_id=context.task.instance.instance_id,
             error=f"Worker process crashed ({e.__class__.__name__}: {e})\n"
             f"See instance log for details in {instance_log_path}",
