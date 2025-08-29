@@ -57,24 +57,29 @@ class Settings(BaseSettings):
         return self.data_dir / "silver_patches"
 
     @property
-    def benchmac_dir(self) -> Path:
+    def benchmac_temp_dir(self) -> Path:
         """Path to the directory containing the BenchMAC repository."""
         return self.project_root / ".benchmac"
 
     @property
     def cache_dir(self) -> Path:
         """Path to the root directory for temporary and cached files."""
-        return self.benchmac_dir / "cache"
+        return self.benchmac_temp_dir / "cache"
 
     @property
     def results_dir(self) -> Path:
         """Path to the directory where evaluation results are stored."""
-        return self.benchmac_dir / "results"
+        return self.benchmac_temp_dir / "results"
 
     @property
     def silver_patches_repos_dir(self) -> Path:
         """Path to the directory where repositories are temporarily cloned for silver patch generation."""  # noqa: E501
         return self.cache_dir / "silver_patches_repos"
+
+    @property
+    def experiments_dir(self) -> Path:
+        """Path to the directory where experiments are stored."""
+        return self.benchmac_temp_dir / "experiments"
 
     # --- Docker Settings ---
     docker_host: str | None = Field(
@@ -101,6 +106,7 @@ class Settings(BaseSettings):
         self.silver_patches_repos_dir.mkdir(exist_ok=True)
         self.results_dir.mkdir(exist_ok=True)
         self.dockerfiles_dir.mkdir(exist_ok=True)
+        self.experiments_dir.mkdir(exist_ok=True)
         logger.info("✅ Directories initialized.")
 
 
