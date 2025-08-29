@@ -15,7 +15,7 @@ import pytest
 
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
-from bench_mac.models import BenchmarkInstance, CommandsConfig
+from bench_mac.models import BenchmarkInstance, InstanceCommands
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ class TestImageBuilder:
             base_commit="4f29e0e",
             source_angular_version="11.2.8",
             target_angular_version="12",
-            commands=CommandsConfig(
+            commands=InstanceCommands(
                 install="npm ci",
                 build="npx ng build --configuration production",
             ),

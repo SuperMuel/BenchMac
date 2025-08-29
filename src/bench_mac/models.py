@@ -29,7 +29,7 @@ def validate_angular_version(value: str) -> str:
 AngularVersion = Annotated[str, BeforeValidator(validate_angular_version)]
 
 
-class CommandsConfig(BaseModel):
+class InstanceCommands(BaseModel):
     """Specifies custom evaluation commands, overriding harness defaults."""
 
     install: str = Field(
@@ -102,7 +102,7 @@ class BenchmarkInstance(BaseModel):
         description="The desired target major Angular version (e.g., '16').",
     )
 
-    commands: CommandsConfig = Field(
+    commands: InstanceCommands = Field(
         ...,
         description="Custom commands for evaluation, overriding defaults.",
     )

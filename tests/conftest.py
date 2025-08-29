@@ -4,15 +4,15 @@ from typing import cast
 
 import pytest
 
-from bench_mac.models import BenchmarkInstance, CommandsConfig, Submission
+from bench_mac.models import BenchmarkInstance, InstanceCommands, Submission
 
 _UNSET = object()
 
 
 @pytest.fixture
-def default_commands() -> CommandsConfig:
-    """Provides a standard CommandsConfig for testing."""
-    return CommandsConfig(
+def default_commands() -> InstanceCommands:
+    """Provides a standard InstanceCommands for testing."""
+    return InstanceCommands(
         install="npm install",
         build="ng build --configuration production",
     )
@@ -25,7 +25,7 @@ def default_dockerfile_content() -> str:
 
 
 @pytest.fixture
-def sample_instance(default_commands: CommandsConfig) -> BenchmarkInstance:
+def sample_instance(default_commands: InstanceCommands) -> BenchmarkInstance:
     """Provides a standard BenchmarkInstance for testing."""
     return BenchmarkInstance(
         instance_id="my-project_v15_to_v16",
@@ -41,7 +41,7 @@ class InstanceFactory:
     """Factory for creating test instances with custom parameters."""
 
     def __init__(
-        self, default_commands: CommandsConfig, default_dockerfile_content: str
+        self, default_commands: InstanceCommands, default_dockerfile_content: str
     ):
         self.default_commands = default_commands
         self.default_dockerfile_content = default_dockerfile_content
@@ -53,7 +53,7 @@ class InstanceFactory:
         base_commit: str = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
         source_angular_version: str = "15.0.0",
         target_angular_version: str = "16.1.0",
-        commands: CommandsConfig | None = None,
+        commands: InstanceCommands | None = None,
         metadata: dict[str, str] | None = None,
         override_dockerfile_content: str | None | object = _UNSET,
     ) -> BenchmarkInstance:
@@ -78,7 +78,7 @@ class InstanceFactory:
 
 @pytest.fixture
 def instance_factory(
-    default_commands: CommandsConfig,
+    default_commands: InstanceCommands,
     default_dockerfile_content: str,
 ) -> InstanceFactory:
     """Factory fixture for creating custom BenchmarkInstance objects."""

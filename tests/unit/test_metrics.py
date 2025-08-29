@@ -13,8 +13,8 @@ from bench_mac.metrics import (
 )
 from bench_mac.models import (
     BenchmarkInstance,
-    CommandsConfig,
     ExecutionTrace,
+    InstanceCommands,
 )
 
 from ..utils import create_command_output
@@ -127,7 +127,7 @@ def sample_instance() -> BenchmarkInstance:
         source_angular_version="15.2.0",
         target_angular_version="16.0.0",
         override_dockerfile_content="FROM node:18",  # Dummy content
-        commands=CommandsConfig(
+        commands=InstanceCommands(
             install="npm ci",
             build="ng build",
         ),
