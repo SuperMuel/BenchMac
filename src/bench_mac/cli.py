@@ -29,6 +29,7 @@ from bench_mac.models import (
     EvaluationResult,
     EvaluationTask,
     Submission,
+    utc_now,
 )
 from bench_mac.runner import BenchmarkRunner
 from bench_mac.utils import load_instances
@@ -429,7 +430,7 @@ def evaluate(
     """
     Run the BenchMAC evaluation on a set of submissions.
     """
-    run_id = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
+    run_id = utc_now().strftime("%Y-%m-%d_%H%M%S")
 
     run_dir = settings.results_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

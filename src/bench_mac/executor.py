@@ -1,5 +1,4 @@
 import tempfile
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ from bench_mac.models import (
     CommandResult,
     ExecutionTrace,
     Submission,
+    utc_now,
 )
 
 
@@ -32,11 +32,11 @@ def _execute_and_capture(
     workdir: str | None = None,
 ) -> CommandResult:
     """Executes a command and captures all relevant output in a CommandResult object."""
-    start_time = datetime.now(UTC)
+    start_time = utc_now()
     exit_code, stdout, stderr = manager.execute_in_container(
         container, command, workdir
     )
-    end_time = datetime.now(UTC)
+    end_time = utc_now()
 
     return CommandResult(
         command=command,

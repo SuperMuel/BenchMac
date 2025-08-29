@@ -10,6 +10,7 @@ from bench_mac.models import (
     ExecutionTrace,
     MetricsReport,
     Submission,
+    utc_now,
 )
 
 
@@ -175,8 +176,8 @@ class TestEvaluationResult:
             exit_code=1,
             stdout="",
             stderr="Build failed with 1 error.",
-            start_time=datetime.now(UTC),
-            end_time=datetime.now(UTC),
+            start_time=utc_now(),
+            end_time=utc_now(),
         )
         execution = ExecutionTrace(steps=[command_output])
         metrics = MetricsReport(patch_application_success=False)

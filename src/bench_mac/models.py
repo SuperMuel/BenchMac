@@ -1,11 +1,25 @@
 import re
-from datetime import datetime
+import uuid
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from bench_mac.config import settings
+
+
+def utc_now() -> datetime:
+    """Returns the current time in UTC."""
+    return datetime.now(UTC)
 
 
 def validate_angular_version(value: str) -> str:
@@ -170,6 +184,17 @@ class BenchmarkInstance(BaseModel):
         return content
 
 
+class SubmissionMetadata(BaseModel):
+    """Metadata for a submission."""
+
+    model_config = ConfigDict(extra="allow")
+
+    created_at: AwareDatetime = Field(
+        default_factory=utc_now,
+        description="The timestamp when the submission was created.",
+    )
+
+
 class Submission(BaseModel):
     """
     A solution candidate for a specific instance.
@@ -177,6 +202,11 @@ class Submission(BaseModel):
     `model_patch` must be a unified diff (git patch) applying all changes that
     implement the migration from source to target.
     """
+
+    submission_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="The unique identifier of the submission.",
+    )
 
     instance_id: str = Field(
         ...,
@@ -187,7 +217,10 @@ class Submission(BaseModel):
         description="A string containing the full, unified diff (.patch format) of all changes.",  # noqa: E501
     )
 
-    # TODO: validate model_patch that it's not empty ?
+    metadata: SubmissionMetadata = Field(
+        default_factory=SubmissionMetadata,
+        description="Metadata for the submission.",
+    )
 
 
 # --- Evaluation & Metrics Models ---
@@ -277,10 +310,10 @@ class CommandResult(BaseModel):
     stderr: str = Field(
         default="", description="The captured standard error (stderr) of the command."
     )
-    start_time: datetime = Field(
+    start_time: AwareDatetime = Field(
         ..., description="The UTC timestamp when the command started."
     )
-    end_time: datetime = Field(
+    end_time: AwareDatetime = Field(
         ..., description="The UTC timestamp when the command finished."
     )
 
@@ -296,7 +329,7 @@ class CommandResult(BaseModel):
 
 class ExecutionTrace(BaseModel):
     """
-    Ordered list of `CommandOutput` steps produced during evaluation.
+    Ordered list of `CommandResult` steps produced during evaluation.
 
     Typical order on the happy path:
       1) git apply --check
@@ -307,8 +340,6 @@ class ExecutionTrace(BaseModel):
     """
 
     steps: list[CommandResult]
-
-    # TODO: verify order of steps ?
 
 
 class EvaluationReport(BaseModel):

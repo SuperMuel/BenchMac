@@ -1,8 +1,8 @@
 """Test utilities and helper functions."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 
-from bench_mac.models import CommandResult
+from bench_mac.models import CommandResult, utc_now
 
 
 def create_command_output(
@@ -14,7 +14,7 @@ def create_command_output(
     end_time: datetime | None = None,
 ) -> CommandResult:
     """Test helper to auto-fill required timestamps for CommandResult."""
-    now = datetime.now(UTC)
+    now = utc_now()
     start = start_time or now
     end = end_time or start
     return CommandResult(
