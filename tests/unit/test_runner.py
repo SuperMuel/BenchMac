@@ -6,13 +6,13 @@ import pytest
 
 from bench_mac.models import (
     CommandOutput,
+    EvaluationCompleted,
     EvaluationReport,
     EvaluationResult,
     ExecutionJob,
     ExecutionTrace,
     MetricsReport,
     RunFailure,
-    RunSuccess,
     Submission,
 )
 from bench_mac.runner import BenchmarkRunner, WorkerContext
@@ -64,7 +64,7 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         )
         execution = ExecutionTrace(steps=[successful_command])
 
-        return RunSuccess(
+        return EvaluationCompleted(
             result=EvaluationReport(
                 instance_id=context.task.instance.instance_id,
                 execution=execution,
@@ -143,6 +143,6 @@ class TestBenchmarkRunner:
 
         # Check the success case
         success_result = sorted_results[0]
-        assert isinstance(success_result, RunSuccess)
+        assert isinstance(success_result, EvaluationCompleted)
         assert success_result.result.instance_id == "task-1-success"
         assert success_result.result.metrics.patch_application_success is True

@@ -297,8 +297,11 @@ class EvaluationReport(BaseModel):
     )
 
 
-class RunSuccess(BaseModel):
-    """Represents a successfully completed evaluation run for an instance."""
+class EvaluationCompleted(BaseModel):
+    """
+    Indicates the harness successfully completed its evaluation process
+    and produced a final, graded record for the submission.
+    """
 
     status: Literal["success"] = "success"
     result: EvaluationReport
@@ -312,4 +315,4 @@ class RunFailure(BaseModel):
     error: str
 
 
-EvaluationResult = RunSuccess | RunFailure
+EvaluationResult = EvaluationCompleted | RunFailure

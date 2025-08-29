@@ -11,11 +11,11 @@ from bench_mac.executor import execute_submission
 from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
 from bench_mac.metrics import calculate_metrics
 from bench_mac.models import (
+    EvaluationCompleted,
     EvaluationReport,
     EvaluationResult,
     ExecutionJob,
     RunFailure,
-    RunSuccess,
 )
 
 
@@ -66,7 +66,7 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
             metrics=metrics,
         )
 
-        return RunSuccess(result=report)
+        return EvaluationCompleted(result=report)
     except Exception as e:
         # Catch any unexpected crash in the worker process
         instance_logger.exception("Worker process for instance crashed unexpectedly.")
