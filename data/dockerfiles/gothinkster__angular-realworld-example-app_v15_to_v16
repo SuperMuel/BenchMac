@@ -12,6 +12,7 @@ ENV CI=true \
 
 # Install system packages needed for Angular CI
 RUN apt-get update && apt-get install -y \
+    curl \
     git \
     chromium \
     chromium-driver \
@@ -29,12 +30,12 @@ WORKDIR /app/project
 # Use a writable npm cache location for the non-root user
 ENV NPM_CONFIG_CACHE=/home/node/.npm
 
-# Clone repository and checkout specific commit (Angular 15)
-RUN git clone https://github.com/gothinkster/angular-realworld-example-app.git . && \
-    git checkout e28c896
+# Download a history-free snapshot of the code at the specific commit (Angular 15)
+RUN curl -L https://github.com/gothinkster/angular-realworld-example-app/archive/e28c896.tar.gz \
+    | tar -xz --strip-components=1
 
-# Mark the repo as safe to avoid Git ownership warnings
-RUN git config --global --add safe.directory /app/project
+# Mark the repo as safe to avoid Git ownership warnings, as we'll init it for the agent
+RUN git init && git config --global --add safe.directory /app/project
 
 # Neutral idle command - do not run install/build/lint/test
 CMD ["bash", "-lc", "sleep infinity"]

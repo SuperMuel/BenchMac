@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run all Tests with Coverage",
+            "label": "Run unit & integration tests with coverage",
             "type": "shell",
             "command": "uv",
             "args": [
@@ -12,6 +12,33 @@
                 "--cov-report=xml",
                 "-m",
                 "unit or integration",
+                "-v"
+            ],
+            "group": {
+                "kind": "test"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ],
+            "detail": "Run unit and integration tests with coverage reporting using uv and pytest"
+        },
+        {
+            "label": "Run unit & integration & instance_validation tests with coverage",
+            "type": "shell",
+            "command": "uv",
+            "args": [
+                "run",
+                "pytest",
+                "--cov=src",
+                "--cov-report=xml",
+                "-m",
+                "unit or integration or instance_validation",
                 "-v"
             ],
             "group": {

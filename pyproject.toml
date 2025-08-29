@@ -43,6 +43,7 @@ omit = [
     "src/bench_mac/config.py",
     "src/bench_mac/logging_config.py",
     "src/bench_mac/cli.py",
+    "src/bench_mac/version.py",
 ]
 
 [tool.coverage.report]

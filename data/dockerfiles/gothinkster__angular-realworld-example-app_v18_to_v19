@@ -16,6 +16,7 @@ ENV CI=true \
 # - chromium and chromium-driver: for Angular testing with ChromeHeadless
 RUN apt-get update && \
     apt-get install -y \
+        curl \
         git \
         ca-certificates \
         chromium \
@@ -36,12 +37,12 @@ WORKDIR /app/project
 # Use a writable npm cache location for the non-root user
 ENV NPM_CONFIG_CACHE=/home/node/.npm
 
-# Clone repository and checkout specific commit (Angular 18)
-RUN git clone https://github.com/gothinkster/angular-realworld-example-app.git . && \
-    git checkout 2555e2f
+# Download a history-free snapshot of the code at the specific commit (Angular 18)
+RUN curl -L https://github.com/gothinkster/angular-realworld-example-app/archive/2555e2f.tar.gz \
+    | tar -xz --strip-components=1
 
-# Mark the repo as safe to avoid Git ownership warnings
-RUN git config --global --add safe.directory /app/project
+# Mark the repo as safe to avoid Git ownership warnings, as we'll init it for the agent
+RUN git init && git config --global --add safe.directory /app/project
 
 # Default command - idle state for external harness
 CMD ["bash", "-lc", "sleep infinity"]

@@ -54,9 +54,36 @@ class TestBaselineInstanceValidation:
             container = docker_manager.run_container(instance_image_tag)
             assert container, "Failed to run container."
 
-            # === 2. EXECUTION & ASSERTION: Run all baseline commands ===
-            # The project working directory inside the container is /app/project
             project_dir = "/app/project"
+
+            # === 2a. VALIDATE GIT STATE ===
+            logger.info("Step 2a: Validating Git history sanitization...")
+
+            # Ensure there's no leaked history.
+            # `git rev-list --count --all` counts all commits in the repository.
+            # After `curl | tar | git init`, this count should be 0. If an initial
+            # commit is added in the Dockerfile, it should be 1. We'll check for <= 1.
+            git_count_cmd = "git rev-list --count --all"
+            exit_code, stdout, stderr = docker_manager.execute_in_container(
+                container, git_count_cmd, workdir=project_dir
+            )
+
+            assert exit_code == 0, f"Git count command failed: {stderr}"
+            commit_count = int(stdout.strip())
+
+            assert commit_count <= 1, (
+                f"\n\n❌ History validation FAILED for instance "
+                "'{instance.instance_id}'.\n"
+                f"   - Expected commit count <= 1, but found {commit_count}.\n"
+                f"   - This indicates the FULL git history was included in the Docker "
+                f"image, which INVALIDATES the benchmark.\n"
+                f"   - Please ensure the Dockerfile uses 'curl.../archive/...' and NOT "
+                f"'git clone'."
+            )
+            logger.success("✅ Git history is properly sanitized.")
+
+            # === 3. EXECUTION & ASSERTION: Run all baseline commands ===
+            # The project working directory inside the container is /app/project
             commands_to_validate = [
                 ("Install", instance.commands.install),
                 ("Build", instance.commands.build),
