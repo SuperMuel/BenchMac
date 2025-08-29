@@ -33,9 +33,11 @@ from bench_mac.models import (
 )
 from bench_mac.runner import BenchmarkRunner
 from bench_mac.utils import load_instances
+from bench_mac.version import harness_version
 
 app = cyclopts.App(
-    help="BenchMAC: A benchmark for evaluating AI on Angular Codebase Migrations."
+    help="BenchMAC: A benchmark for evaluating AI on Angular Codebase Migrations.",
+    version=harness_version(),
 )
 
 
