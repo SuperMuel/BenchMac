@@ -11,13 +11,13 @@ from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import (
     BenchmarkInstance,
-    CommandOutput,
+    CommandResult,
     ExecutionTrace,
     Submission,
 )
 
 
-def _is_peer_dep_error(install_output: CommandOutput) -> bool:
+def _is_peer_dep_error(install_output: CommandResult) -> bool:
     """Checks if a failed command output indicates a peer dependency conflict."""
     if install_output.success:
         return False
@@ -30,15 +30,15 @@ def _execute_and_capture(
     container: "Container",
     command: str,
     workdir: str | None = None,
-) -> CommandOutput:
-    """Executes a command and captures all relevant output in a CommandOutput object."""
+) -> CommandResult:
+    """Executes a command and captures all relevant output in a CommandResult object."""
     start_time = datetime.now(UTC)
     exit_code, stdout, stderr = manager.execute_in_container(
         container, command, workdir
     )
     end_time = datetime.now(UTC)
 
-    return CommandOutput(
+    return CommandResult(
         command=command,
         exit_code=exit_code,
         stdout=stdout,
@@ -78,7 +78,7 @@ def execute_submission(
     -------
     An ExecutionTrace object containing all command outputs.
     """
-    steps: list[CommandOutput] = []
+    steps: list[CommandResult] = []
     container = None
 
     project_dir = "/app/project"  # TODO: make this configurable

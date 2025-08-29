@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from bench_mac.models import (
-    CommandOutput,
+    CommandResult,
     EvaluationCompleted,
     EvaluationFailed,
     EvaluationReport,
@@ -54,7 +54,7 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
     """
     if "success" in context.task.instance.instance_id:
         # Simulate a successful evaluation with a mock execution trace
-        successful_command = CommandOutput(
+        successful_command = CommandResult(
             command="git apply -p0 /tmp/patch.patch",
             exit_code=0,
             stdout="Applied patch successfully",

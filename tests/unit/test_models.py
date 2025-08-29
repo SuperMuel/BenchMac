@@ -5,7 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from bench_mac.models import (
-    CommandOutput,
+    CommandResult,
     EvaluationReport,
     ExecutionTrace,
     MetricsReport,
@@ -133,15 +133,15 @@ class TestSubmission:
 
 
 @pytest.mark.unit
-class TestCommandOutput:
-    """Tests for the CommandOutput model."""
+class TestCommandResult:
+    """Tests for the CommandResult model."""
 
     def test_duration_seconds_calculation(self) -> None:
         """Test that duration_seconds correctly calculates the time difference."""
         start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 1, 12, 0, 5, 500000, tzinfo=UTC)  # 5.5 seconds later
 
-        command_output = CommandOutput(
+        command_output = CommandResult(
             command="npm install",
             exit_code=0,
             stdout="Dependencies installed",
@@ -170,7 +170,7 @@ class TestEvaluationResult:
     def test_instantiation_with_valid_data(self) -> None:
         """Test successful creation of an EvaluationResult."""
         # Create a mock execution trace
-        command_output = CommandOutput(
+        command_output = CommandResult(
             command="ng build",
             exit_code=1,
             stdout="",

@@ -3,12 +3,12 @@ from logging import getLogger
 
 from packaging.version import parse as parse_version
 
-from .models import BenchmarkInstance, CommandOutput, ExecutionTrace, MetricsReport
+from .models import BenchmarkInstance, CommandResult, ExecutionTrace, MetricsReport
 
 logger = getLogger(__name__)
 
 
-def _find_step(trace: ExecutionTrace, command_part: str) -> CommandOutput | None:
+def _find_step(trace: ExecutionTrace, command_part: str) -> CommandResult | None:
     """Finds the first step in the trace whose command contains a substring."""
     for step in trace.steps:
         if command_part in step.command:
@@ -17,8 +17,8 @@ def _find_step(trace: ExecutionTrace, command_part: str) -> CommandOutput | None
 
 
 def _calculate_patch_application_success(
-    patch_check_step: CommandOutput | None,
-    patch_apply_step: CommandOutput | None,
+    patch_check_step: CommandResult | None,
+    patch_apply_step: CommandResult | None,
 ) -> bool | None:
     """
     Calculates the definitive success of patch application based on the outcomes
@@ -78,7 +78,7 @@ def _calculate_patch_application_success(
 
 
 def _calculate_target_version_achieved(
-    version_check_step: CommandOutput | None, target_version: str
+    version_check_step: CommandResult | None, target_version: str
 ) -> bool | None:
     """
     Calculates if the target version was achieved by parsing `npm ls --json` output.

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from bench_mac.models import CommandOutput
+from bench_mac.models import CommandResult
 
 
 def create_command_output(
@@ -12,12 +12,12 @@ def create_command_output(
     stderr: str = "",
     start_time: datetime | None = None,
     end_time: datetime | None = None,
-) -> CommandOutput:
-    """Test helper to auto-fill required timestamps for CommandOutput."""
+) -> CommandResult:
+    """Test helper to auto-fill required timestamps for CommandResult."""
     now = datetime.now(UTC)
     start = start_time or now
     end = end_time or start
-    return CommandOutput(
+    return CommandResult(
         command=command,
         exit_code=exit_code,
         stdout=stdout,

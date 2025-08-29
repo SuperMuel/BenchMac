@@ -239,7 +239,7 @@ class ExecutionJob(BaseModel):
     submission: Submission
 
 
-class CommandOutput(BaseModel):
+class CommandResult(BaseModel):
     """
     Represents the detailed result of a single command executed in the container.
     """
@@ -275,7 +275,7 @@ class CommandOutput(BaseModel):
 
 
 class ExecutionTrace(BaseModel):
-    steps: list[CommandOutput]
+    steps: list[CommandResult]
 
 
 class EvaluationReport(BaseModel):
