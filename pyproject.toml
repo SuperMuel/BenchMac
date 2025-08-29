@@ -33,6 +33,10 @@ dev = [
     "ruff>=0.12.0",
     "python-dotenv>=1.1.1",
 ]
+experiments = [
+    "mini-swe-agent>=1.9.1",
+    "typer>=0.16.1",
+]
 
 [tool.coverage.run]
 source = ["src"]
@@ -183,3 +187,6 @@ addopts = [
 
 [project.scripts]
 benchmac = "bench_mac.cli:app"
+
+[tool.uv]
+default-groups = "all"
