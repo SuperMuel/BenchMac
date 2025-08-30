@@ -30,8 +30,8 @@ They should be run manually after adding or changing instances in `data/`.
 
 ### Running the Application
 - **Main CLI entry point**: `uv run benchmac` or `uv run python -m bench_mac.cli`
-- **Evaluate submissions**: `uv run benchmac evaluate path/to/submissions.jsonl`
-- **Filter by instance ID**: `uv run benchmac evaluate submissions.jsonl --instance-id angular2-hn_v10_to_v11`
+- **Evaluate submissions**: `uv run benchmac eval path/to/submissions.jsonl`
+- **Filter by instance ID**: `uv run benchmac eval submissions.jsonl --instance-id angular2-hn_v10_to_v11`
 
 ## Architecture Overview
 

@@ -415,7 +415,7 @@ def _print_evaluation_summary(
 
 
 @app.command
-def evaluate(
+def eval(
     submissions_file: Path,
     *,
     output_file: Path | None = None,
