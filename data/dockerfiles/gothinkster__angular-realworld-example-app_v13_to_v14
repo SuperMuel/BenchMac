@@ -1,5 +1,5 @@
 # Base image: Node 18 LTS on Debian slim (Angular 13 supports Node 12.20.2+, 14.15.0+, or 16.10.0+)
-FROM node:18-bookworm-slim
+FROM node:18-bookworm-slim@sha256:f9ab18e354e6855ae56ef2b290dd225c1e51a564f87584b9bd21dd651838830e
 
 # Set environment variables for CI
 ENV CI=true \

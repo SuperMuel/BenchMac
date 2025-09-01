@@ -1,4 +1,4 @@
-FROM node:16.20.2-bullseye-slim
+FROM node:16.20.2-bullseye-slim@sha256:503446c15c6236291222f8192513c2eb56a02a8949cbadf4fe78cce19815c734
 
 # Set environment variables for CI
 ENV CI=true \
