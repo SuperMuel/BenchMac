@@ -355,6 +355,9 @@ class EvaluationReport(BaseModel):
     """
 
     instance_id: str = Field(...)
+    submission_id: str = Field(
+        ..., description="The unique identifier of the submission that was evaluated."
+    )
 
     # The raw, unprocessed data from the execution environment.
     # This is the "source of truth".
@@ -392,6 +395,9 @@ class EvaluationFailed(BaseModel):
 
     status: Literal["failure"] = "failure"
     instance_id: str
+    submission_id: str = Field(
+        ..., description="The unique identifier of the submission that failed."
+    )
     error: str
 
 

@@ -62,6 +62,7 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         # 3. Assemble the final, comprehensive report
         report = EvaluationReport(
             instance_id=context.task.instance.instance_id,
+            submission_id=context.task.submission.submission_id,
             execution=trace,
             metrics=metrics,
         )
@@ -75,6 +76,7 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         )
         return EvaluationFailed(
             instance_id=context.task.instance.instance_id,
+            submission_id=context.task.submission.submission_id,
             error=f"Worker process crashed ({e.__class__.__name__}: {e})\n"
             f"See instance log for details in {instance_log_path}",
         )

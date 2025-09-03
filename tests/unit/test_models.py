@@ -184,6 +184,7 @@ class TestEvaluationResult:
 
         result = EvaluationReport(
             instance_id="my-project_v15_to_v16",
+            submission_id="test-submission-id",
             execution=execution,
             metrics=metrics,
         )
@@ -197,7 +198,10 @@ class TestEvaluationResult:
         execution = ExecutionTrace(steps=[])
         metrics = MetricsReport(patch_application_success=True)
         result = EvaluationReport(
-            instance_id="some-id", execution=execution, metrics=metrics
+            instance_id="some-id",
+            submission_id="test-submission-id",
+            execution=execution,
+            metrics=metrics,
         )
         assert len(result.execution.steps) == 0
 

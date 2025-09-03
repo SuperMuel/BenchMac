@@ -67,6 +67,7 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         return EvaluationCompleted(
             result=EvaluationReport(
                 instance_id=context.task.instance.instance_id,
+                submission_id=context.task.submission.submission_id,
                 execution=execution,
                 metrics=MetricsReport(
                     patch_application_success=True,
@@ -77,6 +78,7 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         # Simulate a harness-level failure
         return EvaluationFailed(
             instance_id=context.task.instance.instance_id,
+            submission_id=context.task.submission.submission_id,
             error="Simulated worker crash",
         )
 
