@@ -36,7 +36,10 @@ dev = [
 experiments = [
     "logfire>=4.3.6",
     "mini-swe-agent>=1.9.1",
- "typer>=0.16.1",
+    "opentelemetry-api==1.25.0",
+    "opentelemetry-exporter-otlp==1.25.0",
+    "opentelemetry-sdk==1.25.0",
+    "typer>=0.16.1",
 ]
 explorer = [
     "pandas>=2.3.2",

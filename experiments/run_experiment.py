@@ -15,6 +15,9 @@ import yaml
 from dotenv import load_dotenv
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.models.litellm_model import LitellmModel
+from minisweagent.run.utils.save import (
+    save_traj,  # type: ignore[reportUnknownReturnType]
+)
 from pydantic import BaseModel, Field, ValidationError
 from rich.console import Console
 from rich.progress import Progress
@@ -299,6 +302,7 @@ def main(
 
         for task in tasks:
             instance = instances[task.instance_id]
+            submission_id = str(uuid.uuid4())
             progress.update(
                 task_progress,
                 description=f"[cyan]Processing: {task.instance_id} ({task.model_name})[/cyan]",
@@ -327,9 +331,22 @@ def main(
                 try:
                     # Run the agent
                     console.print("Running agent")
-                    output: tuple[str, str] = agent.run(task_prompt)  # type: ignore[reportUnknownReturnType]
-                    print(f"Agent output: {output}")  # noqa: T201
+                    exit_status, result = agent.run(task_prompt)  # type: ignore[reportUnknownReturnType]
+                    print(f"Agent output: {result}")  # noqa: T201
 
+                    save_traj(
+                        agent,
+                        settings.experiments_dir
+                        / "swe_agent_mini"
+                        / Path(f"{submission_id}.traj.json"),
+                        exit_status=exit_status,
+                        result=result,
+                        extra_info={
+                            "instance_id": task.instance_id,
+                            "submission_id": submission_id,
+                            "model_name": task.model_name,
+                        },
+                    )
                 except Exception as e:
                     console.print(
                         f"[bold red]Error processing {task.instance_id} ({task.model_name}): {e}[/bold red]"
@@ -344,6 +361,7 @@ def main(
                 model_patch = env.diff_with_base_commit()
                 # Write submission
                 submission = Submission(
+                    submission_id=submission_id,
                     instance_id=task.instance_id,
                     model_patch=model_patch,
                     metadata=SubmissionMetadata(model_name=task.model_name),
