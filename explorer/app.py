@@ -42,9 +42,11 @@ def _iter_lines_from_jsonl_files(
 
 
 @st.cache_data(show_spinner=False)
-def load_all_outcomes() -> tuple[list[EvaluationCompleted], list[EvaluationFailed]]:
-    """Load and validate all outcomes from every results.jsonl under evaluations_dir."""
-    base_dir = settings.evaluations_dir
+def load_all_evaluations(
+    base_dir: Path,
+) -> tuple[list[EvaluationCompleted], list[EvaluationFailed]]:
+    """Load and validate all evaluations from every results.jsonl
+    under base_dir."""
     if not base_dir.exists():
         return ([], [])
 
@@ -73,18 +75,17 @@ def load_all_outcomes() -> tuple[list[EvaluationCompleted], list[EvaluationFaile
 
 
 @st.cache_data(show_spinner=False)
-def load_all_submissions() -> dict[str, Submission]:
+def load_all_submissions(submissions_dir: Path) -> dict[str, Submission]:
     """
-    Load all submissions from experiments_dir/submissions/*.jsonl keyed by
+    Load all submissions from submissions_dir/*.jsonl keyed by
     submission_id.
     """
-    subs_dir = settings.experiments_dir / "submissions"
-    if not subs_dir.exists():
+    if not submissions_dir.exists():
         return {}
 
     mapping: dict[str, Submission] = {}
     for file_path, line_num, line in _iter_lines_from_jsonl_files(
-        subs_dir.glob("*.jsonl")
+        submissions_dir.glob("*.jsonl")
     ):
         try:
             sub = Submission.model_validate_json(line)
@@ -103,14 +104,14 @@ def _latest_timestamp_for(success: EvaluationCompleted) -> float:
     return steps[-1].end_time.timestamp()
 
 
-def group_successes_by_instance_and_model(
-    successes: list[EvaluationCompleted], submissions_by_id: dict[str, Submission]
+def group_completed_by_instance_and_model(
+    completed: list[EvaluationCompleted], submissions_by_id: dict[str, Submission]
 ) -> dict[str, dict[str, EvaluationCompleted]]:
-    """Return latest success per (instance_id, model_name) as nested mapping
-    model->instance->result.
+    """Return latest completed evaluation per (instance_id, model_name) as
+    nested mapping model->instance->result.
     """
     grouped: dict[str, dict[str, EvaluationCompleted]] = {}
-    for s in successes:
+    for s in completed:
         sub = submissions_by_id.get(s.result.submission_id)
         model_name = (
             sub.metadata.model_name if sub and sub.metadata.model_name else "(unknown)"
@@ -127,17 +128,20 @@ def group_successes_by_instance_and_model(
 
 
 def extract_summary_data(
-    grouped_successes: dict[str, dict[str, EvaluationCompleted]],
-    failures: list[EvaluationFailed],
+    grouped_completed: dict[str, dict[str, EvaluationCompleted]],
+    harness_failures_list: list[EvaluationFailed],
 ) -> dict[str, Any]:
-    """Compute top-level summary from grouped successes (latest only) and failures."""
-    successes_list = [
-        s for by_instance in grouped_successes.values() for s in by_instance.values()
+    """Compute top-level summary from grouped completed and harness failures.
+
+    Only the latest result per (instance, model) is kept in `grouped_completed`.
+    """
+    completed_list = [
+        s for by_instance in grouped_completed.values() for s in by_instance.values()
     ]
 
-    total_evaluations = len(successes_list) + len(failures)
-    successful_evaluations = len(successes_list)
-    failed_evaluations = len(failures)
+    total_evaluations = len(completed_list) + len(harness_failures_list)
+    completed_evaluations = len(completed_list)
+    harness_failures = len(harness_failures_list)
 
     metrics_fields = [
         "patch_application_success",
@@ -149,7 +153,7 @@ def extract_summary_data(
     metrics_summary: dict[str, dict[str, float | int]] = {}
     for field in metrics_fields:
         values: list[bool] = []
-        for s in successes_list:
+        for s in completed_list:
             value = getattr(s.result.metrics, field)
             if value is not None:
                 values.append(bool(value))
@@ -162,13 +166,13 @@ def extract_summary_data(
                 "success_rate": success_count / total_count if total_count > 0 else 0,
             }
 
-    instance_ids = [s.result.instance_id for s in successes_list]
+    instance_ids = [s.result.instance_id for s in completed_list]
 
     return {
         "total_evaluations": total_evaluations,
-        "successful_evaluations": successful_evaluations,
-        "failed_evaluations": failed_evaluations,
-        "success_rate": successful_evaluations / total_evaluations
+        "completed_evaluations": completed_evaluations,
+        "harness_failures": harness_failures,
+        "harness_success_rate": completed_evaluations / total_evaluations
         if total_evaluations > 0
         else 0,
         "metrics_summary": metrics_summary,
@@ -204,12 +208,11 @@ def create_metrics_chart(metrics_summary: dict[str, Any]) -> Any:
 
     df = pd.DataFrame(data)
 
-    fig = px.bar(  # type: ignore
+    fig = px.bar(  # type: ignore[reportUnknownReturnType]
         df,
         x="Metric",
         y="Success Rate",
         text=df["Success Rate"].round(1).astype(str) + "%",  # type: ignore
-        title="Metrics Success Rates",
         color="Success Rate",
         color_continuous_scale="RdYlGn",
     )
@@ -252,8 +255,14 @@ def display_execution_steps(steps: list[CommandResult]) -> None:
         st.write("No execution steps available.")
         return
 
-    for i, step in enumerate(steps, 1):
-        with st.expander(f"Step {i}: {step.command}", expanded=False):
+    for step in steps:
+        # Show command in red if exit code is 1, otherwise normal
+        command_display = (
+            f":red[{step.command}]"
+            if step.exit_code != 0
+            else f":green[{step.command}]"
+        )
+        with st.expander(command_display, expanded=False):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -280,38 +289,37 @@ def main() -> None:
     )
 
     st.title("🔍 BenchMAC Results Explorer")
+
+    evaluations_dir = settings.evaluations_dir
+    experiments_dir = settings.experiments_dir / "submissions"
+
     st.markdown(
-        "Explore your BenchMAC evaluation results aggregated from your evaluations "
-        "directory."
+        f"""
+        <div style="background-color: #f0f2f6; padding: 0.75em 1em; border-radius: 0.5em; margin-bottom: 1em;">
+            <b>📂 Evaluations directory:</b> <code>{evaluations_dir}</code><br>
+            <b>📂 Submissions directory:</b> <code>{experiments_dir}</code>
+        </div>
+        """,  # noqa: E501
+        unsafe_allow_html=True,
     )
 
-    with st.spinner("Loading outcomes and submissions..."):
-        successes, failures = load_all_outcomes()
-        submissions_by_id = load_all_submissions()
+    with st.spinner("Loading evaluations and submissions..."):
+        completed, harness_failures_list = load_all_evaluations(evaluations_dir)
+        submissions_by_id = load_all_submissions(experiments_dir)
 
-    grouped = group_successes_by_instance_and_model(successes, submissions_by_id)
-    summary = extract_summary_data(grouped, failures)
+    grouped = group_completed_by_instance_and_model(completed, submissions_by_id)
+    summary = extract_summary_data(grouped, harness_failures_list)
 
     # Harness failures section
-    if summary["failed_evaluations"] > 0:
+    if summary["harness_failures"] > 0:
         st.header("🚨 Harness Failures")
-        st.metric("Number of Failures", summary["failed_evaluations"])
-        for f in failures:
+        st.metric("Number of Failures", summary["harness_failures"])
+        for f in harness_failures_list:
             with st.expander(
-                f"❌ {f.instance_id} (submission: {f.submission_id})",
+                f"❌ `{f.instance_id}` (submission: `{f.submission_id}`)",
                 expanded=False,
             ):
                 st.error(f.error)
-
-    # Overview section for grouped successes
-    st.header("📊 Overview (Successful Evaluations Only)")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Successful", summary["successful_evaluations"])
-    with col2:
-        st.metric("Failed (ignored below)", summary["failed_evaluations"])
-    with col3:
-        st.metric("Success Rate", f"{summary['success_rate'] * 100:.1f}%")
 
     st.subheader("📈 Metrics Breakdown")
     if summary["metrics_summary"]:
@@ -333,17 +341,17 @@ def main() -> None:
             )
 
         if metrics_data:
-            df = pd.DataFrame(metrics_data)  # type: ignore
-            st.dataframe(df, use_container_width=True)  # type: ignore
+            df = pd.DataFrame(metrics_data)
+            st.dataframe(df, width="stretch")  # type: ignore
     else:
         st.info("No metrics data available for analysis.")
 
     # Detailed results by agent configuration (model_name)
-    st.header("🔬 Detailed Results by Agent Configuration")
+    st.header("🔬 Results by Agent")
 
     model_names = sorted(grouped.keys())
     for model_name in model_names:
-        st.subheader(f"🤖 {model_name}")
+        st.subheader(f"🤖 `{model_name}`")
         instances_map = grouped[model_name]
 
         st.write(f"{len(instances_map)} result(s)")
@@ -351,7 +359,7 @@ def main() -> None:
         for instance_id, success in sorted(instances_map.items()):
             metrics = success.result.metrics
             status_emoji = get_status_emoji(metrics)
-            with st.expander(f"{status_emoji} {instance_id}", expanded=False):
+            with st.expander(f"{status_emoji} `{instance_id}`", expanded=False):
                 cols = st.columns(4)
                 metric_fields = [
                     ("Patch Application", metrics.patch_application_success),
