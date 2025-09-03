@@ -113,7 +113,7 @@ class InstanceEnv:
                 "or has been closed."
             )
 
-        diff_command = f"git diff --no-prefix {self.instance.base_commit}"
+        diff_command = "git diff --no-prefix baseline"
         _, stdout, _ = self.docker_manager.execute_in_container(
             self.container, diff_command, workdir=self._project_workdir
         )
