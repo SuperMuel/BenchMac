@@ -3,6 +3,7 @@
 
 import json
 import os
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from textwrap import dedent
@@ -14,7 +15,7 @@ import yaml
 from dotenv import load_dotenv
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.models.litellm_model import LitellmModel
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from rich.console import Console
 from rich.progress import Progress
 
@@ -104,6 +105,11 @@ class PatchGenerationTask(BaseModel):
     This represents a single unit of work in the patch generation process.
     """
 
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique identifier for the task.",
+    )
+
     instance_id: str = Field(
         ...,
         description="Unique identifier for the benchmark instance to process.",
@@ -133,6 +139,86 @@ def collect_tasks(
         for instance_id in instances
         for model_name in model_names
     ]
+
+
+def collect_old_submissions(experiments_dir: Path) -> list[Submission]:
+    """
+    Collect all old submissions from the experiments directory.
+
+    Args:
+        experiments_dir: Path to the experiments directory containing submissions
+
+    Returns:
+        List of all Submission objects found in submission files
+    """
+    submissions: list[Submission] = []
+    submissions_dir = experiments_dir / "submissions"
+
+    if not submissions_dir.exists():
+        return submissions
+
+    # Find all JSONL files in the submissions directory
+    submission_files = list(submissions_dir.glob("*.jsonl"))
+
+    for submission_file in submission_files:
+        try:
+            with submission_file.open("r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:  # Skip empty lines
+                        submission_data = json.loads(line)
+                        submission = Submission.model_validate(submission_data)
+                        submissions.append(submission)
+        except (json.JSONDecodeError, ValidationError) as e:
+            console.print(
+                f"[yellow]Warning: Could not parse {submission_file}: {e}[/yellow]"
+            )
+            continue
+
+    return submissions
+
+
+def filter_completed_tasks(
+    tasks: list[PatchGenerationTask], old_submissions: list[Submission]
+) -> list[PatchGenerationTask]:
+    """
+    Filter out tasks that have already been completed based on old submissions.
+
+    A task is considered completed if there's already a submission with the same
+    instance_id and model_name combination.
+
+    Args:
+        tasks: List of tasks to potentially run
+        old_submissions: List of existing submissions
+
+    Returns:
+        List of tasks that haven't been completed yet
+    """
+    # Create a set of completed (instance_id, model_name) combinations
+    completed_combinations = {
+        (submission.instance_id, submission.metadata.model_name)
+        for submission in old_submissions
+        if submission.metadata.model_name is not None
+    }
+
+    # Filter tasks that haven't been completed
+    filtered_tasks: list[PatchGenerationTask] = []
+    skipped_count = 0
+
+    for task in tasks:
+        task_combination = (task.instance_id, task.model_name)
+        if task_combination in completed_combinations:
+            console.print(
+                f"[blue]Skipping already completed task: {task.instance_id} ({task.model_name})[/blue]"
+            )
+            skipped_count += 1
+        else:
+            filtered_tasks.append(task)
+
+    if skipped_count > 0:
+        console.print(f"[blue]Skipped {skipped_count} already completed tasks[/blue]")
+
+    return filtered_tasks
 
 
 @app.command()
@@ -191,23 +277,20 @@ def main(
     if submissions_file is None:
         submissions_file = get_submissions_file_path(settings.experiments_dir)
 
-    else:
-        # Check if the file contains some submissions, so we can skip the instances that are already processed
-        existing_submissions = {
-            json.loads(line)["instance_id"]
-            for line in submissions_file.read_text().splitlines()
-        }
-        console.print(
-            f"Skipping {len(existing_submissions)} instances that are already processed"
-        )
-        instances = {
-            instance_id: instance
-            for instance_id, instance in instances.items()
-            if instance_id not in existing_submissions
-        }
+    # Collect old submissions to avoid re-running completed tasks
+    old_submissions = collect_old_submissions(settings.experiments_dir)
+    console.print(f"Found {len(old_submissions)} existing submissions")
 
     # Collect all tasks
     tasks = collect_tasks(instances, model_names)
+    console.print(f"Generated {len(tasks)} potential tasks")
+
+    # Filter out already completed tasks
+    tasks = filter_completed_tasks(tasks, old_submissions)
+
+    if not tasks:
+        console.print("No tasks to process. Exiting...")
+        return
 
     docker_manager = DockerManager()
 

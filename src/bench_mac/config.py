@@ -67,9 +67,9 @@ class Settings(BaseSettings):
         return self.benchmac_temp_dir / "cache"
 
     @property
-    def results_dir(self) -> Path:
+    def evaluations_dir(self) -> Path:
         """Path to the directory where evaluation results are stored."""
-        return self.benchmac_temp_dir / "results"
+        return self.benchmac_temp_dir / "evaluations"
 
     @property
     def silver_patches_repos_dir(self) -> Path:
@@ -104,7 +104,7 @@ class Settings(BaseSettings):
         self.silver_patches_dir.mkdir(exist_ok=True)
         self.cache_dir.mkdir(exist_ok=True)
         self.silver_patches_repos_dir.mkdir(exist_ok=True)
-        self.results_dir.mkdir(exist_ok=True)
+        self.evaluations_dir.mkdir(exist_ok=True)
         self.dockerfiles_dir.mkdir(exist_ok=True)
         self.experiments_dir.mkdir(exist_ok=True)
         logger.info("✅ Directories initialized.")

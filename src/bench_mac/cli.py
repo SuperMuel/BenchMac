@@ -325,25 +325,22 @@ def _print_evaluation_summary(
     if logs_dir:
         summary_table.add_row("Logs Directory:", str(logs_dir))
 
-    # Overall results table
-    results_table = Table(title="📊 Overall Results", show_header=True)
-    results_table.add_column("Status", style="bold")
-    results_table.add_column("Count", justify="right")
-    results_table.add_column("Percentage", justify="right")
-
-    if total_jobs > 0:
-        success_pct = (successful_jobs / total_jobs) * 100
-        failure_pct = (failed_jobs / total_jobs) * 100
-
-        results_table.add_row(
-            Text("✅ Success", style="bold green"),
-            str(successful_jobs),
-            f"{success_pct:.1f}%",
+    # Only show the failed instance IDs if there are unsuccessful jobs
+    if failed_jobs > 0 and total_jobs > 0:
+        failed_instance_ids = [
+            outcome.instance_id for outcome in outcomes if outcome.status != "success"
+        ]
+        results_table = Table(
+            title="❌ Harness Failures",
+            show_header=True,
+            caption="Note: These are instances where the evaluation harness failed to "
+            "process the AI agent's submission. "
+            "This does not necessarily mean the AI agent failed; the error may be due "
+            "to infrastructure or evaluation issues.",
         )
-        results_table.add_row(
-            Text("❌ Failed", style="bold red"), str(failed_jobs), f"{failure_pct:.1f}%"
-        )
-        results_table.add_row(Text("📈 Total", style="bold"), str(total_jobs), "100.0%")
+        results_table.add_column("Instance ID", style="bold red")
+        for instance_id in failed_instance_ids:
+            results_table.add_row(instance_id)
 
     # Metrics breakdown table
     metrics_table = Table(title="📋 Metrics Breakdown", show_header=True)
@@ -434,7 +431,7 @@ def eval(
     """
     run_id = utc_now().strftime("%Y-%m-%d_%H%M%S")
 
-    run_dir = settings.results_dir / run_id
+    run_dir = settings.evaluations_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = run_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
