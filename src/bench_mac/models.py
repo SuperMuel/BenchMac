@@ -193,6 +193,10 @@ class SubmissionMetadata(BaseModel):
         default_factory=utc_now,
         description="The timestamp when the submission was created.",
     )
+    model_name: str | None = Field(
+        default=None,
+        description="The name of the model used to generate this submission.",
+    )
 
 
 class Submission(BaseModel):

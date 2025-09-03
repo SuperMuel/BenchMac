@@ -14,11 +14,16 @@ import yaml
 from dotenv import load_dotenv
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.models.litellm_model import LitellmModel
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.progress import Progress
 
 from bench_mac.docker.manager import DockerManager
-from bench_mac.models import BenchmarkInstance
+from bench_mac.models import (
+    BenchmarkInstance,
+    Submission,
+    SubmissionMetadata,
+)
 from experiments.environment import InstanceEnv
 from src.bench_mac.config import settings
 from src.bench_mac.utils import load_instances
@@ -26,6 +31,9 @@ from src.bench_mac.utils import load_instances
 # --- Configuration ---
 app = typer.Typer(add_completion=False)
 console = Console()
+
+# Default model names
+DEFAULT_MODEL_NAMES = ["mistral/devstral-medium-2507"]
 
 
 load_dotenv()
@@ -76,9 +84,8 @@ def generate_task_prompt(instance: BenchmarkInstance) -> str:
 
         1. Analyze the codebase by finding and reading relevant files
         2. Edit the source code or run any command to migrate the codebase to the target Angular version
-        3. Prefer `ng update` over manual changes when possible
-        4. Test the application by running the build command
-        5. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
+        3. Test the application by running the build command
+        4. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
         Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>
         """
     )
@@ -87,13 +94,54 @@ def generate_task_prompt(instance: BenchmarkInstance) -> str:
 AGENT_CONFIG = yaml.safe_load(Path("experiments/agent_config.yaml").read_text())
 
 
+# --- Patch Generation Task Models ---
+
+
+class PatchGenerationTask(BaseModel):
+    """
+    A task for generating patches using an agent configuration on a specific instance.
+
+    This represents a single unit of work in the patch generation process.
+    """
+
+    instance_id: str = Field(
+        ...,
+        description="Unique identifier for the benchmark instance to process.",
+    )
+    model_name: str = Field(
+        ...,
+        description="The name of the model to use for patch generation "
+        "(e.g., 'mistral/devstral-medium-2507').",
+    )
+
+
+def collect_tasks(
+    instances: dict[str, BenchmarkInstance], model_names: list[str]
+) -> list[PatchGenerationTask]:
+    """
+    Collect all patch generation tasks by combining instances with agent configurations.
+
+    Args:
+        instances: Dictionary of benchmark instances keyed by instance_id
+        model_names: List of model names to use for patch generation
+
+    Returns:
+        List of PatchGenerationTask objects, one for each instance-model_name combination
+    """
+    return [
+        PatchGenerationTask(instance_id=instance_id, model_name=model_name)
+        for instance_id in instances
+        for model_name in model_names
+    ]
+
+
 @app.command()
 def main(
-    model_name: str = typer.Option(
-        "mistral/devstral-medium-2507",
+    model_names: list[str] = typer.Option(  # noqa: B008
+        DEFAULT_MODEL_NAMES,
         "--model-name",
         "-m",
-        help="Name of the model to use (e.g., 'mistral/devstral').",
+        help="Name of the model(s) to use (e.g., 'mistral/devstral'). Can be used multiple times.",
     ),
     instances_file: Path = typer.Option(  # noqa: B008
         settings.instances_file, help="Path to the benchmark instances file."
@@ -114,7 +162,8 @@ def main(
     Runs an LLM-powered agent on BenchMAC instances and generates a submission file.
     """
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
-    console.print(f"📝 Model: [cyan]{model_name}[/cyan]")
+    model_names_str = ", ".join(f"[cyan]{m}[/cyan]" for m in model_names)
+    console.print(f"📝 Model(s): {model_names_str}")
 
     # Load all instances first
     all_instances = load_instances(instances_file)
@@ -157,16 +206,19 @@ def main(
             if instance_id not in existing_submissions
         }
 
+    # Collect all tasks
+    tasks = collect_tasks(instances, model_names)
+
     docker_manager = DockerManager()
 
     with Progress(console=console) as progress:
-        task_progress = progress.add_task(
-            "[cyan]Processing Instances...", total=len(instances)
-        )
+        task_progress = progress.add_task("[cyan]Processing Tasks...", total=len(tasks))
 
-        for instance_id, instance in instances.items():
+        for task in tasks:
+            instance = instances[task.instance_id]
             progress.update(
-                task_progress, description=f"[cyan]Processing: {instance_id}[/cyan]"
+                task_progress,
+                description=f"[cyan]Processing: {task.instance_id} ({task.model_name})[/cyan]",
             )
 
             # Create environment
@@ -180,27 +232,27 @@ def main(
                 )
 
                 console.print("Creating model")
-                model = LitellmModel(model_name=model_name)
+                model = LitellmModel(model_name=task.model_name)
                 console.print("Creating agent")
                 agent = DefaultAgent(
                     model,
                     env,
                     **AGENT_CONFIG["agent"],
                 )
-                task = generate_task_prompt(instance)
+                task_prompt = generate_task_prompt(instance)
 
                 try:
                     # Run the agent
                     console.print("Running agent")
-                    output: tuple[str, str] = agent.run(task)  # type: ignore[reportUnknownReturnType]
+                    output: tuple[str, str] = agent.run(task_prompt)  # type: ignore[reportUnknownReturnType]
                     print(f"Agent output: {output}")  # noqa: T201
 
                 except Exception as e:
                     console.print(
-                        f"[bold red]Error processing {instance_id}: {e}[/bold red]"
+                        f"[bold red]Error processing {task.instance_id} ({task.model_name}): {e}[/bold red]"
                     )
                     progress.console.print(
-                        f"[yellow]Skipping {instance_id} due to error.[/yellow]"
+                        f"[yellow]Skipping {task.instance_id} ({task.model_name}) due to error.[/yellow]"
                     )
                     progress.advance(task_progress)
                     continue
@@ -208,12 +260,13 @@ def main(
                 # Generate patch
                 model_patch = env.diff_with_base_commit()
                 # Write submission
-                submission: dict[str, str] = {
-                    "instance_id": instance_id,
-                    "model_patch": model_patch,
-                }
+                submission = Submission(
+                    instance_id=task.instance_id,
+                    model_patch=model_patch,
+                    metadata=SubmissionMetadata(model_name=task.model_name),
+                )
                 with submissions_file.open("a") as f:
-                    f.write(json.dumps(submission) + "\n")
+                    f.write(submission.model_dump_json() + "\n")
 
             progress.advance(task_progress)
 
