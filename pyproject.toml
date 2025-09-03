@@ -34,8 +34,9 @@ dev = [
     "python-dotenv>=1.1.1",
 ]
 experiments = [
+    "logfire>=4.3.6",
     "mini-swe-agent>=1.9.1",
-    "typer>=0.16.1",
+ "typer>=0.16.1",
 ]
 
 [tool.coverage.run]

@@ -29,9 +29,11 @@ console = Console()
 
 
 load_dotenv()
-assert os.getenv("LANGSMITH_API_KEY"), "LANGSMITH_API_KEY is not set"
-litellm.callbacks = ["langsmith"]
-litellm.langsmith_batch_size = 1
+# assert os.getenv("LANGSMITH_API_KEY"), "LANGSMITH_API_KEY is not set"
+# litellm.callbacks = ["langsmith"]
+# litellm.langsmith_batch_size = 1
+
+litellm.callbacks = ["logfire"]
 
 
 assert os.getenv("MISTRAL_API_KEY"), "MISTRAL_API_KEY is not set"
@@ -205,7 +207,6 @@ def main(
 
                 # Generate patch
                 model_patch = env.diff_with_base_commit()
-                assert model_patch, "Model patch is empty"
                 # Write submission
                 submission: dict[str, str] = {
                     "instance_id": instance_id,
@@ -220,7 +221,7 @@ def main(
     console.print(f"Submissions saved to [cyan]{submissions_file}[/cyan]")
     console.print(
         "You can now run the evaluation with:\n"
-        f"[bold]uv run benchmac evaluate {submissions_file}[/bold]"
+        f"[bold]uv run benchmac eval {submissions_file}[/bold]"
     )
 
 
