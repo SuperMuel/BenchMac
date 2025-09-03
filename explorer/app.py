@@ -143,28 +143,7 @@ def extract_summary_data(
     completed_evaluations = len(completed_list)
     harness_failures = len(harness_failures_list)
 
-    metrics_fields = [
-        "patch_application_success",
-        "target_version_achieved",
-        "install_success",
-        "build_success",
-    ]
-
-    metrics_summary: dict[str, dict[str, float | int]] = {}
-    for field in metrics_fields:
-        values: list[bool] = []
-        for s in completed_list:
-            value = getattr(s.result.metrics, field)
-            if value is not None:
-                values.append(bool(value))
-        if values:
-            success_count = sum(1 for v in values if v)
-            total_count = len(values)
-            metrics_summary[field] = {
-                "success_count": success_count,
-                "total_count": total_count,
-                "success_rate": success_count / total_count if total_count > 0 else 0,
-            }
+    metrics_summary = _compute_metrics_summary(completed_list)
 
     instance_ids = [s.result.instance_id for s in completed_list]
 
@@ -178,6 +157,54 @@ def extract_summary_data(
         "metrics_summary": metrics_summary,
         "instance_ids": sorted(set(instance_ids)),
     }
+
+
+def _compute_metrics_summary(
+    completed_list: list[EvaluationCompleted],
+) -> dict[str, dict[str, float | int]]:
+    """Compute success counts and rates for each metric field.
+
+    Returns a mapping: metric_field -> {success_count, total_count, success_rate}.
+    """
+    metrics_fields = [
+        "patch_application_success",
+        "target_version_achieved",
+        "install_success",
+    ]
+
+    metrics_summary: dict[str, dict[str, float | int]] = {}
+
+    # Compute standard metrics (independent)
+    for field in metrics_fields:
+        values: list[bool] = []
+        for s in completed_list:
+            value = getattr(s.result.metrics, field)
+            if value is not None:
+                values.append(bool(value))
+        total_count = len(completed_list) if field == "install_success" else len(values)
+        success_count = sum(1 for v in values if v)
+        if total_count > 0:
+            metrics_summary[field] = {
+                "success_count": success_count,
+                "total_count": total_count,
+                "success_rate": success_count / total_count,
+            }
+
+    # Compute build_success constrained by install_success and over all instances
+    total_instances = len(completed_list)
+    if total_instances > 0:
+        constrained_build_success = 0
+        for s in completed_list:
+            m = s.result.metrics
+            if m.install_success is True and m.build_success is True:
+                constrained_build_success += 1
+        metrics_summary["build_success"] = {
+            "success_count": constrained_build_success,
+            "total_count": total_instances,
+            "success_rate": constrained_build_success / total_instances,
+        }
+
+    return metrics_summary
 
 
 def create_metrics_chart(metrics_summary: dict[str, Any]) -> Any:
@@ -325,7 +352,28 @@ def main() -> None:
     if summary["metrics_summary"]:
         metrics_chart = create_metrics_chart(summary["metrics_summary"])
         if metrics_chart:
-            st.plotly_chart(metrics_chart, use_container_width=True)  # type: ignore
+            st.plotly_chart(  # type: ignore
+                metrics_chart, use_container_width=True, key="metrics_overall"
+            )
+
+        # Per-agent breakdown charts
+        model_names = sorted(grouped.keys())
+        if model_names:
+            st.subheader("📊 Metrics Breakdown by Agent")
+            tabs = st.tabs(model_names)
+            for tab, model_name in zip(tabs, model_names, strict=True):
+                by_instance = grouped[model_name]
+                per_agent_summary = _compute_metrics_summary(list(by_instance.values()))
+                agent_chart = create_metrics_chart(per_agent_summary)
+                with tab:
+                    if agent_chart:
+                        st.plotly_chart(  # type: ignore
+                            agent_chart,
+                            use_container_width=True,
+                            key=f"metrics_agent_{model_name}",
+                        )
+                    else:
+                        st.info("No metrics data available for this agent.")
 
         # Detailed metrics table
         st.subheader("Detailed Metrics")
