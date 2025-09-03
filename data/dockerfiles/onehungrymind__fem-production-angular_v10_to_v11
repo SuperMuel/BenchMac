@@ -1,0 +1,42 @@
+# Node.js 16 is compatible with Angular 10.1.0 and Angular 11 without OpenSSL issues
+FROM node:16-bullseye-slim
+
+# Minimal, repeatable CI-ish environment
+ENV CI=true \
+    TZ=UTC \
+    LANG=C.UTF-8 \
+    NG_CLI_ANALYTICS=false \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_FUND=false \
+    CHROME_BIN=/usr/bin/chromium
+
+# Tools required by the harness and typical Angular builds/tests
+RUN apt-get update && \
+    apt-get install -y \
+        curl \
+        git \
+        ca-certificates \
+        --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
+# Non-root user + writable workspace
+RUN mkdir -p /app/project && chown -R node:node /app
+USER node
+# This is where the repository will be available to the agent
+WORKDIR /app/project
+
+# Use a user-scoped npm cache (keeps permissions sane)
+ENV NPM_CONFIG_CACHE=/home/node/.npm
+
+# IMPORTANT: pull a history-free snapshot, NOT a git clone
+# If the full git history is included, AI agents could "see the future" and cheat.
+# Use the chosen base_commit here
+RUN curl -L https://github.com/onehungrymind/fem-production-angular/archive/2e938bdea84c2163f8ce046225b031a3311e8c5a.tar.gz \
+    | tar -xz --strip-components=1
+
+# Initialize a new git repo (for `git apply` to work) but no history
+RUN git init && git config --global --add safe.directory /app/project
+
+# Keep container idle; the harness will exec into it
+CMD ["bash", "-lc", "sleep infinity"]
