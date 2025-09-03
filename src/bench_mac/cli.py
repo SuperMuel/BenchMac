@@ -325,6 +325,7 @@ def _print_evaluation_summary(
     if logs_dir:
         summary_table.add_row("Logs Directory:", str(logs_dir))
 
+    results_table = None
     # Only show the failed instance IDs if there are unsuccessful jobs
     if failed_jobs > 0 and total_jobs > 0:
         failed_instance_ids = [
@@ -376,7 +377,8 @@ def _print_evaluation_summary(
     console.print()
     console.print(Panel(summary_table, expand=False))
     console.print()
-    console.print(Panel(results_table, expand=False))
+    if results_table:
+        console.print(Panel(results_table, expand=False))
     console.print()
     console.print(Panel(metrics_table, expand=False))
     console.print()
