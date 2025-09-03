@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +14,7 @@ from bench_mac.models import (
     ExecutionTrace,
     MetricsReport,
     Submission,
+    utc_now,
 )
 from bench_mac.runner import BenchmarkRunner, WorkerContext
 
@@ -52,6 +53,9 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
     A fake worker function that replaces the real one during tests.
     It returns predictable results without any I/O or Docker calls.
     """
+    now = utc_now()
+    start_time = now
+    end_time = now + timedelta(seconds=1)
     if "success" in context.task.instance.instance_id:
         # Simulate a successful evaluation with a mock execution trace
         successful_command = CommandResult(
@@ -59,8 +63,8 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
             exit_code=0,
             stdout="Applied patch successfully",
             stderr="",
-            start_time=datetime.now(UTC),
-            end_time=datetime.now(UTC) + timedelta(seconds=1),
+            start_time=start_time,
+            end_time=end_time,
         )
         execution = ExecutionTrace(steps=[successful_command])
 
@@ -73,6 +77,8 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
                     patch_application_success=True,
                 ),
             ),
+            started_at=start_time,
+            ended_at=end_time,
         )
     else:
         # Simulate a harness-level failure
@@ -80,6 +86,8 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
             instance_id=context.task.instance.instance_id,
             submission_id=context.task.submission.submission_id,
             error="Simulated worker crash",
+            started_at=start_time,
+            ended_at=end_time,
         )
 
 

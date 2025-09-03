@@ -371,6 +371,10 @@ class EvaluationReport(BaseModel):
     metrics: MetricsReport = Field(
         ..., description="The detailed performance metrics for the submission."
     )
+    created_at: AwareDatetime = Field(
+        default_factory=utc_now,
+        description="The timestamp when the evaluation report was created.",
+    )
 
 
 class EvaluationCompleted(BaseModel):
@@ -383,6 +387,12 @@ class EvaluationCompleted(BaseModel):
 
     status: Literal["success"] = "success"
     result: EvaluationReport
+    started_at: AwareDatetime = Field(
+        description="The timestamp when the evaluation started.",
+    )
+    ended_at: AwareDatetime = Field(
+        description="The timestamp when the evaluation ended.",
+    )
 
 
 class EvaluationFailed(BaseModel):
@@ -397,6 +407,12 @@ class EvaluationFailed(BaseModel):
     instance_id: str
     submission_id: str = Field(
         ..., description="The unique identifier of the submission that failed."
+    )
+    started_at: AwareDatetime = Field(
+        description="The timestamp when the evaluation started.",
+    )
+    ended_at: AwareDatetime = Field(
+        description="The timestamp when the evaluation ended.",
     )
     error: str
 
