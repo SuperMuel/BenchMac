@@ -30,7 +30,7 @@ console = Console()
 
 load_dotenv()
 assert os.getenv("LANGSMITH_API_KEY"), "LANGSMITH_API_KEY is not set"
-# litellm.callbacks = ["langsmith"]
+litellm.callbacks = ["langsmith"]
 litellm.langsmith_batch_size = 1
 
 
@@ -74,8 +74,9 @@ def generate_task_prompt(instance: BenchmarkInstance) -> str:
 
         1. Analyze the codebase by finding and reading relevant files
         2. Edit the source code or run any command to migrate the codebase to the target Angular version
-        3. Test the application by running the build command
-        4. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
+        3. Prefer `ng update` over manual changes when possible
+        4. Test the application by running the build command
+        5. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
         Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>
         """
     )
@@ -101,6 +102,11 @@ def main(
         "-s",
         help="Path to the submissions file.",
     ),
+    instance_ids: Optional[list[str]] = typer.Option(  # noqa: B008, UP045
+        None,
+        "--instance-id",
+        help="Filter by specific instance ID(s). Can be used multiple times.",
+    ),
 ) -> None:
     """
     Runs an LLM-powered agent on BenchMAC instances and generates a submission file.
@@ -108,9 +114,31 @@ def main(
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
     console.print(f"📝 Model: [cyan]{model_name}[/cyan]")
 
+    # Load all instances first
+    all_instances = load_instances(instances_file)
+
+    # Filter by instance IDs if specified
+    if instance_ids:
+        instances = {
+            instance_id: instance
+            for instance_id, instance in all_instances.items()
+            if instance_id in instance_ids
+        }
+        console.print(
+            f"Filtering to {len(instances)} specified instance(s): {', '.join(instance_ids)}"
+        )
+
+        # Check if any specified instances were not found
+        missing_instances = set(instance_ids) - set(instances.keys())
+        if missing_instances:
+            console.print(
+                f"[yellow]Warning: The following instance IDs were not found: {', '.join(missing_instances)}[/yellow]"
+            )
+    else:
+        instances = all_instances
+
     if submissions_file is None:
         submissions_file = get_submissions_file_path(settings.experiments_dir)
-        instances = load_instances(instances_file)
 
     else:
         # Check if the file contains some submissions, so we can skip the instances that are already processed
@@ -118,10 +146,12 @@ def main(
             json.loads(line)["instance_id"]
             for line in submissions_file.read_text().splitlines()
         }
-        console.print(f"Skipping {len(existing_submissions)} instances")
+        console.print(
+            f"Skipping {len(existing_submissions)} instances that are already processed"
+        )
         instances = {
             instance_id: instance
-            for instance_id, instance in load_instances(instances_file).items()
+            for instance_id, instance in instances.items()
             if instance_id not in existing_submissions
         }
 
