@@ -45,6 +45,8 @@ class TestBaselineInstanceValidation:
         try:
             # === 1. SETUP: Prepare the Docker Environment ===
             logger.info("Step 1: Preparing Docker environment...")
+            # TODO: this test shouldn't use the lower-level prepare_environment function
+            # but rather use the higher-level InstanceEnv class
             instance_image_tag = prepare_environment(instance, docker_manager)
             assert instance_image_tag, "Failed to prepare Docker environment."
 
@@ -71,16 +73,50 @@ class TestBaselineInstanceValidation:
             assert exit_code == 0, f"Git count command failed: {stderr}"
             commit_count = int(stdout.strip())
 
-            assert commit_count <= 1, (
+            assert commit_count == 1, (
                 f"\n\n❌ History validation FAILED for instance "
-                "'{instance.instance_id}'.\n"
-                f"   - Expected commit count <= 1, but found {commit_count}.\n"
-                f"   - This indicates the FULL git history was included in the Docker "
-                f"image, which INVALIDATES the benchmark.\n"
-                f"   - Please ensure the Dockerfile uses 'curl.../archive/...' and NOT "
-                f"'git clone'."
+                f"'{instance.instance_id}'.\n"
+                f"   - Expected exactly 1 baseline commit, but found {commit_count}.\n"
+                f"   - If {commit_count} > 1: FULL git history was included (INVALID).\n"  # noqa: E501
+                f"   - If {commit_count} == 0: No baseline commit created (INVALID).\n"
+                f"   - The Dockerfile should create exactly 1 baseline commit after "
+                f"extracting source code."
             )
             logger.success("✅ Git history is properly sanitized.")
+
+            # === 2b. VALIDATE BASELINE COMMIT AND TAG ===
+            logger.info("Step 2b: Validating baseline commit and tag...")
+
+            # 1. Verify the baseline tag exists
+            tag_check_cmd = "git tag -l baseline"
+            exit_code, stdout, stderr = docker_manager.execute_in_container(
+                container, tag_check_cmd, workdir=project_dir
+            )
+            assert exit_code == 0, f"Git tag check failed: {stderr}"
+            assert stdout.strip() == "baseline", (
+                f"Missing 'baseline' tag for instance '{instance.instance_id}'. "
+                f"Expected 'baseline', got: '{stdout.strip()}'. "
+                f"The Dockerfile should create a 'baseline' tag after the initial commit."  # noqa: E501
+            )
+
+            # 2. Verify the baseline tag points to the current HEAD
+            head_hash_cmd = "git rev-parse HEAD"
+            tag_hash_cmd = "git rev-parse baseline"
+            exit_code, head_hash, _ = docker_manager.execute_in_container(
+                container, head_hash_cmd, workdir=project_dir
+            )
+            assert exit_code == 0, "Failed to get HEAD hash"
+
+            exit_code, tag_hash, _ = docker_manager.execute_in_container(
+                container, tag_hash_cmd, workdir=project_dir
+            )
+            assert exit_code == 0, "Failed to get baseline tag hash"
+
+            assert head_hash.strip() == tag_hash.strip(), (
+                f"Baseline tag doesn't point to HEAD for "
+                f"instance '{instance.instance_id}'. "
+                f"HEAD: {head_hash.strip()}, baseline: {tag_hash.strip()}"
+            )
 
             # === 3. EXECUTION & ASSERTION: Run all baseline commands ===
             # The project working directory inside the container is /app/project
