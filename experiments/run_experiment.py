@@ -29,7 +29,7 @@ from bench_mac.models import (
     SubmissionMetadata,
 )
 from experiments.environment import InstanceEnv
-from experiments.models import PatchGenerationTask
+from experiments.models import AgentConfig, ExperimentTask
 from src.bench_mac.config import settings
 from src.bench_mac.utils import load_instances
 
@@ -103,22 +103,22 @@ AGENT_CONFIG = yaml.safe_load(Path("experiments/agent_config.yaml").read_text())
 
 
 def collect_tasks(
-    instances: dict[str, BenchmarkInstance], model_names: list[str]
-) -> list[PatchGenerationTask]:
+    instances: dict[str, BenchmarkInstance], agent_configs: list[AgentConfig]
+) -> list[ExperimentTask]:
     """
     Collect all patch generation tasks by combining instances with agent configurations.
 
     Args:
         instances: Dictionary of benchmark instances keyed by instance_id
-        model_names: List of model names to use for patch generation
+        agent_configs: List of agent configurations to use for patch generation
 
     Returns:
-        List of PatchGenerationTask objects, one for each instance-model_name combination
+        List of ExperimentTask objects, one for each instance-agent_config combination
     """
     return [
-        PatchGenerationTask(instance_id=instance_id, model_name=model_name)
+        ExperimentTask(instance_id=instance_id, agent_config=agent_config)
         for instance_id in instances
-        for model_name in model_names
+        for agent_config in agent_configs
     ]
 
 
@@ -160,8 +160,8 @@ def collect_old_submissions(experiments_dir: Path) -> list[Submission]:
 
 
 def filter_completed_tasks(
-    tasks: list[PatchGenerationTask], old_submissions: list[Submission]
-) -> list[PatchGenerationTask]:
+    tasks: list[ExperimentTask], old_submissions: list[Submission]
+) -> list[ExperimentTask]:
     """
     Filter out tasks that have already been completed based on old submissions.
 
@@ -183,14 +183,14 @@ def filter_completed_tasks(
     }
 
     # Filter tasks that haven't been completed
-    filtered_tasks: list[PatchGenerationTask] = []
+    filtered_tasks: list[ExperimentTask] = []
     skipped_count = 0
 
     for task in tasks:
-        task_combination = (task.instance_id, task.model_name)
+        task_combination = (task.instance_id, task.agent_config.model_name)
         if task_combination in completed_combinations:
             console.print(
-                f"[blue]Skipping already completed task: {task.instance_id} ({task.model_name})[/blue]"
+                f"[blue]Skipping already completed task: {task.instance_id} ({task.agent_config.model_name})[/blue]"
             )
             skipped_count += 1
         else:
@@ -229,7 +229,12 @@ def main(
     Runs an LLM-powered agent on BenchMAC instances and generates a submission file.
     """
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
-    model_names_str = ", ".join(f"[cyan]{m}[/cyan]" for m in model_names)
+
+    # Create agent configurations from model names
+    agent_configs = [AgentConfig(model_name=model_name) for model_name in model_names]
+    model_names_str = ", ".join(
+        f"[cyan]{config.model_name}[/cyan]" for config in agent_configs
+    )
     console.print(f"📝 Model(s): {model_names_str}")
 
     # Load all instances first
@@ -263,7 +268,7 @@ def main(
     console.print(f"Found {len(old_submissions)} existing submissions")
 
     # Collect all tasks
-    tasks = collect_tasks(instances, model_names)
+    tasks = collect_tasks(instances, agent_configs)
     console.print(f"Generated {len(tasks)} potential tasks")
 
     # Filter out already completed tasks
@@ -283,7 +288,7 @@ def main(
             submission_id = str(uuid.uuid4())
             progress.update(
                 task_progress,
-                description=f"[cyan]Processing: {task.instance_id} ({task.model_name})[/cyan]",
+                description=f"[cyan]Processing: {task.instance_id} ({task.agent_config.model_name})[/cyan]",
             )
 
             # Create environment
@@ -297,7 +302,7 @@ def main(
                 )
 
                 console.print("Creating model")
-                model = LitellmModel(model_name=task.model_name)
+                model = LitellmModel(model_name=task.agent_config.model_name)
                 console.print("Creating agent")
                 agent = DefaultAgent(
                     model,
@@ -322,15 +327,15 @@ def main(
                         extra_info={
                             "instance_id": task.instance_id,
                             "submission_id": submission_id,
-                            "model_name": task.model_name,
+                            "model_name": task.agent_config.model_name,
                         },
                     )
                 except Exception as e:
                     console.print(
-                        f"[bold red]Error processing {task.instance_id} ({task.model_name}): {e}[/bold red]"
+                        f"[bold red]Error processing {task.instance_id} ({task.agent_config.model_name}): {e}[/bold red]"
                     )
                     progress.console.print(
-                        f"[yellow]Skipping {task.instance_id} ({task.model_name}) due to error.[/yellow]"
+                        f"[yellow]Skipping {task.instance_id} ({task.agent_config.model_name}) due to error.[/yellow]"
                     )
                     progress.advance(task_progress)
                     continue
@@ -342,7 +347,9 @@ def main(
                     submission_id=submission_id,
                     instance_id=task.instance_id,
                     model_patch=model_patch,
-                    metadata=SubmissionMetadata(model_name=task.model_name),
+                    metadata=SubmissionMetadata(
+                        model_name=task.agent_config.model_name
+                    ),
                 )
                 with submissions_file.open("a") as f:
                     f.write(submission.model_dump_json() + "\n")

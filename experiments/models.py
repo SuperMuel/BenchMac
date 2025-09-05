@@ -3,7 +3,19 @@ import uuid
 from pydantic import BaseModel, Field
 
 
-class PatchGenerationTask(BaseModel):
+class AgentConfig(BaseModel):
+    """
+    Configuration for an agent.
+    """
+
+    model_name: str = Field(
+        ...,
+        description="The name of the model to use for patch generation "
+        "(e.g., 'mistral/devstral-medium-2507').",
+    )
+
+
+class ExperimentTask(BaseModel):
     """
     A task for generating patches using an agent configuration on a specific instance.
 
@@ -19,8 +31,7 @@ class PatchGenerationTask(BaseModel):
         ...,
         description="Unique identifier for the benchmark instance to process.",
     )
-    model_name: str = Field(
+    agent_config: AgentConfig = Field(
         ...,
-        description="The name of the model to use for patch generation "
-        "(e.g., 'mistral/devstral-medium-2507').",
+        description="The agent configuration to use for patch generation.",
     )
