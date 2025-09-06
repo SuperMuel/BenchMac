@@ -7,7 +7,6 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from textwrap import dedent
-from typing import Optional
 
 import litellm
 import typer
@@ -29,7 +28,13 @@ from bench_mac.models import (
     SubmissionMetadata,
 )
 from experiments.environment import InstanceEnv
-from experiments.models import AgentConfig, ExperimentTask
+from experiments.models import (
+    AgentConfig,
+    CompletedExperiment,
+    ExperimentResult,
+    ExperimentTask,
+    FailedExperiment,
+)
 from src.bench_mac.config import settings
 from src.bench_mac.utils import load_instances
 
@@ -53,16 +58,14 @@ assert os.getenv("MISTRAL_API_KEY"), "MISTRAL_API_KEY is not set"
 settings.initialize_directories()
 
 
-def get_submissions_file_path(
-    experiments_dir: Path, now: datetime | None = None
-) -> Path:
+def get_results_file_path(experiments_dir: Path, now: datetime | None = None) -> Path:
     if now is None:
         now = datetime.now(UTC)
     assert experiments_dir.is_dir() and experiments_dir.exists()
-    submissions_dir = experiments_dir / "submissions"
-    submissions_dir.mkdir(parents=True, exist_ok=True)
+    results_dir = experiments_dir / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
 
-    return submissions_dir / f"submissions_{now.strftime('%Y-%m-%d_%H-%M-%S')}.jsonl"
+    return results_dir / f"results_{now.strftime('%Y-%m-%d_%H-%M-%S')}.jsonl"
 
 
 def generate_task_prompt(instance: BenchmarkInstance) -> str:
@@ -122,64 +125,66 @@ def collect_tasks(
     ]
 
 
-def collect_old_submissions(experiments_dir: Path) -> list[Submission]:
+def collect_old_results(experiments_dir: Path) -> list[ExperimentResult]:
     """
-    Collect all old submissions from the experiments directory.
+    Collect all old results from the experiments directory.
 
     Args:
-        experiments_dir: Path to the experiments directory containing submissions
+        experiments_dir: Path to the experiments directory containing results
 
     Returns:
-        List of all Submission objects found in submission files
+        List of all ExperimentResult objects found in results files
     """
-    submissions: list[Submission] = []
-    submissions_dir = experiments_dir / "submissions"
+    results: list[ExperimentResult] = []
+    results_dir = experiments_dir / "results"
 
-    if not submissions_dir.exists():
-        return submissions
+    if not results_dir.exists():
+        return results
 
-    # Find all JSONL files in the submissions directory
-    submission_files = list(submissions_dir.glob("*.jsonl"))
+    result_files = list(results_dir.glob("*.jsonl"))
 
-    for submission_file in submission_files:
+    for result_file in result_files:
         try:
-            with submission_file.open("r") as f:
+            with result_file.open("r") as f:
                 for line in f:
                     line = line.strip()
-                    if line:  # Skip empty lines
-                        submission_data = json.loads(line)
-                        submission = Submission.model_validate(submission_data)
-                        submissions.append(submission)
+                    if line:
+                        data = json.loads(line)
+                        result = ExperimentResult.model_validate(data)
+                        results.append(result)
         except (json.JSONDecodeError, ValidationError) as e:
             console.print(
-                f"[yellow]Warning: Could not parse {submission_file}: {e}[/yellow]"
+                f"[yellow]Warning: Could not parse {result_file}: {e}[/yellow]"
             )
             continue
 
-    return submissions
+    return results
 
 
 def filter_completed_tasks(
-    tasks: list[ExperimentTask], old_submissions: list[Submission]
+    tasks: list[ExperimentTask], old_results: list[ExperimentResult]
 ) -> list[ExperimentTask]:
     """
     Filter out tasks that have already been completed based on old submissions.
 
-    A task is considered completed if there's already a submission with the same
+    A task is considered completed if there's already a completed result with the same
     instance_id and model_name combination.
 
     Args:
         tasks: List of tasks to potentially run
-        old_submissions: List of existing submissions
+        old_results: List of existing results
 
     Returns:
         List of tasks that haven't been completed yet
     """
     # Create a set of completed (instance_id, model_name) combinations
     completed_combinations = {
-        (submission.instance_id, submission.metadata.model_name)
-        for submission in old_submissions
-        if submission.metadata.model_name is not None
+        (
+            r.root.task.instance_id,  # type: ignore[reportAttributeAccessIssue]
+            r.root.task.agent_config.model_name,  # type: ignore[reportAttributeAccessIssue]
+        )
+        for r in old_results
+        if getattr(r.root, "status", None) == "completed"
     }
 
     # Filter tasks that haven't been completed
@@ -213,13 +218,13 @@ def main(
     instances_file: Path = typer.Option(  # noqa: B008
         settings.instances_file, help="Path to the benchmark instances file."
     ),
-    submissions_file: Optional[Path] = typer.Option(  # noqa: B008, UP045
+    results_file: Path | None = typer.Option(  # noqa: B008
         None,
-        "--submissions-file",
-        "-s",
-        help="Path to the submissions file.",
+        "--results-file",
+        "-r",
+        help="Path to the results JSONL file.",
     ),
-    instance_ids: Optional[list[str]] = typer.Option(  # noqa: B008, UP045
+    instance_ids: list[str] | None = typer.Option(  # noqa: B008
         None,
         "--instance-id",
         help="Filter by specific instance ID(s). Can be used multiple times.",
@@ -260,19 +265,19 @@ def main(
     else:
         instances = all_instances
 
-    if submissions_file is None:
-        submissions_file = get_submissions_file_path(settings.experiments_dir)
+    if results_file is None:
+        results_file = get_results_file_path(settings.experiments_dir)
 
-    # Collect old submissions to avoid re-running completed tasks
-    old_submissions = collect_old_submissions(settings.experiments_dir)
-    console.print(f"Found {len(old_submissions)} existing submissions")
+    # Collect old results to avoid re-running completed tasks
+    old_results = collect_old_results(settings.experiments_dir)
+    console.print(f"Found {len(old_results)} existing results")
 
     # Collect all tasks
     tasks = collect_tasks(instances, agent_configs)
     console.print(f"Generated {len(tasks)} potential tasks")
 
     # Filter out already completed tasks
-    tasks = filter_completed_tasks(tasks, old_submissions)
+    tasks = filter_completed_tasks(tasks, old_results)
 
     if not tasks:
         console.print("No tasks to process. Exiting...")
@@ -286,6 +291,7 @@ def main(
         for task in tasks:
             instance = instances[task.instance_id]
             submission_id = str(uuid.uuid4())
+            started_at = datetime.now(UTC)
             progress.update(
                 task_progress,
                 description=f"[cyan]Processing: {task.instance_id} ({task.agent_config.model_name})[/cyan]",
@@ -330,38 +336,46 @@ def main(
                             "model_name": task.agent_config.model_name,
                         },
                     )
+
+                    # Generate patch and write completed result
+                    model_patch = env.diff_with_base_commit()
+                    submission = Submission(
+                        submission_id=submission_id,
+                        instance_id=task.instance_id,
+                        model_patch=model_patch,
+                        metadata=SubmissionMetadata(
+                            model_name=task.agent_config.model_name
+                        ),
+                    )
+                    ended_at = datetime.now(UTC)
+                    completed = CompletedExperiment(
+                        task=task,
+                        submission=submission,
+                        started_at=started_at,
+                        ended_at=ended_at,
+                    )
+                    result_wrapper = ExperimentResult(root=completed)
+                    with results_file.open("a") as f:  # type: ignore[reportOptionalMemberAccess]
+                        f.write(result_wrapper.model_dump_json() + "\n")
                 except Exception as e:
+                    ended_at = datetime.now(UTC)
                     console.print(
                         f"[bold red]Error processing {task.instance_id} ({task.agent_config.model_name}): {e}[/bold red]"
                     )
-                    progress.console.print(
-                        f"[yellow]Skipping {task.instance_id} ({task.agent_config.model_name}) due to error.[/yellow]"
+                    failed = FailedExperiment(
+                        task=task,
+                        error=str(e),
+                        started_at=started_at,
+                        ended_at=ended_at,
                     )
-                    progress.advance(task_progress)
-                    continue
-
-                # Generate patch
-                model_patch = env.diff_with_base_commit()
-                # Write submission
-                submission = Submission(
-                    submission_id=submission_id,
-                    instance_id=task.instance_id,
-                    model_patch=model_patch,
-                    metadata=SubmissionMetadata(
-                        model_name=task.agent_config.model_name
-                    ),
-                )
-                with submissions_file.open("a") as f:
-                    f.write(submission.model_dump_json() + "\n")
+                    result_wrapper = ExperimentResult(root=failed)
+                    with results_file.open("a") as f:  # type: ignore[reportOptionalMemberAccess]
+                        f.write(result_wrapper.model_dump_json() + "\n")
 
             progress.advance(task_progress)
 
     console.print("\n[bold green]✅ Experiment finished![/bold green]")
-    console.print(f"Submissions saved to [cyan]{submissions_file}[/cyan]")
-    console.print(
-        "You can now run the evaluation with:\n"
-        f"[bold]uv run benchmac eval {submissions_file}[/bold]"
-    )
+    console.print(f"Results saved to [cyan]{results_file}[/cyan]")
 
 
 if __name__ == "__main__":

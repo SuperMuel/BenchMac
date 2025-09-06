@@ -24,9 +24,8 @@ from rich.text import Text
 from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
-    EvaluationCompleted,
-    EvaluationFailed,
     EvaluationResult,
+    EvaluationResultAdapter,
     EvaluationTask,
     Submission,
     utc_now,
@@ -44,7 +43,12 @@ app = cyclopts.App(
 def _load_submissions(
     submissions_path: Path,
 ) -> Generator[Submission, None, None]:
-    """Loads submissions from a JSONL file."""
+    """Load submissions from a JSONL file.
+
+    Accepts two line formats:
+    - Raw Submission objects
+    - ExperimentResult objects (completed) with embedded Submission under `.submission`
+    """
     with submissions_path.open("r", encoding="utf-8") as f:
         for i, line in enumerate(f, 1):
             line = line.strip()
@@ -52,7 +56,20 @@ def _load_submissions(
                 continue
             try:
                 data = json.loads(line)
-                yield Submission.model_validate(data)
+                # Raw Submission
+                if "submission_id" in data and "model_patch" in data:
+                    yield Submission.model_validate(data)
+                    continue
+
+                # Completed ExperimentResult with embedded submission
+                if data.get("status") == "completed" and "submission" in data:
+                    sub = Submission.model_validate(data["submission"])  # type: ignore[reportArgumentType]
+                    yield sub
+                    continue
+
+                raise ValueError(
+                    "Line is neither a Submission nor a completed ExperimentResult"
+                )
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(
                     f"⚠️ Warning: Skipping invalid submission on line {i}: {e}"
@@ -123,9 +140,9 @@ def _run_interactive(
             outcomes.append(outcome)
 
             # Update counters based on outcome
-            if outcome.status == "success":
+            if outcome.status == "completed":
                 success_count += 1
-                logger.info(f"✅ SUCCESS: {outcome.result.instance_id}")
+                logger.info(f"✅ Completed: {outcome.result.instance_id}")
             else:
                 failure_count += 1
                 logger.error(f"❌ FAILURE: {outcome.instance_id} - {outcome.error}")
@@ -174,10 +191,10 @@ def _run_non_interactive(
             f.write(outcome.model_dump_json() + "\n")
 
             # Also print a summary to the console log
-            if outcome.status == "success":
-                logger.info(f"✅ SUCCESS: {outcome.result.instance_id}")
-            elif outcome.status == "failure":
-                logger.error(f"❌ FAILURE: {outcome.instance_id} - {outcome.error}")
+            if outcome.status == "completed":
+                logger.info(f"✅ Completed: {outcome.result.instance_id}")
+            elif outcome.status == "failed":
+                logger.error(f"❌ Failed: {outcome.instance_id} - {outcome.error}")
 
         runner.run(
             tasks=task_list,
@@ -202,14 +219,7 @@ def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
             if not line:
                 continue
             try:
-                data = json.loads(line)
-                # Handle union type by checking the status field
-                if data.get("status") == "success":
-                    outcome = EvaluationCompleted.model_validate(data)
-                elif data.get("status") == "failure":
-                    outcome = EvaluationFailed.model_validate(data)
-                else:
-                    raise ValueError(f"Unknown status: {data.get('status')}")
+                outcome = EvaluationResultAdapter.validate_json(line)
                 outcomes.append(outcome)
             except Exception as e:
                 logger.warning(
@@ -239,7 +249,7 @@ def _collect_network_error_details(
     details: dict[str, list[str]] = {}
 
     for outcome in outcomes:
-        if outcome.status == "success":
+        if outcome.status == "completed":
             instance_id = outcome.result.instance_id
             for step in outcome.result.execution.steps:
                 if not step.success:
@@ -272,7 +282,7 @@ def _print_evaluation_summary(
 
     # Calculate metrics
     total_jobs = len(outcomes)
-    successful_jobs = sum(1 for outcome in outcomes if outcome.status == "success")
+    successful_jobs = sum(1 for outcome in outcomes if outcome.status == "completed")
     failed_jobs = total_jobs - successful_jobs
 
     # Metrics breakdown - initialize counters for all metrics
@@ -286,7 +296,7 @@ def _print_evaluation_summary(
     install_total_count = 0
 
     for outcome in outcomes:
-        if outcome.status == "success":
+        if outcome.status == "completed":
             metrics = outcome.result.metrics
 
             # Patch application metrics
@@ -329,7 +339,7 @@ def _print_evaluation_summary(
     # Only show the failed instance IDs if there are unsuccessful jobs
     if failed_jobs > 0 and total_jobs > 0:
         failed_instance_ids = [
-            outcome.instance_id for outcome in outcomes if outcome.status != "success"
+            outcome.instance_id for outcome in outcomes if outcome.status != "completed"
         ]
         results_table = Table(
             title="❌ Harness Failures",

@@ -21,6 +21,7 @@ from bench_mac.models import (
     CommandResult,
     EvaluationCompleted,
     EvaluationFailed,
+    EvaluationResultAdapter,
     MetricsReport,
     Submission,
 )
@@ -56,15 +57,15 @@ def load_all_evaluations(
 
     for file_path, line_num, line in _iter_lines_from_jsonl_files(jsonl_files):
         try:
-            # Peek status without double-parsing
-            status = json.loads(line).get("status")
-            if status == "success":
-                successes.append(EvaluationCompleted.model_validate_json(line))
-            elif status == "failure":
-                failures.append(EvaluationFailed.model_validate_json(line))
+            outcome = EvaluationResultAdapter.validate_json(line)
+            if outcome.status == "completed":
+                successes.append(outcome)
+            elif outcome.status == "failed":
+                failures.append(outcome)
             else:
                 st.warning(
-                    f"Unknown status in {file_path.name} line {line_num}: {status}"
+                    f"Unknown status in {file_path.name} line {line_num}: "
+                    f"{outcome.status}"
                 )
         except (json.JSONDecodeError, ValidationError, Exception) as e:
             st.warning(
@@ -75,25 +76,50 @@ def load_all_evaluations(
 
 
 @st.cache_data(show_spinner=False)
-def load_all_submissions(submissions_dir: Path) -> dict[str, Submission]:
+def load_all_submissions(experiments_dir: Path) -> dict[str, Submission]:
     """
-    Load all submissions from submissions_dir/*.jsonl keyed by
-    submission_id.
+    Load all submissions keyed by submission_id from:
+    - experiments_dir/submissions/*.jsonl (legacy standalone Submission records)
+    - experiments_dir/results/*.jsonl (new ExperimentResult records with
+      embedded Submission)
     """
-    if not submissions_dir.exists():
+    if not experiments_dir.exists():
         return {}
 
     mapping: dict[str, Submission] = {}
-    for file_path, line_num, line in _iter_lines_from_jsonl_files(
-        submissions_dir.glob("*.jsonl")
-    ):
-        try:
-            sub = Submission.model_validate_json(line)
-            mapping[sub.submission_id] = sub
-        except (json.JSONDecodeError, ValidationError, Exception) as e:
-            st.warning(
-                f"Skipping invalid submission in {file_path.name} line {line_num}: {e}"
-            )
+
+    # 1) Legacy standalone submissions
+    submissions_dir = experiments_dir / "submissions"
+    if submissions_dir.exists():
+        for file_path, line_num, line in _iter_lines_from_jsonl_files(
+            submissions_dir.glob("*.jsonl")
+        ):
+            try:
+                sub = Submission.model_validate_json(line)
+                mapping[sub.submission_id] = sub
+            except (json.JSONDecodeError, ValidationError, Exception) as e:
+                st.warning(
+                    f"Skipping invalid submission in {file_path.name} "
+                    f"line {line_num}: {e}"
+                )
+
+    # 2) New results files with embedded submissions when completed
+    results_dir = experiments_dir / "results"
+    if results_dir.exists():
+        for file_path, line_num, line in _iter_lines_from_jsonl_files(
+            results_dir.glob("*.jsonl")
+        ):
+            try:
+                data = json.loads(line)
+                if data.get("status") == "completed" and "submission" in data:
+                    sub = Submission.model_validate(data["submission"])  # type: ignore[reportArgumentType]
+                    mapping[sub.submission_id] = sub
+            except (json.JSONDecodeError, ValidationError, Exception) as e:
+                st.warning(
+                    f"Skipping invalid experiment result in {file_path.name} "
+                    f"line {line_num}: {e}"
+                )
+
     return mapping
 
 
@@ -302,11 +328,11 @@ def display_execution_steps(steps: list[CommandResult]) -> None:
                 st.write(f"**End:** {step.end_time}")
 
             if step.stdout:
-                st.subheader("📤 Standard Output")
+                st.subheader("📤 STDOUT")
                 st.code(step.stdout, language="bash")
 
             if step.stderr:
-                st.subheader("⚠️ Standard Error")
+                st.subheader("⚠️ STDERR")
                 st.code(step.stderr, language="bash")
 
 
@@ -318,13 +344,13 @@ def main() -> None:
     st.title("🔍 BenchMAC Results Explorer")
 
     evaluations_dir = settings.evaluations_dir
-    experiments_dir = settings.experiments_dir / "submissions"
+    experiments_dir = settings.experiments_dir
 
     st.markdown(
         f"""
         <div style="background-color: #f0f2f6; padding: 0.75em 1em; border-radius: 0.5em; margin-bottom: 1em;">
             <b>📂 Evaluations directory:</b> <code>{evaluations_dir}</code><br>
-            <b>📂 Submissions directory:</b> <code>{experiments_dir}</code>
+            <b>📂 Experiments directory:</b> <code>{experiments_dir}</code>
         </div>
         """,  # noqa: E501
         unsafe_allow_html=True,

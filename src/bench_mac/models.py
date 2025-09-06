@@ -10,6 +10,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    TypeAdapter,
     field_validator,
     model_validator,
 )
@@ -385,7 +386,7 @@ class EvaluationCompleted(BaseModel):
     metric values) and produced an `EvaluationReport`.
     """
 
-    status: Literal["success"] = "success"
+    status: Literal["completed"] = "completed"
     result: EvaluationReport
     started_at: AwareDatetime = Field(
         description="The timestamp when the evaluation started.",
@@ -403,7 +404,7 @@ class EvaluationFailed(BaseModel):
     available, process crash). No `ExecutionTrace` is available here.
     """
 
-    status: Literal["failure"] = "failure"
+    status: Literal["failed"] = "failed"
     instance_id: str
     submission_id: str = Field(
         ..., description="The unique identifier of the submission that failed."
@@ -417,4 +418,9 @@ class EvaluationFailed(BaseModel):
     error: str
 
 
-EvaluationResult = EvaluationCompleted | EvaluationFailed
+EvaluationResult = Annotated[
+    EvaluationCompleted | EvaluationFailed,
+    Field(discriminator="status"),
+]
+
+EvaluationResultAdapter = TypeAdapter(EvaluationResult)
