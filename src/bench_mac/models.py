@@ -200,6 +200,7 @@ class SubmissionMetadata(BaseModel):
 
 
 SubmissionID = NewType("SubmissionID", str)
+EvaluationID = NewType("EvaluationID", str)
 
 
 class Submission(BaseModel):
@@ -388,6 +389,10 @@ class EvaluationCompleted(BaseModel):
     metric values) and produced an `EvaluationReport`.
     """
 
+    id: EvaluationID = Field(
+        default_factory=lambda: EvaluationID(str(uuid.uuid4())),
+        description="The unique identifier of the evaluation.",
+    )
     status: Literal["completed"] = "completed"
     result: EvaluationReport
     started_at: AwareDatetime = Field(
@@ -406,6 +411,10 @@ class EvaluationFailed(BaseModel):
     available, process crash). No `ExecutionTrace` is available here.
     """
 
+    id: EvaluationID = Field(
+        default_factory=lambda: EvaluationID(str(uuid.uuid4())),
+        description="The unique identifier of the evaluation.",
+    )
     status: Literal["failed"] = "failed"
     instance_id: InstanceID
     submission_id: SubmissionID = Field(

@@ -24,9 +24,11 @@ from rich.text import Text
 from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
+    EvaluationID,
     EvaluationResult,
     EvaluationResultAdapter,
     EvaluationTask,
+    SubmissionID,
     utc_now,
 )
 from bench_mac.runner import BenchmarkRunner
@@ -333,13 +335,9 @@ def _load_previous_evaluation_results(
 
 
 def _collect_network_error_details(
-    outcomes: list[EvaluationResult],
-) -> dict[str, list[str]]:
-    """Return mapping of instance_id -> list of step commands impacted
-     by network-like errors.
-
-    Includes harness-level failures (no steps) under a synthetic "harness" entry.
-    """
+    eval_results: list[EvaluationResult],
+) -> list[tuple[EvaluationID, SubmissionID, list[str]]]:
+    """Return list of tuples with evaluation_id, submission_id, and affected cmds."""
     network_error_keywords = [
         "socket timeout",
         "econnreset",
@@ -349,29 +347,31 @@ def _collect_network_error_details(
         "proxy",
     ]
 
-    details: dict[str, list[str]] = {}
+    results: list[tuple[EvaluationID, SubmissionID, list[str]]] = []
 
-    for outcome in outcomes:
-        if outcome.status == "completed":
-            instance_id = outcome.result.instance_id
-            for step in outcome.result.execution.steps:
-                if not step.success:
-                    stderr_lower = step.stderr.lower()
-                    if any(
-                        keyword in stderr_lower for keyword in network_error_keywords
-                    ):
-                        details.setdefault(instance_id, [])
-                        if step.command not in details[instance_id]:
-                            details[instance_id].append(step.command)
-        else:  # failure at harness level
-            instance_id = outcome.instance_id
-            error_lower = outcome.error.lower()
-            if any(keyword in error_lower for keyword in network_error_keywords):
-                details.setdefault(instance_id, [])
-                if "harness" not in details[instance_id]:
-                    details[instance_id].append("harness")
+    for outcome in eval_results:
+        if outcome.status != "completed":
+            continue
 
-    return details
+        evaluation_id = outcome.id
+        submission_id = outcome.result.submission_id
+
+        affected_commands: list[str] = []
+
+        # Check execution steps for network errors
+        for step in outcome.result.execution.steps:
+            if (
+                any(
+                    keyword in step.stderr.lower() for keyword in network_error_keywords
+                )
+                and step.command not in affected_commands
+            ):
+                affected_commands.append(step.command)
+
+        if affected_commands:
+            results.append((evaluation_id, submission_id, affected_commands))
+
+    return results
 
 
 def _print_evaluation_summary(
@@ -498,11 +498,17 @@ def _print_evaluation_summary(
 
     network_error_details = _collect_network_error_details(outcomes)
     if network_error_details:
-        details_table = Table(title="Affected instances and steps", show_header=True)
-        details_table.add_column("Instance", style="bold")
-        details_table.add_column("Step(s)")
-        for instance_id, commands in network_error_details.items():
-            details_table.add_row(instance_id, "\n".join(commands))
+        details_table = Table(title="Network errors by evaluation", show_header=True)
+        details_table.add_column("Evaluation ID", style="bold cyan", max_width=12)
+        details_table.add_column("Submission ID", style="bold magenta", max_width=12)
+        details_table.add_column("Affected Commands")
+
+        for evaluation_id, submission_id, commands in network_error_details:
+            details_table.add_row(
+                evaluation_id,
+                submission_id,
+                "\n".join(f"[yellow]{cmd}[/yellow]" for cmd in commands),
+            )
 
         combined_panel = Panel(
             Group(
@@ -610,42 +616,6 @@ def eval(
         )
 
     logger.complete()
-
-
-@app.command
-def summary(results_file: Path) -> None:
-    """
-    Display a summary of evaluation results from an existing results.jsonl file.
-    """
-    if not results_file.exists():
-        logger.error(f"❌ Results file not found: {results_file}")
-        return
-
-    logger.info(f"Loading results from: {results_file}")
-
-    # Load eval_results from file
-    eval_results = _load_eval_results_from_file(results_file)
-
-    if not eval_results:
-        logger.error("❌ No valid results found in file")
-        return
-
-    logger.info(f"Loaded {len(eval_results)} results")
-
-    # Extract run info from file path if possible
-    run_id = None
-    logs_dir = None
-    if results_file.parent.name.startswith("2025-"):  # Run ID pattern
-        run_id = results_file.parent.name
-        logs_dir = results_file.parent / "logs"
-
-    # Print summary
-    _print_evaluation_summary(
-        outcomes=eval_results,
-        run_id=run_id,
-        results_file=results_file,
-        logs_dir=logs_dir,
-    )
 
 
 if __name__ == "__main__":
