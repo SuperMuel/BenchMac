@@ -64,7 +64,6 @@ def collect_network_error_details(
         "etimedout",
         "network is unreachable",
         "failed to fetch",
-        "proxy",
     ]
 
     results: list[tuple[EvaluationID, SubmissionID, list[str]]] = []

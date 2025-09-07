@@ -254,6 +254,128 @@ def create_metrics_chart(metrics_summary: dict[str, Any]) -> Any:
     return fig
 
 
+def compute_agent_scores(
+    grouped_completed: dict[AgentConfig, dict[InstanceID, EvaluationCompleted]],
+) -> dict[AgentConfig, dict[str, float | int]]:
+    """Compute ranking scores for each agent configuration.
+
+    Scoring priorities (in order):
+    1. build_success (most important)
+    2. install_success (second most important)
+    3. patch_application_success (third)
+    4. target_version_achieved (fourth)
+
+    CRITICAL: If target_version_achieved success rate is 0%, the overall score is 0.
+
+    Returns a dict mapping agent configs to their performance metrics.
+    """
+    agent_scores: dict[AgentConfig, dict[str, float | int]] = {}
+
+    for agent_config, instances in grouped_completed.items():
+        completed_list = list(instances.values())
+
+        # Compute individual metrics
+        metrics_summary = _compute_metrics_summary(completed_list)
+
+        # Check if target_version_achieved is 0% - if so, score is automatically 0
+        target_success_rate = metrics_summary.get("target_version_achieved", {}).get(
+            "success_rate", 0
+        )
+
+        if target_success_rate == 0:
+            overall_score = 0.0
+        else:
+            # Compute weighted overall score (prioritizing key metrics)
+            weights = {
+                "build_success": 0.4,  # Most important
+                "install_success": 0.3,  # Second most important
+                "patch_application_success": 0.2,  # Third
+                "target_version_achieved": 0.1,  # Fourth
+            }
+
+            overall_score = 0.0
+            total_weight = 0.0
+
+            for metric_name, weight in weights.items():
+                if metric_name in metrics_summary:
+                    metric_info = metrics_summary[metric_name]
+                    overall_score += float(metric_info["success_rate"]) * weight
+                    total_weight += weight
+
+            if total_weight > 0:
+                overall_score /= total_weight
+
+        agent_scores[agent_config] = {
+            "overall_score": overall_score * 100,  # Convert to percentage
+            "total_evaluations": len(completed_list),
+            "patch_success_rate": (
+                metrics_summary.get("patch_application_success", {}).get(
+                    "success_rate", 0
+                )
+                * 100
+            ),
+            "target_success_rate": target_success_rate * 100,
+            "install_success_rate": (
+                metrics_summary.get("install_success", {}).get("success_rate", 0) * 100
+            ),
+            "build_success_rate": (
+                metrics_summary.get("build_success", {}).get("success_rate", 0) * 100
+            ),
+        }
+
+    return agent_scores
+
+
+def display_agent_leaderboard(
+    grouped: dict[AgentConfig, dict[InstanceID, EvaluationCompleted]],
+) -> None:
+    """Display the agent configuration leaderboard with detailed rankings table.
+
+    Only displays if there are multiple agent configurations to compare.
+    """
+    agent_configs = sorted(grouped.keys(), key=lambda x: x.key)
+    if len(agent_configs) <= 1:
+        return
+
+    st.header("🏆 Leaderboard")
+
+    agent_scores = compute_agent_scores(grouped)
+
+    # Detailed leaderboard table
+    sorted_agents = sorted(
+        agent_scores.items(), key=lambda x: x[1]["overall_score"], reverse=True
+    )
+
+    leaderboard_data: list[dict[str, Any]] = []
+    for rank, (agent_config, scores) in enumerate(sorted_agents, 1):
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
+        leaderboard_data.append(
+            {
+                "Rank": f"{medal}",
+                "Agent Configuration": agent_config.key,
+                "Overall Score": f"{scores['overall_score']:.1f}%",
+                "Total Evaluations": int(scores["total_evaluations"]),
+                "Patch Success": f"{scores['patch_success_rate']:.1f}%",
+                "Target Success": f"{scores['target_success_rate']:.1f}%",
+                "Install Success": f"{scores['install_success_rate']:.1f}%",
+                "Build Success": f"{scores['build_success_rate']:.1f}%",
+            }
+        )
+
+    if leaderboard_data:
+        df = pd.DataFrame(leaderboard_data)
+
+        # Best performing agent highlight
+        best_agent = sorted_agents[0][0]
+        best_score = sorted_agents[0][1]["overall_score"]
+        st.success(
+            f"🎯 **Top Performing Agent:** `{best_agent.key}` with "
+            f"**{best_score:.1f}%** overall success rate"
+        )
+
+        st.dataframe(df, width="stretch", hide_index=True)
+
+
 def get_status_emoji(metrics: MetricsReport) -> str:
     """Return a status emoji based on metrics.
 
@@ -424,15 +546,11 @@ def main() -> None:
             "to see metrics and analysis."
         )
         return
+    # Agent Configuration Leaderboard
+    display_agent_leaderboard(grouped)
 
-    st.subheader("📈 Metrics Breakdown")
+    # st.subheader("📈 Metrics Breakdown")
     if summary["metrics_summary"]:
-        metrics_chart = create_metrics_chart(summary["metrics_summary"])
-        if metrics_chart:
-            st.plotly_chart(  # type: ignore
-                metrics_chart, use_container_width=True, key="metrics_overall"
-            )
-
         # Per-agent-config breakdown charts
         agent_configs = sorted(grouped.keys(), key=lambda x: x.key)
         if agent_configs:
@@ -453,22 +571,6 @@ def main() -> None:
                     else:
                         st.info("No metrics data available for this agent.")
 
-        # Detailed metrics table
-        st.subheader("Detailed Metrics")
-        metrics_data: list[dict[str, Any]] = []
-        for field, info in summary["metrics_summary"].items():
-            metrics_data.append(
-                {
-                    "Metric": field.replace("_", " ").title(),
-                    "Success": info["success_count"],
-                    "Total": info["total_count"],
-                    "Success Rate": f"{info['success_rate'] * 100:.1f}%",
-                }
-            )
-
-        if metrics_data:
-            df = pd.DataFrame(metrics_data)
-            st.dataframe(df, width="stretch")  # type: ignore
     else:
         st.info("No metrics data available for analysis.")
 
@@ -486,6 +588,11 @@ def main() -> None:
             metrics = success.result.metrics
             status_emoji = get_status_emoji(metrics)
             with st.expander(f"{status_emoji} `{instance_id}`", expanded=False):
+                st.markdown(
+                    f"**Evaluation ID:** `{success.id}`  |  "
+                    " **Submission ID:** `{success.result.submission_id}`"
+                )
+                st.divider()
                 cols = st.columns(4)
                 metric_fields = [
                     ("Patch Application", metrics.patch_application_success),
