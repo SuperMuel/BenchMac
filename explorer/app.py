@@ -368,6 +368,14 @@ def main() -> None:
             ):
                 st.error(f.error)
 
+    # Check if no evaluation results are available
+    if not completed:
+        st.info(
+            "No evaluation results found. Please run some evaluations "
+            "to see metrics and analysis."
+        )
+        return
+
     st.subheader("📈 Metrics Breakdown")
     if summary["metrics_summary"]:
         metrics_chart = create_metrics_chart(summary["metrics_summary"])
