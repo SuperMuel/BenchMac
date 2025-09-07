@@ -337,7 +337,7 @@ def main(
                         extra_info={
                             "instance_id": task.instance_id,
                             "submission_id": submission_id,
-                            "model_name": task.agent_config.model_name,
+                            "agent_config": task.agent_config.model_dump(),
                         },
                     )
 

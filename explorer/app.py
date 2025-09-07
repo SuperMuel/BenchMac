@@ -314,9 +314,27 @@ def display_execution_steps(steps: list[CommandResult]) -> None:
                 st.code(step.stderr, language="bash")
 
 
+def get_swe_mini_inspector_command(
+    submission_id: str,
+    experiments_dir: Path = settings.experiments_dir,
+) -> tuple[str, bool]:
+    """Get the inspector command for a submission and check if trajectory file exists.
+
+    Returns:
+        A tuple of (command, file_exists)
+    """
+    trajectory_path = experiments_dir / "swe_agent_mini" / f"{submission_id}.traj.json"
+    trajectory_path_full = str(trajectory_path.resolve())
+    command = f"uvx --from mini-swe-agent mini-extra inspector {trajectory_path_full}"
+    return command, trajectory_path.exists()
+
+
 def main() -> None:
     st.set_page_config(
-        page_title="BenchMAC Results Explorer", page_icon="🔍", layout="wide"
+        page_title="BenchMAC Results Explorer",
+        page_icon="🔍",
+        layout="wide",
+        initial_sidebar_state="collapsed",
     )
 
     # Sidebar
@@ -464,6 +482,30 @@ def main() -> None:
 
                 st.subheader("Execution Steps")
                 display_execution_steps(success.result.execution.steps)
+
+                # Agent Inspector Section
+                if agent_config.scaffold == "swe-agent-mini":
+                    st.subheader("🔍 Agent Inspector")
+                    inspector_command, file_exists = get_swe_mini_inspector_command(
+                        str(success.result.submission_id)
+                    )
+
+                    if file_exists:
+                        st.text(
+                            "You can check the trajectory of this agent by running "
+                            "the following command:"
+                        )
+                        st.code(
+                            inspector_command,
+                            language="bash",
+                            wrap_lines=True,
+                        )
+                    else:
+                        st.markdown(
+                            f"<span style='color: grey;'>Trajectory file not found: "
+                            f"`{success.result.submission_id}.traj.json`</span>",
+                            unsafe_allow_html=True,
+                        )
 
 
 if __name__ == "__main__":
