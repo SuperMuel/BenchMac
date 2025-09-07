@@ -1,7 +1,7 @@
 import uuid
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NewType
 
-from pydantic import AwareDatetime, BaseModel, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 
 from bench_mac.models import Submission
 
@@ -11,11 +11,20 @@ class AgentConfig(BaseModel):
     Configuration for an agent.
     """
 
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     model_name: str = Field(
         ...,
         description="The name of the model to use for patch generation "
         "(e.g., 'mistral/devstral-medium-2507').",
     )
+
+    @property
+    def key(self) -> str:
+        return f"{self.model_name}"
+
+    def __hash__(self) -> int:
+        return hash(self.key)
 
 
 class ExperimentTask(BaseModel):
@@ -35,9 +44,12 @@ class ExperimentTask(BaseModel):
     )
 
 
+ExperimentID = NewType("ExperimentID", str)
+
+
 class CompletedExperiment(BaseModel):
-    id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
+    id: ExperimentID = Field(
+        default_factory=lambda: ExperimentID(str(uuid.uuid4())),
         description="Unique identifier for the experiment.",
     )
     status: Literal["completed"] = "completed"
@@ -48,8 +60,8 @@ class CompletedExperiment(BaseModel):
 
 
 class FailedExperiment(BaseModel):
-    id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
+    id: ExperimentID = Field(
+        default_factory=lambda: ExperimentID(str(uuid.uuid4())),
         description="Unique identifier for the experiment.",
     )
     status: Literal["failed"] = "failed"

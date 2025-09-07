@@ -1,7 +1,7 @@
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal, NewType, Self
 from urllib.parse import urlparse
 
 from pydantic import (
@@ -63,6 +63,9 @@ class InstanceCommands(BaseModel):
 # --- Core Benchmark & SUT Models ---
 
 
+InstanceID = NewType("InstanceID", str)
+
+
 class BenchmarkInstance(BaseModel):
     """
     A single migration task to evaluate.
@@ -73,7 +76,7 @@ class BenchmarkInstance(BaseModel):
     `data/dockerfiles/<instance_id>`.
     """
 
-    instance_id: str = Field(
+    instance_id: InstanceID = Field(
         ...,
         description="Unique identifier for the benchmark instance.",
         min_length=1,
@@ -194,10 +197,9 @@ class SubmissionMetadata(BaseModel):
         default_factory=utc_now,
         description="The timestamp when the submission was created.",
     )
-    model_name: str | None = Field(
-        default=None,
-        description="The name of the model used to generate this submission.",
-    )
+
+
+SubmissionID = NewType("SubmissionID", str)
 
 
 class Submission(BaseModel):
@@ -208,12 +210,12 @@ class Submission(BaseModel):
     implement the migration from source to target.
     """
 
-    submission_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
+    submission_id: SubmissionID = Field(
+        default_factory=lambda: SubmissionID(str(uuid.uuid4())),
         description="The unique identifier of the submission.",
     )
 
-    instance_id: str = Field(
+    instance_id: InstanceID = Field(
         ...,
         description="The unique identifier of the instance being solved.",
     )
@@ -355,8 +357,8 @@ class EvaluationReport(BaseModel):
     `MetricsReport` (interpretation).
     """
 
-    instance_id: str = Field(...)
-    submission_id: str = Field(
+    instance_id: InstanceID = Field(...)
+    submission_id: SubmissionID = Field(
         ..., description="The unique identifier of the submission that was evaluated."
     )
 
@@ -405,8 +407,8 @@ class EvaluationFailed(BaseModel):
     """
 
     status: Literal["failed"] = "failed"
-    instance_id: str
-    submission_id: str = Field(
+    instance_id: InstanceID
+    submission_id: SubmissionID = Field(
         ..., description="The unique identifier of the submission that failed."
     )
     started_at: AwareDatetime = Field(

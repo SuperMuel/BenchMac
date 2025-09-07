@@ -26,6 +26,12 @@ Repository = "https://github.com/SuperMuel/BenchMac"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/bench_mac", "experiments", "explorer"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/bench_mac", "experiments", "explorer", "README.md", "LICENSE"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
@@ -41,11 +47,7 @@ experiments = [
     "opentelemetry-sdk==1.25.0",
     "typer>=0.16.1",
 ]
-explorer = [
-    "pandas>=2.3.2",
-    "plotly>=6.3.0",
-    "streamlit>=1.49.1",
-]
+explorer = ["pandas>=2.3.2", "plotly>=6.3.0", "streamlit>=1.49.1"]
 
 [tool.coverage.run]
 source = ["src"]

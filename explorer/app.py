@@ -9,7 +9,7 @@ This app aggregates all evaluation results found under the configured
 import json
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import plotly.express as px  # type: ignore
@@ -22,8 +22,16 @@ from bench_mac.models import (
     EvaluationCompleted,
     EvaluationFailed,
     EvaluationResultAdapter,
+    InstanceID,
     MetricsReport,
     Submission,
+    SubmissionID,
+)
+from experiments.models import (
+    AgentConfig,
+    CompletedExperiment,
+    ExperimentResult,
+    FailedExperiment,
 )
 
 
@@ -58,15 +66,12 @@ def load_all_evaluations(
     for file_path, line_num, line in _iter_lines_from_jsonl_files(jsonl_files):
         try:
             outcome = EvaluationResultAdapter.validate_json(line)
-            if outcome.status == "completed":
-                successes.append(outcome)
-            elif outcome.status == "failed":
-                failures.append(outcome)
-            else:
-                st.warning(
-                    f"Unknown status in {file_path.name} line {line_num}: "
-                    f"{outcome.status}"
-                )
+            match outcome.status:
+                case "completed":
+                    successes.append(outcome)
+                case "failed":
+                    failures.append(outcome)
+
         except (json.JSONDecodeError, ValidationError, Exception) as e:
             st.warning(
                 f"Skipping invalid result in {file_path.name} line {line_num}: {e}"
@@ -76,85 +81,58 @@ def load_all_evaluations(
 
 
 @st.cache_data(show_spinner=False)
-def load_all_submissions(experiments_dir: Path) -> dict[str, Submission]:
-    """
-    Load all submissions keyed by submission_id from:
-    - experiments_dir/submissions/*.jsonl (legacy standalone Submission records)
-    - experiments_dir/results/*.jsonl (new ExperimentResult records with
-      embedded Submission)
-    """
+def load_all_experiments(experiments_dir: Path) -> list[ExperimentResult]:
+    """Load all experiment results (agent runs) from experiments_dir/results/*.jsonl."""
     if not experiments_dir.exists():
-        return {}
+        return []
 
-    mapping: dict[str, Submission] = {}
-
-    # 1) Legacy standalone submissions
-    submissions_dir = experiments_dir / "submissions"
-    if submissions_dir.exists():
-        for file_path, line_num, line in _iter_lines_from_jsonl_files(
-            submissions_dir.glob("*.jsonl")
-        ):
-            try:
-                sub = Submission.model_validate_json(line)
-                mapping[sub.submission_id] = sub
-            except (json.JSONDecodeError, ValidationError, Exception) as e:
-                st.warning(
-                    f"Skipping invalid submission in {file_path.name} "
-                    f"line {line_num}: {e}"
-                )
-
-    # 2) New results files with embedded submissions when completed
+    results: list[ExperimentResult] = []
     results_dir = experiments_dir / "results"
-    if results_dir.exists():
-        for file_path, line_num, line in _iter_lines_from_jsonl_files(
-            results_dir.glob("*.jsonl")
-        ):
-            try:
-                data = json.loads(line)
-                if data.get("status") == "completed" and "submission" in data:
-                    sub = Submission.model_validate(data["submission"])  # type: ignore[reportArgumentType]
-                    mapping[sub.submission_id] = sub
-            except (json.JSONDecodeError, ValidationError, Exception) as e:
-                st.warning(
-                    f"Skipping invalid experiment result in {file_path.name} "
-                    f"line {line_num}: {e}"
-                )
+    if not results_dir.exists():
+        return results
 
-    return mapping
+    for file_path, line_num, line in _iter_lines_from_jsonl_files(
+        results_dir.glob("*.jsonl")
+    ):
+        try:
+            data = json.loads(line)
+            result = ExperimentResult.model_validate(data)
+            results.append(result)
+        except (json.JSONDecodeError, ValidationError) as e:
+            st.warning(
+                f"Skipping invalid experiment result in {file_path.name} "
+                f"line {line_num}: {e}"
+            )
 
-
-def _latest_timestamp_for(success: EvaluationCompleted) -> float:
-    steps = success.result.execution.steps
-    if not steps:
-        return 0.0
-    return steps[-1].end_time.timestamp()
+    return results
 
 
 def group_completed_by_instance_and_model(
-    completed: list[EvaluationCompleted], submissions_by_id: dict[str, Submission]
-) -> dict[str, dict[str, EvaluationCompleted]]:
-    """Return latest completed evaluation per (instance_id, model_name) as
-    nested mapping model->instance->result.
-    """
-    grouped: dict[str, dict[str, EvaluationCompleted]] = {}
-    for s in completed:
-        sub = submissions_by_id.get(s.result.submission_id)
-        model_name = (
-            sub.metadata.model_name if sub and sub.metadata.model_name else "(unknown)"
-        )
-        inst_id = s.result.instance_id
+    completed: list[EvaluationCompleted],
+    agent_by_submission_id: dict[SubmissionID, AgentConfig],
+) -> dict[AgentConfig, dict[InstanceID, EvaluationCompleted]]:
+    """Return latest completed evaluation per (instance, AgentConfig).
 
-        bucket = grouped.setdefault(model_name, {})
+    The top-level key is a stable, human-readable AgentConfig label.
+    """
+    grouped: dict[AgentConfig, dict[InstanceID, EvaluationCompleted]] = {}
+    for s in completed:
+        inst_id = s.result.instance_id
+        submission_id = s.result.submission_id
+
+        # Determine agent_config for this submission
+        agent_cfg = agent_by_submission_id.get(submission_id)
+        assert agent_cfg is not None
+
+        bucket = grouped.setdefault(agent_cfg, {})
         current = bucket.get(inst_id)
-        if current is None or _latest_timestamp_for(s) >= _latest_timestamp_for(
-            current
-        ):
+        if current is None or s.ended_at >= current.ended_at:
             bucket[inst_id] = s
     return grouped
 
 
 def extract_summary_data(
-    grouped_completed: dict[str, dict[str, EvaluationCompleted]],
+    grouped_completed: dict[AgentConfig, dict[InstanceID, EvaluationCompleted]],
     harness_failures_list: list[EvaluationFailed],
 ) -> dict[str, Any]:
     """Compute top-level summary from grouped completed and harness failures.
@@ -356,11 +334,27 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    with st.spinner("Loading evaluations and submissions..."):
+    with st.spinner("Loading evaluations and experiments..."):
         completed, harness_failures_list = load_all_evaluations(evaluations_dir)
-        submissions_by_id = load_all_submissions(experiments_dir)
+        experiments = load_all_experiments(experiments_dir)
 
-    grouped = group_completed_by_instance_and_model(completed, submissions_by_id)
+    # Build lookups from experiments
+    submissions_by_id: dict[SubmissionID, Submission] = {}
+    agent_by_submission_id: dict[SubmissionID, AgentConfig] = {}
+    for er in experiments:
+        match er.root.status:
+            case "completed":
+                er_completed = cast(CompletedExperiment, er.root)
+                submissions_by_id[er_completed.submission.submission_id] = (
+                    er_completed.submission
+                )
+                agent_by_submission_id[er_completed.submission.submission_id] = (
+                    er_completed.task.agent_config
+                )
+            case FailedExperiment():
+                continue
+
+    grouped = group_completed_by_instance_and_model(completed, agent_by_submission_id)
     summary = extract_summary_data(grouped, harness_failures_list)
 
     # Harness failures section
@@ -382,13 +376,14 @@ def main() -> None:
                 metrics_chart, use_container_width=True, key="metrics_overall"
             )
 
-        # Per-agent breakdown charts
-        model_names = sorted(grouped.keys())
-        if model_names:
-            st.subheader("📊 Metrics Breakdown by Agent")
-            tabs = st.tabs(model_names)
-            for tab, model_name in zip(tabs, model_names, strict=True):
-                by_instance = grouped[model_name]
+        # Per-agent-config breakdown charts
+        agent_configs = sorted(grouped.keys(), key=lambda x: x.key)
+        if agent_configs:
+            st.subheader("📊 Metrics Breakdown by Agent Configuration")
+            tab_labels = [config.key for config in agent_configs]
+            tabs = st.tabs(tab_labels)
+            for tab, agent_config in zip(tabs, agent_configs, strict=True):
+                by_instance = grouped[agent_config]
                 per_agent_summary = _compute_metrics_summary(list(by_instance.values()))
                 agent_chart = create_metrics_chart(per_agent_summary)
                 with tab:
@@ -396,7 +391,7 @@ def main() -> None:
                         st.plotly_chart(  # type: ignore
                             agent_chart,
                             use_container_width=True,
-                            key=f"metrics_agent_{model_name}",
+                            key=f"metrics_agent_{agent_config}",
                         )
                     else:
                         st.info("No metrics data available for this agent.")
@@ -420,13 +415,13 @@ def main() -> None:
     else:
         st.info("No metrics data available for analysis.")
 
-    # Detailed results by agent configuration (model_name)
-    st.header("🔬 Results by Agent")
+    # Detailed results by agent configuration
+    st.header("🔬 Results by Agent Configuration")
 
-    model_names = sorted(grouped.keys())
-    for model_name in model_names:
-        st.subheader(f"🤖 `{model_name}`")
-        instances_map = grouped[model_name]
+    agent_configs = sorted(grouped.keys(), key=lambda x: x.key)
+    for agent_config in agent_configs:
+        st.subheader(f"🤖 `{agent_config.key}`")
+        instances_map = grouped[agent_config]
 
         st.write(f"{len(instances_map)} result(s)")
 

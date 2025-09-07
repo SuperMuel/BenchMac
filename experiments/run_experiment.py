@@ -24,8 +24,9 @@ from rich.progress import Progress
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import (
     BenchmarkInstance,
+    InstanceID,
     Submission,
-    SubmissionMetadata,
+    SubmissionID,
 )
 from experiments.environment import InstanceEnv
 from experiments.models import (
@@ -168,7 +169,7 @@ def filter_completed_tasks(
     Filter out tasks that have already been completed based on old submissions.
 
     A task is considered completed if there's already a completed result with the same
-    instance_id and model_name combination.
+    instance_id and the same full AgentConfig.
 
     Args:
         tasks: List of tasks to potentially run
@@ -177,23 +178,26 @@ def filter_completed_tasks(
     Returns:
         List of tasks that haven't been completed yet
     """
-    # Create a set of completed (instance_id, model_name) combinations
-    completed_combinations = {
-        (
-            r.root.task.instance_id,  # type: ignore[reportAttributeAccessIssue]
-            r.root.task.agent_config.model_name,  # type: ignore[reportAttributeAccessIssue]
-        )
-        for r in old_results
-        if getattr(r.root, "status", None) == "completed"
-    }
+    # Create a set of completed (instance_id, agent_config_key) combinations
+    completed_combinations = set()
+    for r in old_results:
+        if r.root.status != "completed":
+            continue
+        try:
+            instance_id = r.root.task.instance_id
+            key = r.root.task.agent_config.key
+            completed_combinations.add((instance_id, key))
+        except Exception:
+            # Be defensive: if structure is unexpected, skip that result
+            continue
 
     # Filter tasks that haven't been completed
     filtered_tasks: list[ExperimentTask] = []
     skipped_count = 0
 
     for task in tasks:
-        task_combination = (task.instance_id, task.agent_config.model_name)
-        if task_combination in completed_combinations:
+        task_key = (task.instance_id, task.agent_config.key)
+        if task_key in completed_combinations:
             console.print(
                 f"[blue]Skipping already completed task: {task.instance_id} ({task.agent_config.model_name})[/blue]"
             )
@@ -340,12 +344,9 @@ def main(
                     # Generate patch and write completed result
                     model_patch = env.diff_with_base_commit()
                     submission = Submission(
-                        submission_id=submission_id,
-                        instance_id=task.instance_id,
+                        submission_id=SubmissionID(submission_id),
+                        instance_id=InstanceID(task.instance_id),
                         model_patch=model_patch,
-                        metadata=SubmissionMetadata(
-                            model_name=task.agent_config.model_name
-                        ),
                     )
                     ended_at = datetime.now(UTC)
                     completed = CompletedExperiment(
