@@ -13,6 +13,7 @@ from typing import Any, cast
 
 import pandas as pd
 import plotly.express as px  # type: ignore
+import plotly.graph_objects as go  # type: ignore
 import streamlit as st
 from pydantic import ValidationError
 
@@ -250,6 +251,122 @@ def create_metrics_chart(metrics_summary: dict[str, Any]) -> Any:
 
     fig.update_traces(textposition="outside")  # type: ignore
     fig.update_layout(yaxis_title="Success Rate (%)", xaxis_title="", showlegend=False)  # type: ignore
+
+    return fig
+
+
+def create_agent_radar_chart(
+    grouped_completed: dict[AgentConfig, dict[InstanceID, EvaluationCompleted]],
+) -> Any:
+    """Create a radar chart showing all agent configurations'
+    metrics on the same graph."""
+    if not grouped_completed:
+        return None
+
+    metrics_names = {
+        "patch_application_success": "Patch Application",
+        "target_version_achieved": "Target Version Achieved",
+        "install_success": "Install Success",
+        "build_success": "Build Success",
+    }
+
+    # Prepare data for radar chart
+    metrics = list(metrics_names.keys())
+    metric_labels = list(metrics_names.values())
+
+    fig = go.Figure()  # type: ignore[reportUnknownReturnType]
+
+    # Color palette for different agents
+    colors = [
+        "#1f77b4",  # Blue
+        "#ff7f0e",  # Orange
+        "#2ca02c",  # Green
+        "#d62728",  # Red
+        "#9467bd",  # Purple
+        "#8c564b",  # Brown
+        "#e377c2",  # Pink
+        "#7f7f7f",  # Gray
+    ]
+
+    for i, (agent_config, instances) in enumerate(grouped_completed.items()):
+        completed_list = list(instances.values())
+        if not completed_list:
+            continue
+
+        metrics_summary = _compute_metrics_summary(completed_list)
+
+        # Extract success rates for each metric
+        values = []
+        for metric in metrics:
+            if metric in metrics_summary:
+                success_rate = float(metrics_summary[metric]["success_rate"]) * 100
+            else:
+                success_rate = 0.0
+            values.append(success_rate)
+
+        # Add the first value again to close the radar chart
+        values.append(values[0])
+        categories = [*metric_labels, metric_labels[0]]
+
+        color = colors[i % len(colors)]
+
+        # Convert hex color to rgba for transparency
+        if color.startswith("#"):
+            # Convert hex to rgba with 0.3 alpha
+            r = int(color[1:3], 16)
+            g = int(color[3:5], 16)
+            b = int(color[5:7], 16)
+            fill_color = f"rgba({r}, {g}, {b}, 0.3)"
+        else:
+            fill_color = color
+
+        fig.add_trace(
+            go.Scatterpolar(  # type: ignore[reportUnknownArgumentType]
+                r=values,
+                theta=categories,
+                name=agent_config.key,
+                line={"color": color, "width": 2},
+                fill="toself",
+                fillcolor=fill_color,
+                hovertemplate="<b>%{fullData.name}</b><br>"
+                + "%{theta}: %{r:.1f}%<extra></extra>",
+            )
+        )
+
+    if not fig.data:
+        return None
+
+    fig.update_layout(  # type: ignore
+        polar={
+            "radialaxis": {
+                "visible": True,
+                "range": [0, 100],
+                "tickfont": {"size": 10},
+                "title": {"text": "Success Rate (%)", "font": {"size": 12}},
+            },
+            "angularaxis": {
+                "tickfont": {"size": 11},
+                "rotation": 90,
+                "direction": "clockwise",
+            },
+        },
+        showlegend=True,
+        legend={
+            "orientation": "h",
+            "yanchor": "top",
+            "y": -0.1,
+            "xanchor": "center",
+            "x": 0.5,
+        },
+        title={
+            "text": "Agent Configuration Performance Comparison",
+            "x": 0.5,
+            "xanchor": "center",
+            "font": {"size": 16},
+        },
+        height=600,
+        margin={"t": 100, "b": 100, "l": 80, "r": 80},
+    )
 
     return fig
 
@@ -549,30 +666,21 @@ def main() -> None:
     # Agent Configuration Leaderboard
     display_agent_leaderboard(grouped)
 
-    # st.subheader("📈 Metrics Breakdown")
-    if summary["metrics_summary"]:
-        # Per-agent-config breakdown charts
-        agent_configs = sorted(grouped.keys(), key=lambda x: x.key)
-        if agent_configs:
-            st.subheader("📊 Metrics Breakdown by Agent Configuration")
-            tab_labels = [config.key for config in agent_configs]
-            tabs = st.tabs(tab_labels)
-            for tab, agent_config in zip(tabs, agent_configs, strict=True):
-                by_instance = grouped[agent_config]
-                per_agent_summary = _compute_metrics_summary(list(by_instance.values()))
-                agent_chart = create_metrics_chart(per_agent_summary)
-                with tab:
-                    if agent_chart:
-                        st.plotly_chart(  # type: ignore
-                            agent_chart,
-                            use_container_width=True,
-                            key=f"metrics_agent_{agent_config}",
-                        )
-                    else:
-                        st.info("No metrics data available for this agent.")
+    # Spider graph for agent comparison
+    if grouped:
+        st.subheader("🕸️ Metrics Breakdown by Agent Configuration")
+        radar_chart = create_agent_radar_chart(grouped)
+        if radar_chart:
+            st.plotly_chart(  # type: ignore
+                radar_chart,
+                use_container_width=True,
+                key="agent_radar_chart",
+            )
 
+        else:
+            st.info("No metrics data available for analysis.")
     else:
-        st.info("No metrics data available for analysis.")
+        st.info("No agent configuration data available for analysis.")
 
     # Detailed results by agent configuration
     st.header("🔬 Results by Agent Configuration")
