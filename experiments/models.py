@@ -13,6 +13,8 @@ class AgentConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    scaffold: Literal["swe-agent-mini"] = "swe-agent-mini"
+
     model_name: str = Field(
         ...,
         description="The name of the model to use for patch generation "
@@ -21,7 +23,7 @@ class AgentConfig(BaseModel):
 
     @property
     def key(self) -> str:
-        return f"{self.model_name}"
+        return f"{self.scaffold}/{self.model_name}"
 
     def __hash__(self) -> int:
         return hash(self.key)
