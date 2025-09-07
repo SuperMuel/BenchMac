@@ -24,15 +24,13 @@ from rich.text import Text
 from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
-    EvaluationID,
     EvaluationResult,
     EvaluationResultAdapter,
     EvaluationTask,
-    SubmissionID,
     utc_now,
 )
 from bench_mac.runner import BenchmarkRunner
-from bench_mac.utils import load_instances
+from bench_mac.utils import collect_network_error_details, load_instances
 from bench_mac.version import harness_version
 from experiments.models import (
     CompletedExperiment,
@@ -334,46 +332,6 @@ def _load_previous_evaluation_results(
     return completed_submission_ids
 
 
-def _collect_network_error_details(
-    eval_results: list[EvaluationResult],
-) -> list[tuple[EvaluationID, SubmissionID, list[str]]]:
-    """Return list of tuples with evaluation_id, submission_id, and affected cmds."""
-    network_error_keywords = [
-        "socket timeout",
-        "econnreset",
-        "etimedout",
-        "network is unreachable",
-        "failed to fetch",
-        "proxy",
-    ]
-
-    results: list[tuple[EvaluationID, SubmissionID, list[str]]] = []
-
-    for outcome in eval_results:
-        if outcome.status != "completed":
-            continue
-
-        evaluation_id = outcome.id
-        submission_id = outcome.result.submission_id
-
-        affected_commands: list[str] = []
-
-        # Check execution steps for network errors
-        for step in outcome.result.execution.steps:
-            if (
-                any(
-                    keyword in step.stderr.lower() for keyword in network_error_keywords
-                )
-                and step.command not in affected_commands
-            ):
-                affected_commands.append(step.command)
-
-        if affected_commands:
-            results.append((evaluation_id, submission_id, affected_commands))
-
-    return results
-
-
 def _print_evaluation_summary(
     outcomes: list[EvaluationResult],
     run_id: str | None = None,
@@ -496,7 +454,7 @@ def _print_evaluation_summary(
     console.print(Panel(metrics_table, expand=False))
     console.print()
 
-    network_error_details = _collect_network_error_details(outcomes)
+    network_error_details = collect_network_error_details(outcomes)
     if network_error_details:
         details_table = Table(title="Network errors by evaluation", show_header=True)
         details_table.add_column("Evaluation ID", style="bold cyan", max_width=12)

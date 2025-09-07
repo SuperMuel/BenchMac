@@ -27,6 +27,7 @@ from bench_mac.models import (
     Submission,
     SubmissionID,
 )
+from bench_mac.utils import collect_network_error_details
 from experiments.models import (
     AgentConfig,
     CompletedExperiment,
@@ -394,6 +395,27 @@ def main() -> None:
                 expanded=False,
             ):
                 st.error(f.error)
+
+    # Network error detection
+    network_error_details = collect_network_error_details(completed)  # type: ignore[arg-type]
+    if network_error_details:
+        st.header("⚠️ Network Errors Detected")
+        st.warning(
+            "One or more evaluations failed due to potential network issues "
+            "(e.g., 'Socket timeout', 'Connection reset', 'Network is unreachable'). "
+            "These failures may be transient and not reflective of the "
+            "submission's quality. Consider re-running the evaluation with a "
+            "stable network connection."
+        )
+
+        with st.expander("📋 Network Error Details", expanded=False):
+            for evaluation_id, submission_id, commands in network_error_details:
+                st.write(f"**Evaluation:** `{evaluation_id}`")
+                st.write(f"**Submission:** `{submission_id}`")
+                st.write("**Affected Commands:**")
+                for cmd in commands:
+                    st.code(cmd, language="bash")
+                st.divider()
 
     # Check if no evaluation results are available
     if not completed:
