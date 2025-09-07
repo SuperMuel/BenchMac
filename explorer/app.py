@@ -319,6 +319,17 @@ def main() -> None:
         page_title="BenchMAC Results Explorer", page_icon="🔍", layout="wide"
     )
 
+    # Sidebar
+    with st.sidebar:
+        st.header("🔄 Data Controls")
+        if st.button(
+            "🔄 Reload Data",
+            help="Clear cache and reload all data",
+            width="stretch",
+        ):
+            st.cache_data.clear()
+            st.rerun()
+
     st.title("🔍 BenchMAC Results Explorer")
 
     evaluations_dir = settings.evaluations_dir
