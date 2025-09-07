@@ -24,6 +24,7 @@ from rich.text import Text
 from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
+    EvaluationCompleted,
     EvaluationResult,
     EvaluationResultAdapter,
     EvaluationTask,
@@ -487,7 +488,152 @@ def _print_evaluation_summary(
         console.print(combined_panel)
 
 
-# --- Main CLI Command (The Dispatcher) ---
+# --- Main CLI Commands ---
+
+
+@app.command
+def remove_eval(
+    evaluation_id: str,
+    *,
+    evaluations_dir: Path | None = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Remove an evaluation by its ID from evaluation results files.
+
+    This command searches through all JSONL files in the evaluations directory
+    and removes the evaluation with the specified ID. Use --dry-run to
+    only show what would be removed without making changes.
+
+    Args:
+        evaluation_id: The unique identifier of the evaluation to remove.
+        evaluations_dir: Directory containing evaluation results
+            (defaults to settings.evaluations_dir).
+        dry_run: If True, only show what would be removed without making changes.
+            Defaults to False.
+    """
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+    evaluations_dir = evaluations_dir or settings.evaluations_dir
+
+    if not evaluations_dir.exists():
+        logger.error(
+            f"❌ Error: Evaluations directory not found at '{evaluations_dir}'"
+        )
+        return
+
+    # Find all JSONL files
+    jsonl_files = list(evaluations_dir.rglob("*.jsonl"))
+    if not jsonl_files:
+        logger.info(f"No JSONL files found in {evaluations_dir}")
+        return
+
+    # Search for the evaluation to remove
+    found_evaluations: list[tuple[Path, int, str, EvaluationResult]] = []
+
+    for file_path in jsonl_files:
+        try:
+            with file_path.open("r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        evaluation = EvaluationResultAdapter.validate_json(line)
+                        if evaluation.id == evaluation_id:
+                            found_evaluations.append(
+                                (file_path, line_num, line, evaluation)
+                            )
+                    except Exception:
+                        # Skip invalid lines, they'll be handled by the main validation
+                        continue
+        except Exception as e:
+            logger.warning(f"Unable to read {file_path}: {e}")
+
+    if not found_evaluations:
+        console.print(
+            f"[yellow]⚠️ No evaluation found with ID: {evaluation_id}[/yellow]"
+        )
+        return
+
+    # Display what will be removed
+    console.print(
+        f"\n[bold blue]Found {len(found_evaluations)} evaluation(s) "
+        f"with ID: {evaluation_id}[/bold blue]\n"
+    )
+
+    table = Table(title="Evaluations to Remove", show_header=True)
+    table.add_column("File", style="cyan")
+    table.add_column("Line", style="magenta", justify="right")
+    table.add_column("Status", style="green")
+    table.add_column("Instance ID", style="yellow")
+    table.add_column("Submission ID", style="blue")
+
+    for file_path, line_num, _, evaluation in found_evaluations:
+        status = evaluation.status
+        if isinstance(evaluation, EvaluationCompleted):
+            instance_id = evaluation.result.instance_id
+            submission_id = evaluation.result.submission_id
+        else:  # EvaluationFailed
+            instance_id = evaluation.instance_id
+            submission_id = evaluation.submission_id
+
+        table.add_row(
+            str(file_path.relative_to(evaluations_dir)),
+            str(line_num),
+            status,
+            instance_id,
+            submission_id[:8] + "..." if len(submission_id) > 8 else submission_id,
+        )
+
+    console.print(table)
+
+    if dry_run:
+        console.print(
+            f"\n[yellow]🧪 DRY RUN: Would remove "
+            f"{len(found_evaluations)} evaluation(s)[/yellow]"
+        )
+        console.print(
+            "[yellow]Use --dry-run=false to actually perform the removal[/yellow]"
+        )
+        return
+
+    # Perform actual removal
+    console.print(f"\n[red]🗑️ Removing {len(found_evaluations)} evaluation(s)...[/red]")
+
+    removed_count = 0
+    for file_path, line_num, _, _ in found_evaluations:
+        try:
+            # Read all lines from the file
+            with file_path.open("r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # Remove the specific line (line_num is 1-indexed, so subtract 1)
+            if 1 <= line_num <= len(lines):
+                del lines[line_num - 1]
+
+                # Write the file back without the removed line
+                with file_path.open("w", encoding="utf-8") as f:
+                    f.writelines(lines)
+
+                removed_count += 1
+                console.print(
+                    "✅ Removed evaluation from "
+                    f"{file_path.relative_to(evaluations_dir)} "
+                    f"line {line_num}"
+                )
+            else:
+                logger.warning(f"Line {line_num} not found in {file_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to remove evaluation from {file_path}: {e}")
+
+    console.print(
+        f"\n[green]✅ Successfully removed {removed_count} evaluation(s)[/green]"
+    )
 
 
 @app.command
