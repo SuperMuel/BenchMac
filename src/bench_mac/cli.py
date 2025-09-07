@@ -90,20 +90,36 @@ def _load_experiment_results(
 
 
 def _prepare_tasks(
-    results_dir: Path,
+    *,
+    experiments_results_dir: Path,
+    evaluations_dir: Path | None = None,
     instances_path: Path,
     filter_ids: list[str] | None = None,
 ) -> Generator[EvaluationTask, None, None]:
     """Matches experiment results to instances and yields tasks to be run.
 
     Only processes completed experiments and shows warnings for failed ones.
+    Skips submissions that have already been evaluated successfully.
     """
     logger.info("Loading benchmark instances...")
     instances_map = load_instances(instances_path)
     logger.info(f"Loaded {len(instances_map)} instances.")
 
+    # Load previous evaluation results to avoid re-running completed submissions
+    if evaluations_dir is None:
+        evaluations_dir = settings.evaluations_dir
+
+    logger.info(f"Loading previous evaluation results from: {evaluations_dir}")
+    completed_submission_ids = _load_previous_evaluation_results(evaluations_dir)
+    if completed_submission_ids:
+        logger.info(
+            f"Found {len(completed_submission_ids)} previously completed evaluations"
+        )
+
     logger.debug("Loading and matching experiment results...")
-    for experiment_result, file_path, line_num in _load_experiment_results(results_dir):
+    for experiment_result, file_path, line_num in _load_experiment_results(
+        experiments_results_dir
+    ):
         if experiment_result.is_failed:
             failed_experiment = experiment_result.root
             assert isinstance(failed_experiment, FailedExperiment)
@@ -117,6 +133,15 @@ def _prepare_tasks(
         completed_experiment = experiment_result.root
         assert isinstance(completed_experiment, CompletedExperiment)
         submission = completed_experiment.submission
+
+        # Check if this submission has already been evaluated successfully
+        if submission.submission_id in completed_submission_ids:
+            logger.debug(
+                f"⏭️ Skipping already evaluated submission {submission.submission_id} "
+                f"for instance {submission.instance_id} "
+                f"(from {file_path.name} line {line_num})"
+            )
+            continue
 
         if filter_ids and submission.instance_id not in filter_ids:
             continue
@@ -237,7 +262,7 @@ def _run_non_interactive(
     return outcomes
 
 
-def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
+def _load_eval_results_from_file(results_file: Path) -> list[EvaluationResult]:
     """Load EvaluationResult objects from a JSONL results file."""
     outcomes: list[EvaluationResult] = []
     if not results_file.exists():
@@ -258,6 +283,53 @@ def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
                 )
 
     return outcomes
+
+
+def _load_previous_evaluation_results(
+    evaluations_dir: Path,
+) -> set[str]:
+    """
+    Load all previous evaluation results from JSONL files in the evaluations directory
+    and return the set of submission IDs that have completed evaluations.
+
+    Only considers completed evaluations (failed ones should be re-run).
+    """
+    completed_submission_ids: set[str] = set()
+
+    if not evaluations_dir.exists():
+        logger.debug(f"Evaluations directory not found: {evaluations_dir}")
+        return completed_submission_ids
+
+    # Find all JSONL files recursively
+    jsonl_files = list(evaluations_dir.rglob("*.jsonl"))
+    if not jsonl_files:
+        logger.debug(
+            f"No JSONL files found in evaluations directory: {evaluations_dir}"
+        )
+        return completed_submission_ids
+
+    logger.debug(
+        f"Loading previous evaluation results from {len(jsonl_files)} files..."
+    )
+
+    for results_file in jsonl_files:
+        try:
+            results = _load_eval_results_from_file(results_file)
+            for result in results:
+                if result.status == "completed":
+                    # Extract submission_id from the completed evaluation
+                    submission_id = result.result.submission_id
+                    completed_submission_ids.add(submission_id)
+                # Skip failed evaluations - they should be re-run
+        except Exception as e:
+            logger.warning(
+                f"⚠️ Warning: Failed to load results from {results_file}: {e}"
+            )
+
+    logger.debug(
+        f"Found {len(completed_submission_ids)} previously completed evaluations"
+    )
+    return completed_submission_ids
 
 
 def _collect_network_error_details(
@@ -456,7 +528,7 @@ def _print_evaluation_summary(
 
 @app.command
 def eval(
-    results_dir: Path = settings.experiments_dir / "results",
+    experiments_dir: Path = settings.experiments_dir / "results",
     *,
     output_file: Path | None = None,
     instances_file: Path | None = None,
@@ -487,8 +559,8 @@ def eval(
     # Configure logging for the main process
     setup_main_process_logging(run_id, logs_dir)
 
-    if not results_dir.exists():
-        logger.error(f"❌ Error: Results directory not found at '{results_dir}'")
+    if not experiments_dir.exists():
+        logger.error(f"❌ Error: Results directory not found at '{experiments_dir}'")
         return
 
     logger.info(
@@ -499,7 +571,7 @@ def eval(
     # 1. Prepare tasks and output path
     tasks = list(
         _prepare_tasks(
-            results_dir=results_dir,
+            experiments_results_dir=experiments_dir,
             instances_path=instances_file or settings.instances_file,
             filter_ids=instance_id,
         )
@@ -551,14 +623,14 @@ def summary(results_file: Path) -> None:
 
     logger.info(f"Loading results from: {results_file}")
 
-    # Load outcomes from file
-    outcomes = _load_outcomes_from_file(results_file)
+    # Load eval_results from file
+    eval_results = _load_eval_results_from_file(results_file)
 
-    if not outcomes:
+    if not eval_results:
         logger.error("❌ No valid results found in file")
         return
 
-    logger.info(f"Loaded {len(outcomes)} results")
+    logger.info(f"Loaded {len(eval_results)} results")
 
     # Extract run info from file path if possible
     run_id = None
@@ -569,7 +641,7 @@ def summary(results_file: Path) -> None:
 
     # Print summary
     _print_evaluation_summary(
-        outcomes=outcomes,
+        outcomes=eval_results,
         run_id=run_id,
         results_file=results_file,
         logs_dir=logs_dir,
