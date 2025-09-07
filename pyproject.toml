@@ -198,6 +198,7 @@ addopts = [
 
 [project.scripts]
 benchmac = "bench_mac.cli:app"
+explorer = "bench_mac.explorer_entry:main"
 
 [tool.uv]
 default-groups = "all"
