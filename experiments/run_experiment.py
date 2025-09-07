@@ -2,21 +2,13 @@
 # this is temporary a Typer app, but we'll fusion this with the main CLI later
 
 import json
-import os
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from textwrap import dedent
 
-import litellm
 import typer
-import yaml
 from dotenv import load_dotenv
-from minisweagent.agents.default import DefaultAgent
-from minisweagent.models.litellm_model import LitellmModel
-from minisweagent.run.utils.save import (
-    save_traj,  # type: ignore[reportUnknownReturnType]
-)
 from pydantic import ValidationError
 from rich.console import Console
 from rich.progress import Progress
@@ -28,7 +20,8 @@ from bench_mac.models import (
     Submission,
     SubmissionID,
 )
-from experiments.environment import InstanceEnv
+from experiments.agents.base import BaseAgent
+from experiments.agents.mini_swe_agent.agent import MiniSweAgent
 from experiments.models import (
     AgentConfig,
     CompletedExperiment,
@@ -39,24 +32,11 @@ from experiments.models import (
 from src.bench_mac.config import settings
 from src.bench_mac.utils import load_instances
 
+load_dotenv()
+
 # --- Configuration ---
 app = typer.Typer(add_completion=False)
 console = Console()
-
-# Default model names
-DEFAULT_MODEL_NAMES = ["mistral/devstral-medium-2507"]
-
-
-load_dotenv()
-# assert os.getenv("LANGSMITH_API_KEY"), "LANGSMITH_API_KEY is not set"
-# litellm.callbacks = ["langsmith"]
-# litellm.langsmith_batch_size = 1
-
-litellm.callbacks = ["logfire"]
-
-
-assert os.getenv("MISTRAL_API_KEY"), "MISTRAL_API_KEY is not set"
-settings.initialize_directories()
 
 
 def get_results_file_path(experiments_dir: Path, now: datetime | None = None) -> Path:
@@ -67,43 +47,6 @@ def get_results_file_path(experiments_dir: Path, now: datetime | None = None) ->
     results_dir.mkdir(parents=True, exist_ok=True)
 
     return results_dir / f"results_{now.strftime('%Y-%m-%d_%H-%M-%S')}.jsonl"
-
-
-def generate_task_prompt(instance: BenchmarkInstance) -> str:
-    """Generates a detailed, structured prompt for the agent."""
-    return dedent(
-        f"""\
-        ## Goal
-        Migrate the application from Angular version {instance.source_angular_version} to {instance.target_angular_version}.
-
-        ## Context
-        - The codebase is available in `/app/project`
-        - The project is already cloned in the current directory. You do not need to clone it.
-        - NPM is already installed.
-        - Commands hints:
-            - Install dependencies: {instance.commands.install}
-            - Build the project: {instance.commands.build}
-
-        ## Rules
-        Do not change any application logic or functionality. Your focus is only on making the code compatible with the target Angular version.
-
-        ## Recommended Workflow
-
-        This workflows should be done step-by-step so that you can iterate on your changes and any possible problems.
-
-        1. Analyze the codebase by finding and reading relevant files
-        2. Edit the source code or run any command to migrate the codebase to the target Angular version
-        3. Test the application by running the build command
-        4. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
-        Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>
-        """
-    )
-
-
-AGENT_CONFIG = yaml.safe_load(Path("experiments/agent_config.yaml").read_text())
-
-
-# --- Patch Generation Task Models ---
 
 
 def collect_tasks(
@@ -211,6 +154,63 @@ def filter_completed_tasks(
     return filtered_tasks
 
 
+def process_single_task(
+    task: ExperimentTask,
+    agent: BaseAgent,
+    submission_id: str,
+    dt_factory: Callable[[], datetime] | None = None,
+) -> CompletedExperiment | FailedExperiment:
+    """
+    Process a single experiment task by running the agent and returning the result.
+
+    Args:
+        task: The experiment task to process
+        instance: The benchmark instance to process
+        submission_id: Unique identifier for the submission
+        started_at: When the task processing started
+
+    Returns:
+        Either a CompletedExperiment or FailedExperiment result
+    """
+    dt_factory = dt_factory or (lambda: datetime.now(UTC))
+    started_at = dt_factory()
+
+    try:
+        # Run the agent
+        console.print("Running agent")
+        model_patch = agent.run(submission_id=submission_id)
+        submission = Submission(
+            submission_id=SubmissionID(submission_id),
+            instance_id=InstanceID(task.instance_id),
+            model_patch=model_patch,
+        )
+        completed = CompletedExperiment(
+            task=task,
+            submission=submission,
+            started_at=started_at,
+            ended_at=dt_factory(),
+        )
+        return completed
+    except Exception as e:
+        console.print(
+            f"[bold red]Error processing {task.instance_id} ({task.agent_config.model_name}): {e}[/bold red]"
+        )
+        failed = FailedExperiment(
+            task=task,
+            error=str(e),
+            started_at=started_at,
+            ended_at=dt_factory(),
+        )
+        return failed
+
+
+def create_agent(instance: BenchmarkInstance, agent_config: AgentConfig) -> BaseAgent:
+    return MiniSweAgent(instance, agent_config, DockerManager())
+
+
+DEFAULT_MODEL_NAMES = ["mistral/devstral-medium-2507"]
+
+
 @app.command()
 def main(
     model_names: list[str] = typer.Option(  # noqa: B008
@@ -237,6 +237,7 @@ def main(
     """
     Runs an LLM-powered agent on BenchMAC instances and generates a submission file.
     """
+    settings.initialize_directories()
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
 
     # Create agent configurations from model names
@@ -287,93 +288,40 @@ def main(
         console.print("No tasks to process. Exiting...")
         return
 
-    docker_manager = DockerManager()
-
-    with Progress(console=console) as progress:
-        task_progress = progress.add_task("[cyan]Processing Tasks...", total=len(tasks))
+    try:
+        with Progress(console=console) as progress:
+            task_progress = progress.add_task(
+                "[cyan]Processing Tasks...", total=len(tasks)
+            )
 
         for task in tasks:
             instance = instances[task.instance_id]
             submission_id = str(uuid.uuid4())
-            started_at = datetime.now(UTC)
             progress.update(
                 task_progress,
                 description=f"[cyan]Processing: {task.instance_id} ({task.agent_config.model_name})[/cyan]",
             )
 
-            # Create environment
-            console.print("Creating environment")
-            with InstanceEnv(instance, docker_manager) as env:
-                console.print("Environment created")
-                test_env = env.execute("ls -la")
-                console.print(f"Test environment: {test_env}")
-                assert "package.json" in str(test_env.get("output", "")), (
-                    "package.json not found in the environment. The repository is not cloned correctly, or the current directory is not the project directory."
-                )
+            agent = create_agent(instance, task.agent_config)
 
-                console.print("Creating model")
-                model = LitellmModel(model_name=task.agent_config.model_name)
-                console.print("Creating agent")
-                agent = DefaultAgent(
-                    model,
-                    env,
-                    **AGENT_CONFIG["agent"],
-                )
-                task_prompt = generate_task_prompt(instance)
+            result = process_single_task(
+                task,
+                agent,
+                submission_id,
+            )
 
-                try:
-                    # Run the agent
-                    console.print("Running agent")
-                    exit_status, result = agent.run(task_prompt)  # type: ignore[reportUnknownReturnType]
-                    print(f"Agent output: {result}")  # noqa: T201
-
-                    save_traj(
-                        agent,
-                        settings.experiments_dir
-                        / "swe_agent_mini"
-                        / Path(f"{submission_id}.traj.json"),
-                        exit_status=exit_status,
-                        result=result,
-                        extra_info={
-                            "instance_id": task.instance_id,
-                            "submission_id": submission_id,
-                            "agent_config": task.agent_config.model_dump(),
-                        },
-                    )
-
-                    # Generate patch and write completed result
-                    model_patch = env.diff_with_base_commit()
-                    submission = Submission(
-                        submission_id=SubmissionID(submission_id),
-                        instance_id=InstanceID(task.instance_id),
-                        model_patch=model_patch,
-                    )
-                    ended_at = datetime.now(UTC)
-                    completed = CompletedExperiment(
-                        task=task,
-                        submission=submission,
-                        started_at=started_at,
-                        ended_at=ended_at,
-                    )
-                    result_wrapper = ExperimentResult(root=completed)
-                    with results_file.open("a") as f:  # type: ignore[reportOptionalMemberAccess]
-                        f.write(result_wrapper.model_dump_json() + "\n")
-                except Exception as e:
-                    ended_at = datetime.now(UTC)
-                    console.print(
-                        f"[bold red]Error processing {task.instance_id} ({task.agent_config.model_name}): {e}[/bold red]"
-                    )
-                    failed = FailedExperiment(
-                        task=task,
-                        error=str(e),
-                        started_at=started_at,
-                        ended_at=ended_at,
-                    )
-                    result_wrapper = ExperimentResult(root=failed)
-                    with results_file.open("a") as f:  # type: ignore[reportOptionalMemberAccess]
-                        f.write(result_wrapper.model_dump_json() + "\n")
+            result_wrapper = ExperimentResult(root=result)
+            with results_file.open("a") as f:
+                f.write(result_wrapper.model_dump_json() + "\n")
 
             progress.advance(task_progress)
+
+    except KeyboardInterrupt:
+        console.print(
+            "\n[bold yellow]Experiment interrupted by user (KeyboardInterrupt).[/bold yellow]"
+        )
+        console.print(f"Partial results saved to [cyan]{results_file}[/cyan]")
+        return
 
     console.print("\n[bold green]✅ Experiment finished![/bold green]")
     console.print(f"Results saved to [cyan]{results_file}[/cyan]")

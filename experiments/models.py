@@ -80,4 +80,10 @@ Discriminated = Annotated[
 
 
 class ExperimentResult(RootModel[Discriminated]):
-    pass
+    @property
+    def is_completed(self) -> bool:
+        return self.root.status == "completed"
+
+    @property
+    def is_failed(self) -> bool:
+        return self.root.status == "failed"

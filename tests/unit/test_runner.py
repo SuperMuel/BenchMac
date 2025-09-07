@@ -12,6 +12,7 @@ from bench_mac.models import (
     EvaluationResult,
     EvaluationTask,
     ExecutionTrace,
+    InstanceID,
     MetricsReport,
     Submission,
     utc_now,
@@ -31,7 +32,9 @@ def sample_tasks(instance_factory: Any) -> list[EvaluationTask]:
         source_angular_version="15",
         target_angular_version="16",
     )
-    submission1 = Submission(instance_id="task-1-success", model_patch="...")
+    submission1 = Submission(
+        instance_id=InstanceID("task-1-success"), model_patch="..."
+    )
 
     instance2 = instance_factory.create_instance(
         instance_id="task-2-failure",
@@ -40,7 +43,9 @@ def sample_tasks(instance_factory: Any) -> list[EvaluationTask]:
         source_angular_version="16",
         target_angular_version="17",
     )
-    submission2 = Submission(instance_id="task-2-failure", model_patch="...")
+    submission2 = Submission(
+        instance_id=InstanceID("task-2-failure"), model_patch="..."
+    )
 
     return [
         EvaluationTask(instance=instance1, submission=submission1),

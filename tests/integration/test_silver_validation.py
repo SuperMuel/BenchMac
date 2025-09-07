@@ -23,7 +23,7 @@ from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.executor import execute_submission
 from bench_mac.metrics import calculate_metrics
-from bench_mac.models import EvaluationTask, Submission
+from bench_mac.models import EvaluationTask, InstanceID, Submission
 from bench_mac.utils import load_instances
 
 # --- Test Data Generation ---
@@ -52,7 +52,7 @@ def discover_silver_tasks() -> list[EvaluationTask]:
         instance_id = patch_file.stem
         if instance_id in instances_map:
             submission = Submission(
-                instance_id=instance_id, model_patch=patch_file.read_text()
+                instance_id=InstanceID(instance_id), model_patch=patch_file.read_text()
             )
             tasks.append(
                 EvaluationTask(

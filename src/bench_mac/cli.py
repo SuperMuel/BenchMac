@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -27,12 +27,16 @@ from bench_mac.models import (
     EvaluationResult,
     EvaluationResultAdapter,
     EvaluationTask,
-    Submission,
     utc_now,
 )
 from bench_mac.runner import BenchmarkRunner
 from bench_mac.utils import load_instances
 from bench_mac.version import harness_version
+from experiments.models import (
+    CompletedExperiment,
+    ExperimentResult,
+    FailedExperiment,
+)
 
 app = cyclopts.App(
     help="BenchMAC: A benchmark for evaluating AI on Angular Codebase Migrations.",
@@ -40,65 +44,92 @@ app = cyclopts.App(
 )
 
 
-def _load_submissions(
-    submissions_path: Path,
-) -> Generator[Submission, None, None]:
-    """Load submissions from a JSONL file.
+def _iter_lines_from_jsonl_files(
+    files: Iterable[Path],
+) -> Iterable[tuple[Path, int, str]]:
+    """Iterate over lines from JSONL files, yielding (file_path, line_num, line)."""
+    for file_path in files:
+        try:
+            with file_path.open("r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    yield (file_path, line_num, line)
+        except Exception as e:
+            logger.warning(f"Unable to read {file_path}: {e}")
 
-    Accepts two line formats:
-    - Raw Submission objects
-    - ExperimentResult objects (completed) with embedded Submission under `.submission`
+
+def _load_experiment_results(
+    results_dir: Path,
+) -> Generator[tuple[ExperimentResult, Path, int], None, None]:
+    """Load experiment results from JSONL files in the results directory.
+
+    Yields tuples of (experiment_result, file_path, line_num) for each valid
+    experiment result.
     """
-    with submissions_path.open("r", encoding="utf-8") as f:
-        for i, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                # Raw Submission
-                if "submission_id" in data and "model_patch" in data:
-                    yield Submission.model_validate(data)
-                    continue
+    if not results_dir.exists():
+        logger.warning(f"Results directory not found: {results_dir}")
+        return
 
-                # Completed ExperimentResult with embedded submission
-                if data.get("status") == "completed" and "submission" in data:
-                    sub = Submission.model_validate(data["submission"])  # type: ignore[reportArgumentType]
-                    yield sub
-                    continue
+    jsonl_files = list(results_dir.rglob("*.jsonl"))
+    if not jsonl_files:
+        logger.warning(f"No JSONL files found in results directory: {results_dir}")
+        return
 
-                raise ValueError(
-                    "Line is neither a Submission nor a completed ExperimentResult"
-                )
-            except (json.JSONDecodeError, Exception) as e:
-                logger.warning(
-                    f"⚠️ Warning: Skipping invalid submission on line {i}: {e}"
-                )
+    for file_path, line_num, line in _iter_lines_from_jsonl_files(jsonl_files):
+        try:
+            data = json.loads(line)
+            experiment_result = ExperimentResult.model_validate(data)
+            yield (experiment_result, file_path, line_num)
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(
+                f"⚠️ Warning: Skipping invalid experiment result in "
+                f"{file_path.name} line {line_num}: {e}"
+            )
 
 
 def _prepare_tasks(
-    submissions_path: Path,
+    results_dir: Path,
     instances_path: Path,
     filter_ids: list[str] | None = None,
 ) -> Generator[EvaluationTask, None, None]:
-    """Matches submissions to instances and yields tasks to be run."""
+    """Matches experiment results to instances and yields tasks to be run.
+
+    Only processes completed experiments and shows warnings for failed ones.
+    """
     logger.info("Loading benchmark instances...")
     instances_map = load_instances(instances_path)
     logger.info(f"Loaded {len(instances_map)} instances.")
 
-    logger.debug("Loading and matching submissions...")
-    for sub in _load_submissions(submissions_path):
-        if filter_ids and sub.instance_id not in filter_ids:
+    logger.debug("Loading and matching experiment results...")
+    for experiment_result, file_path, line_num in _load_experiment_results(results_dir):
+        if experiment_result.is_failed:
+            failed_experiment = experiment_result.root
+            assert isinstance(failed_experiment, FailedExperiment)
+            logger.warning(
+                f"⚠️ Warning: Skipping failed experiment in {file_path.name} "
+                f"line {line_num}: {failed_experiment.error}"
+            )
             continue
 
-        if sub.instance_id in instances_map:
+        # Only process completed experiments
+        completed_experiment = experiment_result.root
+        assert isinstance(completed_experiment, CompletedExperiment)
+        submission = completed_experiment.submission
+
+        if filter_ids and submission.instance_id not in filter_ids:
+            continue
+
+        if submission.instance_id in instances_map:
             yield EvaluationTask(
-                instance=instances_map[sub.instance_id],
-                submission=sub,
+                instance=instances_map[submission.instance_id],
+                submission=submission,
             )
         else:
             logger.warning(
-                f"⚠️ Warning: Submission for '{sub.instance_id}' found, but no matching "
+                f"⚠️ Warning: Submission for '{submission.instance_id}' found in "
+                f"{file_path.name} line {line_num}, but no matching "
                 "instance exists. Skipping."
             )
 
@@ -425,21 +456,26 @@ def _print_evaluation_summary(
 
 @app.command
 def eval(
-    submissions_file: Path,
+    results_dir: Path = settings.experiments_dir / "results",
     *,
     output_file: Path | None = None,
     instances_file: Path | None = None,
     instance_id: Annotated[
         list[str] | None,
         Parameter(
-            help="Filter submissions by instance ID. Can be used multiple times.",
+            help="Filter experiment results by instance ID. "
+            "Can be used multiple times.",
             negative=(),
         ),
     ] = None,
     workers: int = os.cpu_count() or 1,
 ) -> None:
     """
-    Run the BenchMAC evaluation on a set of submissions.
+    Run the BenchMAC evaluation on a set of experiment results.
+
+    This command reads ExperimentResult objects from JSONL files in the results
+    directory, filters out failed experiments (showing warnings), and evaluates
+    the completed ones.
     """
     run_id = utc_now().strftime("%Y-%m-%d_%H%M%S")
 
@@ -451,8 +487,8 @@ def eval(
     # Configure logging for the main process
     setup_main_process_logging(run_id, logs_dir)
 
-    if not submissions_file.exists():
-        logger.error(f"❌ Error: Submissions file not found at '{submissions_file}'")
+    if not results_dir.exists():
+        logger.error(f"❌ Error: Results directory not found at '{results_dir}'")
         return
 
     logger.info(
@@ -463,7 +499,7 @@ def eval(
     # 1. Prepare tasks and output path
     tasks = list(
         _prepare_tasks(
-            submissions_path=submissions_file,
+            results_dir=results_dir,
             instances_path=instances_file or settings.instances_file,
             filter_ids=instance_id,
         )

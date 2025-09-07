@@ -31,7 +31,6 @@ from experiments.models import (
     AgentConfig,
     CompletedExperiment,
     ExperimentResult,
-    FailedExperiment,
 )
 
 
@@ -371,17 +370,16 @@ def main() -> None:
     submissions_by_id: dict[SubmissionID, Submission] = {}
     agent_by_submission_id: dict[SubmissionID, AgentConfig] = {}
     for er in experiments:
-        match er.root.status:
-            case "completed":
-                er_completed = cast(CompletedExperiment, er.root)
-                submissions_by_id[er_completed.submission.submission_id] = (
-                    er_completed.submission
-                )
-                agent_by_submission_id[er_completed.submission.submission_id] = (
-                    er_completed.task.agent_config
-                )
-            case FailedExperiment():
-                continue
+        if er.is_completed:
+            er_completed = cast(CompletedExperiment, er.root)
+            submissions_by_id[er_completed.submission.submission_id] = (
+                er_completed.submission
+            )
+            agent_by_submission_id[er_completed.submission.submission_id] = (
+                er_completed.task.agent_config
+            )
+        elif er.is_failed:
+            continue
 
     grouped = group_completed_by_instance_and_model(completed, agent_by_submission_id)
     summary = extract_summary_data(grouped, harness_failures_list)
