@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from collections.abc import Generator, Iterable, Sequence
+from collections.abc import Generator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -32,6 +32,7 @@ from bench_mac.models import (
 )
 from bench_mac.runner import BenchmarkRunner
 from bench_mac.utils import collect_network_error_details, load_instances
+from bench_mac.utils_jsonl import iter_lines_from_jsonl_files
 from bench_mac.version import harness_version
 from experiments.models import (
     CompletedExperiment,
@@ -43,22 +44,6 @@ app = cyclopts.App(
     help="BenchMAC: A benchmark for evaluating AI on Angular Codebase Migrations.",
     version=harness_version(),
 )
-
-
-def _iter_lines_from_jsonl_files(
-    files: Iterable[Path],
-) -> Iterable[tuple[Path, int, str]]:
-    """Iterate over lines from JSONL files, yielding (file_path, line_num, line)."""
-    for file_path in files:
-        try:
-            with file_path.open("r", encoding="utf-8") as f:
-                for line_num, line in enumerate(f, 1):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    yield (file_path, line_num, line)
-        except Exception as e:
-            logger.warning(f"Unable to read {file_path}: {e}")
 
 
 def _load_experiment_results(
@@ -78,7 +63,7 @@ def _load_experiment_results(
         logger.warning(f"No JSONL files found in results directory: {results_dir}")
         return
 
-    for file_path, line_num, line in _iter_lines_from_jsonl_files(jsonl_files):
+    for file_path, line_num, line in iter_lines_from_jsonl_files(jsonl_files):
         try:
             data = json.loads(line)
             experiment_result = ExperimentResult.model_validate(data)

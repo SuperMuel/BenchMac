@@ -7,7 +7,6 @@ This app aggregates all evaluation results found under the configured
 """
 
 import json
-from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, cast
 
@@ -28,27 +27,12 @@ from bench_mac.models import (
     Submission,
     SubmissionID,
 )
-from bench_mac.utils import collect_network_error_details
+from bench_mac.utils import collect_network_error_details, iter_lines_from_jsonl_files
 from experiments.models import (
     AgentConfig,
     CompletedExperiment,
     ExperimentResult,
 )
-
-
-def _iter_lines_from_jsonl_files(
-    files: Iterable[Path],
-) -> Iterable[tuple[Path, int, str]]:
-    for file_path in files:
-        try:
-            with file_path.open("r", encoding="utf-8") as f:
-                for line_num, line in enumerate(f, 1):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    yield (file_path, line_num, line)
-        except Exception as e:  # pragma: no cover - defensive
-            st.warning(f"Unable to read {file_path}: {e}")
 
 
 @st.cache_data(show_spinner=False)
@@ -64,7 +48,7 @@ def load_all_evaluations(
     successes: list[EvaluationCompleted] = []
     failures: list[EvaluationFailed] = []
 
-    for file_path, line_num, line in _iter_lines_from_jsonl_files(jsonl_files):
+    for file_path, line_num, line in iter_lines_from_jsonl_files(jsonl_files):
         try:
             outcome = EvaluationResultAdapter.validate_json(line)
             match outcome.status:
@@ -92,7 +76,7 @@ def load_all_experiments(experiments_dir: Path) -> list[ExperimentResult]:
     if not results_dir.exists():
         return results
 
-    for file_path, line_num, line in _iter_lines_from_jsonl_files(
+    for file_path, line_num, line in iter_lines_from_jsonl_files(
         results_dir.glob("*.jsonl")
     ):
         try:
