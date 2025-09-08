@@ -1,6 +1,6 @@
 [project]
 name = "bench-mac"
-version = "0.1.0"
+version = "0.2.0"
 description = "A benchmark for evaluating AI agents on Angular version migration tasks."
 readme = "README.md"
 authors = [
