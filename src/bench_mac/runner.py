@@ -16,6 +16,7 @@ from bench_mac.models import (
     EvaluationReport,
     EvaluationResult,
     EvaluationTask,
+    utc_now,
 )
 
 
@@ -45,6 +46,9 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
     # Get a logger bound with instance context
     instance_logger = get_instance_logger(context.task.instance.instance_id)
 
+    # Record the start time for this worker's evaluation
+    started_at = utc_now()
+
     try:
         docker_manager = DockerManager(quiet_init=True)
 
@@ -62,11 +66,16 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         # 3. Assemble the final, comprehensive report
         report = EvaluationReport(
             instance_id=context.task.instance.instance_id,
+            submission_id=context.task.submission.submission_id,
             execution=trace,
             metrics=metrics,
         )
 
-        return EvaluationCompleted(result=report)
+        return EvaluationCompleted(
+            result=report,
+            started_at=started_at,
+            ended_at=utc_now(),
+        )
     except Exception as e:
         # Catch any unexpected crash in the worker process
         instance_logger.exception("Worker process for instance crashed unexpectedly.")
@@ -75,8 +84,11 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         )
         return EvaluationFailed(
             instance_id=context.task.instance.instance_id,
+            submission_id=context.task.submission.submission_id,
             error=f"Worker process crashed ({e.__class__.__name__}: {e})\n"
             f"See instance log for details in {instance_log_path}",
+            started_at=started_at,
+            ended_at=utc_now(),
         )
 
 

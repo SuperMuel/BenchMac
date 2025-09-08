@@ -4,7 +4,7 @@ from typing import cast
 
 import pytest
 
-from bench_mac.models import BenchmarkInstance, InstanceCommands, Submission
+from bench_mac.models import BenchmarkInstance, InstanceCommands, InstanceID, Submission
 
 _UNSET = object()
 
@@ -28,7 +28,7 @@ def default_dockerfile_content() -> str:
 def sample_instance(default_commands: InstanceCommands) -> BenchmarkInstance:
     """Provides a standard BenchmarkInstance for testing."""
     return BenchmarkInstance(
-        instance_id="my-project_v15_to_v16",
+        instance_id=InstanceID("my-project_v15_to_v16"),
         repo="SuperMuel/BenchMAC",
         base_commit="a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
         source_angular_version="15.0.0",
@@ -48,7 +48,7 @@ class InstanceFactory:
 
     def create_instance(
         self,
-        instance_id: str = "test-instance",
+        instance_id: InstanceID = InstanceID("test-instance"),  # noqa: B008
         repo: str = "owner/repo",
         base_commit: str = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
         source_angular_version: str = "15.0.0",
@@ -92,6 +92,6 @@ def instance_factory(
 def sample_submission() -> Submission:
     """Provides a standard Submission for testing."""
     return Submission(
-        instance_id="my-project_v15_to_v16",
+        instance_id=InstanceID("my-project_v15_to_v16"),
         model_patch="diff --git a/file.ts b/file.ts\n--- a/file.ts\n+++ b/file.ts",
     )

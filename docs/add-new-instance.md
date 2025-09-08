@@ -98,9 +98,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
-# Non-root user + writable workspace
-RUN mkdir -p /app/project && chown -R node:node /app
-USER node
+# Writable workspace
+RUN mkdir -p /app/project
 # This is where the repository will be available to the agent
 WORKDIR /app/project
 
@@ -113,8 +112,14 @@ ENV NPM_CONFIG_CACHE=/home/node/.npm
 RUN curl -L https://github.com/<owner>/<repo>/archive/<base_commit>.tar.gz \
     | tar -xz --strip-components=1
 
-# Initialize a new git repo (for `git apply` to work) but no history
-RUN git init && git config --global --add safe.directory /app/project
+# Initialize git repo and create baseline commit for diffing
+RUN git init --initial-branch=main && \
+    git config --global --add safe.directory /app/project && \
+    git config user.email "benchmark@benchmac.dev" && \
+    git config user.name "BenchMAC Baseline" && \
+    git add . && \
+    git commit -m "baseline: <owner>/<repo>@<base_commit>" && \
+    git tag baseline
 
 # Keep container idle; the harness will exec into it
 CMD ["bash", "-lc", "sleep infinity"]
@@ -124,6 +129,7 @@ CMD ["bash", "-lc", "sleep infinity"]
 
 * **Do not** `git clone` the repo. Always `curl | tar` an archive for a **history-free** snapshot.
 * **Do not** run `npm ci`, builds, tests, or lint in the Dockerfile. The harness and AI agents does that.
+* **Do create** a baseline git commit and tag after extracting source code. This allows the harness to get the progress using `git diff baseline`, even if the AI agent created commits.
 * Choose a **Node image** compatible with your **source AND target** Angular version.
 * Keep images slim and reproducible; avoid unnecessary packages.
 
@@ -184,7 +190,8 @@ Verify that all the instances from a single repository are valid
 * [ ] **Dockerfile** at `data/dockerfiles/<instance_id>`:
 
   * Uses `curl | tar` with the **base\_commit**.
-  * Contains no baseline “work” (no `npm ci`, build, test, or lint).
+  * Creates baseline git commit and tag for diffing.
+  * Contains no baseline "work" (no `npm ci`, build, test, or lint).
   * Leaves container idle (e.g., `sleep infinity`).
 * [ ] **Instance line** appended to `data/instances.jsonl` with correct fields.
 * [ ] `uv run pytest -m instance_validation -k "<your new instance id>` passes.

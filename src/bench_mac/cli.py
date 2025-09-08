@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -25,15 +25,19 @@ from bench_mac.config import settings
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
     EvaluationCompleted,
-    EvaluationFailed,
     EvaluationResult,
+    EvaluationResultAdapter,
     EvaluationTask,
-    Submission,
     utc_now,
 )
 from bench_mac.runner import BenchmarkRunner
-from bench_mac.utils import load_instances
+from bench_mac.utils import collect_network_error_details, load_instances
 from bench_mac.version import harness_version
+from experiments.models import (
+    CompletedExperiment,
+    ExperimentResult,
+    FailedExperiment,
+)
 
 app = cyclopts.App(
     help="BenchMAC: A benchmark for evaluating AI on Angular Codebase Migrations.",
@@ -41,47 +45,117 @@ app = cyclopts.App(
 )
 
 
-def _load_submissions(
-    submissions_path: Path,
-) -> Generator[Submission, None, None]:
-    """Loads submissions from a JSONL file."""
-    with submissions_path.open("r", encoding="utf-8") as f:
-        for i, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                yield Submission.model_validate(data)
-            except (json.JSONDecodeError, Exception) as e:
-                logger.warning(
-                    f"⚠️ Warning: Skipping invalid submission on line {i}: {e}"
-                )
+def _iter_lines_from_jsonl_files(
+    files: Iterable[Path],
+) -> Iterable[tuple[Path, int, str]]:
+    """Iterate over lines from JSONL files, yielding (file_path, line_num, line)."""
+    for file_path in files:
+        try:
+            with file_path.open("r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    yield (file_path, line_num, line)
+        except Exception as e:
+            logger.warning(f"Unable to read {file_path}: {e}")
+
+
+def _load_experiment_results(
+    results_dir: Path,
+) -> Generator[tuple[ExperimentResult, Path, int], None, None]:
+    """Load experiment results from JSONL files in the results directory.
+
+    Yields tuples of (experiment_result, file_path, line_num) for each valid
+    experiment result.
+    """
+    if not results_dir.exists():
+        logger.warning(f"Results directory not found: {results_dir}")
+        return
+
+    jsonl_files = list(results_dir.rglob("*.jsonl"))
+    if not jsonl_files:
+        logger.warning(f"No JSONL files found in results directory: {results_dir}")
+        return
+
+    for file_path, line_num, line in _iter_lines_from_jsonl_files(jsonl_files):
+        try:
+            data = json.loads(line)
+            experiment_result = ExperimentResult.model_validate(data)
+            yield (experiment_result, file_path, line_num)
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(
+                f"⚠️ Warning: Skipping invalid experiment result in "
+                f"{file_path.name} line {line_num}: {e}"
+            )
 
 
 def _prepare_tasks(
-    submissions_path: Path,
+    *,
+    experiments_results_dir: Path,
+    evaluations_dir: Path | None = None,
     instances_path: Path,
     filter_ids: list[str] | None = None,
 ) -> Generator[EvaluationTask, None, None]:
-    """Matches submissions to instances and yields tasks to be run."""
+    """Matches experiment results to instances and yields tasks to be run.
+
+    Only processes completed experiments and shows warnings for failed ones.
+    Skips submissions that have already been evaluated successfully.
+    """
     logger.info("Loading benchmark instances...")
     instances_map = load_instances(instances_path)
     logger.info(f"Loaded {len(instances_map)} instances.")
 
-    logger.debug("Loading and matching submissions...")
-    for sub in _load_submissions(submissions_path):
-        if filter_ids and sub.instance_id not in filter_ids:
+    # Load previous evaluation results to avoid re-running completed submissions
+    if evaluations_dir is None:
+        evaluations_dir = settings.evaluations_dir
+
+    logger.info(f"Loading previous evaluation results from: {evaluations_dir}")
+    completed_submission_ids = _load_previous_evaluation_results(evaluations_dir)
+    if completed_submission_ids:
+        logger.info(
+            f"Found {len(completed_submission_ids)} previously completed evaluations"
+        )
+
+    logger.debug("Loading and matching experiment results...")
+    for experiment_result, file_path, line_num in _load_experiment_results(
+        experiments_results_dir
+    ):
+        if experiment_result.is_failed:
+            failed_experiment = experiment_result.root
+            assert isinstance(failed_experiment, FailedExperiment)
+            logger.warning(
+                f"⚠️ Warning: Skipping failed experiment in {file_path.name} "
+                f"line {line_num}: {failed_experiment.error}"
+            )
             continue
 
-        if sub.instance_id in instances_map:
+        # Only process completed experiments
+        completed_experiment = experiment_result.root
+        assert isinstance(completed_experiment, CompletedExperiment)
+        submission = completed_experiment.submission
+
+        # Check if this submission has already been evaluated successfully
+        if submission.submission_id in completed_submission_ids:
+            logger.debug(
+                f"⏭️ Skipping already evaluated submission {submission.submission_id} "
+                f"for instance {submission.instance_id} "
+                f"(from {file_path.name} line {line_num})"
+            )
+            continue
+
+        if filter_ids and submission.instance_id not in filter_ids:
+            continue
+
+        if submission.instance_id in instances_map:
             yield EvaluationTask(
-                instance=instances_map[sub.instance_id],
-                submission=sub,
+                instance=instances_map[submission.instance_id],
+                submission=submission,
             )
         else:
             logger.warning(
-                f"⚠️ Warning: Submission for '{sub.instance_id}' found, but no matching "
+                f"⚠️ Warning: Submission for '{submission.instance_id}' found in "
+                f"{file_path.name} line {line_num}, but no matching "
                 "instance exists. Skipping."
             )
 
@@ -123,9 +197,9 @@ def _run_interactive(
             outcomes.append(outcome)
 
             # Update counters based on outcome
-            if outcome.status == "success":
+            if outcome.status == "completed":
                 success_count += 1
-                logger.info(f"✅ SUCCESS: {outcome.result.instance_id}")
+                logger.info(f"✅ Completed: {outcome.result.instance_id}")
             else:
                 failure_count += 1
                 logger.error(f"❌ FAILURE: {outcome.instance_id} - {outcome.error}")
@@ -174,10 +248,10 @@ def _run_non_interactive(
             f.write(outcome.model_dump_json() + "\n")
 
             # Also print a summary to the console log
-            if outcome.status == "success":
-                logger.info(f"✅ SUCCESS: {outcome.result.instance_id}")
-            elif outcome.status == "failure":
-                logger.error(f"❌ FAILURE: {outcome.instance_id} - {outcome.error}")
+            if outcome.status == "completed":
+                logger.info(f"✅ Completed: {outcome.result.instance_id}")
+            elif outcome.status == "failed":
+                logger.error(f"❌ Failed: {outcome.instance_id} - {outcome.error}")
 
         runner.run(
             tasks=task_list,
@@ -189,7 +263,7 @@ def _run_non_interactive(
     return outcomes
 
 
-def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
+def _load_eval_results_from_file(results_file: Path) -> list[EvaluationResult]:
     """Load EvaluationResult objects from a JSONL results file."""
     outcomes: list[EvaluationResult] = []
     if not results_file.exists():
@@ -202,14 +276,7 @@ def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
             if not line:
                 continue
             try:
-                data = json.loads(line)
-                # Handle union type by checking the status field
-                if data.get("status") == "success":
-                    outcome = EvaluationCompleted.model_validate(data)
-                elif data.get("status") == "failure":
-                    outcome = EvaluationFailed.model_validate(data)
-                else:
-                    raise ValueError(f"Unknown status: {data.get('status')}")
+                outcome = EvaluationResultAdapter.validate_json(line)
                 outcomes.append(outcome)
             except Exception as e:
                 logger.warning(
@@ -219,46 +286,51 @@ def _load_outcomes_from_file(results_file: Path) -> list[EvaluationResult]:
     return outcomes
 
 
-def _collect_network_error_details(
-    outcomes: list[EvaluationResult],
-) -> dict[str, list[str]]:
-    """Return mapping of instance_id -> list of step commands impacted
-     by network-like errors.
-
-    Includes harness-level failures (no steps) under a synthetic "harness" entry.
+def _load_previous_evaluation_results(
+    evaluations_dir: Path,
+) -> set[str]:
     """
-    network_error_keywords = [
-        "socket timeout",
-        "econnreset",
-        "etimedout",
-        "network is unreachable",
-        "failed to fetch",
-        "proxy",
-    ]
+    Load all previous evaluation results from JSONL files in the evaluations directory
+    and return the set of submission IDs that have completed evaluations.
 
-    details: dict[str, list[str]] = {}
+    Only considers completed evaluations (failed ones should be re-run).
+    """
+    completed_submission_ids: set[str] = set()
 
-    for outcome in outcomes:
-        if outcome.status == "success":
-            instance_id = outcome.result.instance_id
-            for step in outcome.result.execution.steps:
-                if not step.success:
-                    stderr_lower = step.stderr.lower()
-                    if any(
-                        keyword in stderr_lower for keyword in network_error_keywords
-                    ):
-                        details.setdefault(instance_id, [])
-                        if step.command not in details[instance_id]:
-                            details[instance_id].append(step.command)
-        else:  # failure at harness level
-            instance_id = outcome.instance_id
-            error_lower = outcome.error.lower()
-            if any(keyword in error_lower for keyword in network_error_keywords):
-                details.setdefault(instance_id, [])
-                if "harness" not in details[instance_id]:
-                    details[instance_id].append("harness")
+    if not evaluations_dir.exists():
+        logger.debug(f"Evaluations directory not found: {evaluations_dir}")
+        return completed_submission_ids
 
-    return details
+    # Find all JSONL files recursively
+    jsonl_files = list(evaluations_dir.rglob("*.jsonl"))
+    if not jsonl_files:
+        logger.debug(
+            f"No JSONL files found in evaluations directory: {evaluations_dir}"
+        )
+        return completed_submission_ids
+
+    logger.debug(
+        f"Loading previous evaluation results from {len(jsonl_files)} files..."
+    )
+
+    for results_file in jsonl_files:
+        try:
+            results = _load_eval_results_from_file(results_file)
+            for result in results:
+                if result.status == "completed":
+                    # Extract submission_id from the completed evaluation
+                    submission_id = result.result.submission_id
+                    completed_submission_ids.add(submission_id)
+                # Skip failed evaluations - they should be re-run
+        except Exception as e:
+            logger.warning(
+                f"⚠️ Warning: Failed to load results from {results_file}: {e}"
+            )
+
+    logger.debug(
+        f"Found {len(completed_submission_ids)} previously completed evaluations"
+    )
+    return completed_submission_ids
 
 
 def _print_evaluation_summary(
@@ -272,7 +344,7 @@ def _print_evaluation_summary(
 
     # Calculate metrics
     total_jobs = len(outcomes)
-    successful_jobs = sum(1 for outcome in outcomes if outcome.status == "success")
+    successful_jobs = sum(1 for outcome in outcomes if outcome.status == "completed")
     failed_jobs = total_jobs - successful_jobs
 
     # Metrics breakdown - initialize counters for all metrics
@@ -286,7 +358,7 @@ def _print_evaluation_summary(
     install_total_count = 0
 
     for outcome in outcomes:
-        if outcome.status == "success":
+        if outcome.status == "completed":
             metrics = outcome.result.metrics
 
             # Patch application metrics
@@ -325,25 +397,23 @@ def _print_evaluation_summary(
     if logs_dir:
         summary_table.add_row("Logs Directory:", str(logs_dir))
 
-    # Overall results table
-    results_table = Table(title="📊 Overall Results", show_header=True)
-    results_table.add_column("Status", style="bold")
-    results_table.add_column("Count", justify="right")
-    results_table.add_column("Percentage", justify="right")
-
-    if total_jobs > 0:
-        success_pct = (successful_jobs / total_jobs) * 100
-        failure_pct = (failed_jobs / total_jobs) * 100
-
-        results_table.add_row(
-            Text("✅ Success", style="bold green"),
-            str(successful_jobs),
-            f"{success_pct:.1f}%",
+    results_table = None
+    # Only show the failed instance IDs if there are unsuccessful jobs
+    if failed_jobs > 0 and total_jobs > 0:
+        failed_instance_ids = [
+            outcome.instance_id for outcome in outcomes if outcome.status != "completed"
+        ]
+        results_table = Table(
+            title="❌ Harness Failures",
+            show_header=True,
+            caption="Note: These are instances where the evaluation harness failed to "
+            "process the AI agent's submission. "
+            "This does not necessarily mean the AI agent failed; the error may be due "
+            "to infrastructure or evaluation issues.",
         )
-        results_table.add_row(
-            Text("❌ Failed", style="bold red"), str(failed_jobs), f"{failure_pct:.1f}%"
-        )
-        results_table.add_row(Text("📈 Total", style="bold"), str(total_jobs), "100.0%")
+        results_table.add_column("Instance ID", style="bold red")
+        for instance_id in failed_instance_ids:
+            results_table.add_row(instance_id)
 
     # Metrics breakdown table
     metrics_table = Table(title="📋 Metrics Breakdown", show_header=True)
@@ -372,25 +442,32 @@ def _print_evaluation_summary(
         target_version_success_count,
         target_version_total_count,
     )
-    add_metric_row("Build Success", build_success_count, build_total_count)
     add_metric_row("Install Success", install_success_count, install_total_count)
+    add_metric_row("Build Success", build_success_count, build_total_count)
 
     # Print all tables
     console.print()
     console.print(Panel(summary_table, expand=False))
     console.print()
-    console.print(Panel(results_table, expand=False))
+    if results_table:
+        console.print(Panel(results_table, expand=False))
     console.print()
     console.print(Panel(metrics_table, expand=False))
     console.print()
 
-    network_error_details = _collect_network_error_details(outcomes)
+    network_error_details = collect_network_error_details(outcomes)
     if network_error_details:
-        details_table = Table(title="Affected instances and steps", show_header=True)
-        details_table.add_column("Instance", style="bold")
-        details_table.add_column("Step(s)")
-        for instance_id, commands in network_error_details.items():
-            details_table.add_row(instance_id, "\n".join(commands))
+        details_table = Table(title="Network errors by evaluation", show_header=True)
+        details_table.add_column("Evaluation ID", style="bold cyan", max_width=12)
+        details_table.add_column("Submission ID", style="bold magenta", max_width=12)
+        details_table.add_column("Affected Commands")
+
+        for evaluation_id, submission_id, commands in network_error_details:
+            details_table.add_row(
+                evaluation_id,
+                submission_id,
+                "\n".join(f"[yellow]{cmd}[/yellow]" for cmd in commands),
+            )
 
         combined_panel = Panel(
             Group(
@@ -411,30 +488,180 @@ def _print_evaluation_summary(
         console.print(combined_panel)
 
 
-# --- Main CLI Command (The Dispatcher) ---
+# --- Main CLI Commands ---
+
+
+@app.command
+def remove_eval(
+    evaluation_id: str,
+    *,
+    evaluations_dir: Path | None = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Remove an evaluation by its ID from evaluation results files.
+
+    This command searches through all JSONL files in the evaluations directory
+    and removes the evaluation with the specified ID. Use --dry-run to
+    only show what would be removed without making changes.
+
+    Args:
+        evaluation_id: The unique identifier of the evaluation to remove.
+        evaluations_dir: Directory containing evaluation results
+            (defaults to settings.evaluations_dir).
+        dry_run: If True, only show what would be removed without making changes.
+            Defaults to False.
+    """
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+    evaluations_dir = evaluations_dir or settings.evaluations_dir
+
+    if not evaluations_dir.exists():
+        logger.error(
+            f"❌ Error: Evaluations directory not found at '{evaluations_dir}'"
+        )
+        return
+
+    # Find all JSONL files
+    jsonl_files = list(evaluations_dir.rglob("*.jsonl"))
+    if not jsonl_files:
+        logger.info(f"No JSONL files found in {evaluations_dir}")
+        return
+
+    # Search for the evaluation to remove
+    found_evaluations: list[tuple[Path, int, str, EvaluationResult]] = []
+
+    for file_path in jsonl_files:
+        try:
+            with file_path.open("r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        evaluation = EvaluationResultAdapter.validate_json(line)
+                        if evaluation.id == evaluation_id:
+                            found_evaluations.append(
+                                (file_path, line_num, line, evaluation)
+                            )
+                    except Exception:
+                        # Skip invalid lines, they'll be handled by the main validation
+                        continue
+        except Exception as e:
+            logger.warning(f"Unable to read {file_path}: {e}")
+
+    if not found_evaluations:
+        console.print(
+            f"[yellow]⚠️ No evaluation found with ID: {evaluation_id}[/yellow]"
+        )
+        return
+
+    # Display what will be removed
+    console.print(
+        f"\n[bold blue]Found {len(found_evaluations)} evaluation(s) "
+        f"with ID: {evaluation_id}[/bold blue]\n"
+    )
+
+    table = Table(title="Evaluations to Remove", show_header=True)
+    table.add_column("File", style="cyan")
+    table.add_column("Line", style="magenta", justify="right")
+    table.add_column("Status", style="green")
+    table.add_column("Instance ID", style="yellow")
+    table.add_column("Submission ID", style="blue")
+
+    for file_path, line_num, _, evaluation in found_evaluations:
+        status = evaluation.status
+        if isinstance(evaluation, EvaluationCompleted):
+            instance_id = evaluation.result.instance_id
+            submission_id = evaluation.result.submission_id
+        else:  # EvaluationFailed
+            instance_id = evaluation.instance_id
+            submission_id = evaluation.submission_id
+
+        table.add_row(
+            str(file_path.relative_to(evaluations_dir)),
+            str(line_num),
+            status,
+            instance_id,
+            submission_id[:8] + "..." if len(submission_id) > 8 else submission_id,
+        )
+
+    console.print(table)
+
+    if dry_run:
+        console.print(
+            f"\n[yellow]🧪 DRY RUN: Would remove "
+            f"{len(found_evaluations)} evaluation(s)[/yellow]"
+        )
+        console.print(
+            "[yellow]Use --dry-run=false to actually perform the removal[/yellow]"
+        )
+        return
+
+    # Perform actual removal
+    console.print(f"\n[red]🗑️ Removing {len(found_evaluations)} evaluation(s)...[/red]")
+
+    removed_count = 0
+    for file_path, line_num, _, _ in found_evaluations:
+        try:
+            # Read all lines from the file
+            with file_path.open("r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # Remove the specific line (line_num is 1-indexed, so subtract 1)
+            if 1 <= line_num <= len(lines):
+                del lines[line_num - 1]
+
+                # Write the file back without the removed line
+                with file_path.open("w", encoding="utf-8") as f:
+                    f.writelines(lines)
+
+                removed_count += 1
+                console.print(
+                    "✅ Removed evaluation from "
+                    f"{file_path.relative_to(evaluations_dir)} "
+                    f"line {line_num}"
+                )
+            else:
+                logger.warning(f"Line {line_num} not found in {file_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to remove evaluation from {file_path}: {e}")
+
+    console.print(
+        f"\n[green]✅ Successfully removed {removed_count} evaluation(s)[/green]"
+    )
 
 
 @app.command
 def eval(
-    submissions_file: Path,
+    experiments_dir: Path = settings.experiments_dir / "results",
     *,
     output_file: Path | None = None,
     instances_file: Path | None = None,
     instance_id: Annotated[
         list[str] | None,
         Parameter(
-            help="Filter submissions by instance ID. Can be used multiple times.",
+            help="Filter experiment results by instance ID. "
+            "Can be used multiple times.",
             negative=(),
         ),
     ] = None,
     workers: int = os.cpu_count() or 1,
 ) -> None:
     """
-    Run the BenchMAC evaluation on a set of submissions.
+    Run the BenchMAC evaluation on a set of experiment results.
+
+    This command reads ExperimentResult objects from JSONL files in the results
+    directory, filters out failed experiments (showing warnings), and evaluates
+    the completed ones.
     """
     run_id = utc_now().strftime("%Y-%m-%d_%H%M%S")
 
-    run_dir = settings.results_dir / run_id
+    run_dir = settings.evaluations_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = run_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -442,8 +669,8 @@ def eval(
     # Configure logging for the main process
     setup_main_process_logging(run_id, logs_dir)
 
-    if not submissions_file.exists():
-        logger.error(f"❌ Error: Submissions file not found at '{submissions_file}'")
+    if not experiments_dir.exists():
+        logger.error(f"❌ Error: Results directory not found at '{experiments_dir}'")
         return
 
     logger.info(
@@ -454,7 +681,7 @@ def eval(
     # 1. Prepare tasks and output path
     tasks = list(
         _prepare_tasks(
-            submissions_path=submissions_file,
+            experiments_results_dir=experiments_dir,
             instances_path=instances_file or settings.instances_file,
             filter_ids=instance_id,
         )
@@ -493,42 +720,6 @@ def eval(
         )
 
     logger.complete()
-
-
-@app.command
-def summary(results_file: Path) -> None:
-    """
-    Display a summary of evaluation results from an existing results.jsonl file.
-    """
-    if not results_file.exists():
-        logger.error(f"❌ Results file not found: {results_file}")
-        return
-
-    logger.info(f"Loading results from: {results_file}")
-
-    # Load outcomes from file
-    outcomes = _load_outcomes_from_file(results_file)
-
-    if not outcomes:
-        logger.error("❌ No valid results found in file")
-        return
-
-    logger.info(f"Loaded {len(outcomes)} results")
-
-    # Extract run info from file path if possible
-    run_id = None
-    logs_dir = None
-    if results_file.parent.name.startswith("2025-"):  # Run ID pattern
-        run_id = results_file.parent.name
-        logs_dir = results_file.parent / "logs"
-
-    # Print summary
-    _print_evaluation_summary(
-        outcomes=outcomes,
-        run_id=run_id,
-        results_file=results_file,
-        logs_dir=logs_dir,
-    )
 
 
 if __name__ == "__main__":

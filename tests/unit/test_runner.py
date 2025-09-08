@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +12,10 @@ from bench_mac.models import (
     EvaluationResult,
     EvaluationTask,
     ExecutionTrace,
+    InstanceID,
     MetricsReport,
     Submission,
+    utc_now,
 )
 from bench_mac.runner import BenchmarkRunner, WorkerContext
 
@@ -30,7 +32,9 @@ def sample_tasks(instance_factory: Any) -> list[EvaluationTask]:
         source_angular_version="15",
         target_angular_version="16",
     )
-    submission1 = Submission(instance_id="task-1-success", model_patch="...")
+    submission1 = Submission(
+        instance_id=InstanceID("task-1-success"), model_patch="..."
+    )
 
     instance2 = instance_factory.create_instance(
         instance_id="task-2-failure",
@@ -39,7 +43,9 @@ def sample_tasks(instance_factory: Any) -> list[EvaluationTask]:
         source_angular_version="16",
         target_angular_version="17",
     )
-    submission2 = Submission(instance_id="task-2-failure", model_patch="...")
+    submission2 = Submission(
+        instance_id=InstanceID("task-2-failure"), model_patch="..."
+    )
 
     return [
         EvaluationTask(instance=instance1, submission=submission1),
@@ -52,6 +58,9 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
     A fake worker function that replaces the real one during tests.
     It returns predictable results without any I/O or Docker calls.
     """
+    now = utc_now()
+    start_time = now
+    end_time = now + timedelta(seconds=1)
     if "success" in context.task.instance.instance_id:
         # Simulate a successful evaluation with a mock execution trace
         successful_command = CommandResult(
@@ -59,25 +68,31 @@ def fake_run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
             exit_code=0,
             stdout="Applied patch successfully",
             stderr="",
-            start_time=datetime.now(UTC),
-            end_time=datetime.now(UTC) + timedelta(seconds=1),
+            start_time=start_time,
+            end_time=end_time,
         )
         execution = ExecutionTrace(steps=[successful_command])
 
         return EvaluationCompleted(
             result=EvaluationReport(
                 instance_id=context.task.instance.instance_id,
+                submission_id=context.task.submission.submission_id,
                 execution=execution,
                 metrics=MetricsReport(
                     patch_application_success=True,
                 ),
             ),
+            started_at=start_time,
+            ended_at=end_time,
         )
     else:
         # Simulate a harness-level failure
         return EvaluationFailed(
             instance_id=context.task.instance.instance_id,
+            submission_id=context.task.submission.submission_id,
             error="Simulated worker crash",
+            started_at=start_time,
+            ended_at=end_time,
         )
 
 

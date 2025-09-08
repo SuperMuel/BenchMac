@@ -15,7 +15,7 @@ import pytest
 
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
-from bench_mac.models import BenchmarkInstance, InstanceCommands
+from bench_mac.models import BenchmarkInstance, InstanceCommands, InstanceID
 
 
 @pytest.fixture
@@ -42,7 +42,9 @@ class TestImageBuilder:
         """Provides a standard, real-world benchmark instance for testing."""
 
         return BenchmarkInstance(
-            instance_id="gothinkster__angular-realworld-example-app_v11_to_v12",
+            instance_id=InstanceID(
+                "gothinkster__angular-realworld-example-app_v11_to_v12"
+            ),
             repo="gothinkster/angular-realworld-example-app",
             base_commit="4f29e0e",
             source_angular_version="11.2.8",

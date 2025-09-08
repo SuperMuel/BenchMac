@@ -8,8 +8,10 @@ from bench_mac.models import (
     CommandResult,
     EvaluationReport,
     ExecutionTrace,
+    InstanceID,
     MetricsReport,
     Submission,
+    SubmissionID,
     utc_now,
 )
 
@@ -114,7 +116,7 @@ class TestSubmission:
         """Test successful creation of a Submission with valid data."""
         patch_content = "diff --git a/file.ts b/file.ts\n--- a/file.ts\n+++ b/file.ts"
         submission = Submission(
-            instance_id="my-project_v15_to_v16", model_patch=patch_content
+            instance_id=InstanceID("my-project_v15_to_v16"), model_patch=patch_content
         )
         assert submission.instance_id == "my-project_v15_to_v16"
         assert submission.model_patch == patch_content
@@ -123,7 +125,7 @@ class TestSubmission:
         """Test that omitting the model_patch field raises a ValidationError."""
         patch_content = "diff --git a/file.ts b/file.ts\n--- a/file.ts\n+++ b/file.ts"
         submission = Submission(
-            instance_id="my-project_v15_to_v16", model_patch=patch_content
+            instance_id=InstanceID("my-project_v15_to_v16"), model_patch=patch_content
         )
 
         data = submission.model_dump()
@@ -183,7 +185,8 @@ class TestEvaluationResult:
         metrics = MetricsReport(patch_application_success=False)
 
         result = EvaluationReport(
-            instance_id="my-project_v15_to_v16",
+            instance_id=InstanceID("my-project_v15_to_v16"),
+            submission_id=SubmissionID("test-submission-id"),
             execution=execution,
             metrics=metrics,
         )
@@ -197,7 +200,10 @@ class TestEvaluationResult:
         execution = ExecutionTrace(steps=[])
         metrics = MetricsReport(patch_application_success=True)
         result = EvaluationReport(
-            instance_id="some-id", execution=execution, metrics=metrics
+            instance_id=InstanceID("some-id"),
+            submission_id=SubmissionID("test-submission-id"),
+            execution=execution,
+            metrics=metrics,
         )
         assert len(result.execution.steps) == 0
 

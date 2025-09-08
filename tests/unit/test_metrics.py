@@ -15,6 +15,7 @@ from bench_mac.models import (
     BenchmarkInstance,
     ExecutionTrace,
     InstanceCommands,
+    InstanceID,
 )
 
 from ..utils import create_command_output
@@ -121,7 +122,7 @@ class TestCalculateTargetVersionAchieved:
 def sample_instance() -> BenchmarkInstance:
     """Provides a standard BenchmarkInstance for testing."""
     return BenchmarkInstance(
-        instance_id="test-project_v15_to_v16",
+        instance_id=InstanceID("test-project_v15_to_v16"),
         repo="owner/repo",
         base_commit="a" * 40,
         source_angular_version="15.2.0",

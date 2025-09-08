@@ -41,8 +41,14 @@ ENV NPM_CONFIG_CACHE=/home/node/.npm
 RUN curl -L https://github.com/gothinkster/angular-realworld-example-app/archive/2555e2f.tar.gz \
     | tar -xz --strip-components=1
 
-# Mark the repo as safe to avoid Git ownership warnings, as we'll init it for the agent
-RUN git init && git config --global --add safe.directory /app/project
+# Initialize git repo and create baseline commit for diffing
+RUN git init && \
+    git config --global --add safe.directory /app/project && \
+    git config user.email "benchmark@benchmac.dev" && \
+    git config user.name "BenchMAC Baseline" && \
+    git add . && \
+    git commit -m "baseline: gothinkster/angular-realworld-example-app@2555e2f" && \
+    git tag baseline
 
 # Default command - idle state for external harness
 CMD ["bash", "-lc", "sleep infinity"]

@@ -3,7 +3,12 @@ from pathlib import Path
 
 from loguru import logger
 
-from bench_mac.models import BenchmarkInstance
+from bench_mac.models import (
+    BenchmarkInstance,
+    EvaluationID,
+    EvaluationResult,
+    SubmissionID,
+)
 
 
 def load_instances(
@@ -47,3 +52,42 @@ def load_instances(
         logger.warning(f"⚠️ Skipped {invalid_count} invalid instances")
 
     return instances
+
+
+def collect_network_error_details(
+    eval_results: list[EvaluationResult],
+) -> list[tuple[EvaluationID, SubmissionID, list[str]]]:
+    """Return list of tuples with evaluation_id, submission_id, and affected cmds."""
+    network_error_keywords = [
+        "socket timeout",
+        "econnreset",
+        "etimedout",
+        "network is unreachable",
+        "failed to fetch",
+    ]
+
+    results: list[tuple[EvaluationID, SubmissionID, list[str]]] = []
+
+    for result in eval_results:
+        if result.status != "completed":
+            continue
+
+        evaluation_id = result.id
+        submission_id = result.result.submission_id
+
+        affected_commands: list[str] = []
+
+        # Check execution steps for network errors
+        for step in result.result.execution.steps:
+            if (
+                any(
+                    keyword in step.stderr.lower() for keyword in network_error_keywords
+                )
+                and step.command not in affected_commands
+            ):
+                affected_commands.append(step.command)
+
+        if affected_commands:
+            results.append((evaluation_id, submission_id, affected_commands))
+
+    return results
