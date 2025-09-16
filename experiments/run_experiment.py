@@ -9,10 +9,12 @@ from pathlib import Path
 
 import typer
 from dotenv import load_dotenv
+from loguru import logger
 from pydantic import ValidationError
 from rich.console import Console
 from rich.progress import Progress
 
+from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import (
     BenchmarkInstance,
@@ -20,8 +22,10 @@ from bench_mac.models import (
     Submission,
     SubmissionID,
 )
+from bench_mac.utils import load_instances
 from experiments.agents.base import BaseAgent
 from experiments.agents.mini_swe_agent.agent import MiniSweAgent
+from experiments.logging_utils import bind_run_context, setup_experiment_logging
 from experiments.models import (
     AgentConfig,
     CompletedExperiment,
@@ -30,8 +34,6 @@ from experiments.models import (
     ExperimentTask,
     FailedExperiment,
 )
-from src.bench_mac.config import settings
-from src.bench_mac.utils import load_instances
 
 load_dotenv()
 
@@ -175,10 +177,16 @@ def process_single_task(
     """
     dt_factory = dt_factory or (lambda: datetime.now(UTC))
     started_at = dt_factory()
+    task_logger = bind_run_context(
+        instance=task.instance_id,
+        model=task.agent_config.model_name,
+        submission=submission_id,
+    )
 
     try:
         # Run the agent
         console.print("Running agent")
+        task_logger.info("Starting agent run")
         agent_result = agent.run(submission_id=submission_id)
         submission = Submission(
             submission_id=SubmissionID(submission_id),
@@ -197,16 +205,25 @@ def process_single_task(
             ended_at=dt_factory(),
             artifacts=artifacts,
         )
+        task_logger.success("Task completed successfully")
         return completed
     except Exception as e:
         console.print(
             f"[bold red]Error processing {task.instance_id} ({task.agent_config.model_name}): {e}[/bold red]"
         )
+        task_logger.opt(exception=True).error("Task failed during agent run")
+        failed_artifacts = None
+        agent_artifacts = agent.collect_artifacts()
+        if agent_artifacts is not None:
+            failed_artifacts = ExperimentArtifacts(
+                execution_trace=agent_artifacts.execution_trace
+            )
         failed = FailedExperiment(
             task=task,
             error=str(e),
             started_at=started_at,
             ended_at=dt_factory(),
+            artifacts=failed_artifacts,
         )
         return failed
 
@@ -280,6 +297,10 @@ def main(
     if results_file is None:
         results_file = get_results_file_path(settings.experiments_dir)
 
+    log_path = setup_experiment_logging(results_file.stem)
+    console.print(f"🗒 Logging to [cyan]{log_path}[/cyan]")
+    logger.info("Initialized experiment logging -> {log_path}", log_path=str(log_path))
+
     # Collect old results to avoid re-running completed tasks
     old_results = collect_old_results(settings.experiments_dir)
     console.print(f"Found {len(old_results)} existing results")
@@ -304,12 +325,18 @@ def main(
         for task in tasks:
             instance = instances[task.instance_id]
             submission_id = str(uuid.uuid4())
+            task_logger = bind_run_context(
+                instance=task.instance_id,
+                model=task.agent_config.model_name,
+                submission=submission_id,
+            )
             progress.update(
                 task_progress,
                 description=f"[cyan]Processing: {task.instance_id} ({task.agent_config.model_name})[/cyan]",
             )
 
             agent = create_agent(instance, task.agent_config)
+            task_logger.debug("Agent created for task")
 
             result = process_single_task(
                 task,
@@ -320,6 +347,11 @@ def main(
             result_wrapper = ExperimentResult(root=result)
             with results_file.open("a") as f:
                 f.write(result_wrapper.model_dump_json() + "\n")
+
+            task_logger.info(
+                "Persisted result to {results_file}",
+                results_file=str(results_file),
+            )
 
             progress.advance(task_progress)
 

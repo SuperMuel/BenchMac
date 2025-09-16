@@ -33,3 +33,7 @@ class BaseAgent(ABC):
     ) -> AgentRunResult:
         """Execute the agent and return the generated patch and optional artifacts."""
         pass
+
+    def collect_artifacts(self) -> AgentRunArtifacts | None:
+        """Return any artifacts gathered outside of a successful run."""
+        return None

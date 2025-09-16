@@ -9,6 +9,7 @@ from minisweagent.run.utils.save import save_traj
 
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
+from bench_mac.models import BenchmarkInstance
 from experiments.agents.base import (
     AgentRunArtifacts,
     AgentRunResult,
@@ -16,7 +17,6 @@ from experiments.agents.base import (
 )
 from experiments.agents.mini_swe_agent.environment import InstanceEnv
 from experiments.models import AgentConfig
-from src.bench_mac.models import BenchmarkInstance
 
 
 def generate_task_prompt(instance: BenchmarkInstance) -> str:
@@ -119,3 +119,9 @@ class MiniSweAgent(BaseAgent):
             artifacts = AgentRunArtifacts(execution_trace=self.env.execution_trace())
 
             return AgentRunResult(model_patch=model_patch, artifacts=artifacts)
+
+    def collect_artifacts(self) -> AgentRunArtifacts | None:
+        try:
+            return AgentRunArtifacts(execution_trace=self.env.execution_trace())
+        except Exception:
+            return None
