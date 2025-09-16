@@ -1,0 +1,51 @@
+# Pick a Node image compatible with Angular 15
+# Using Node 14 for better compatibility with older Angular/dependency versions
+FROM node:14-bullseye-slim
+
+# Minimal, repeatable CI-ish environment
+ENV CI=true \
+    TZ=UTC \
+    LANG=C.UTF-8 \
+    NG_CLI_ANALYTICS=false \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_FUND=false \
+    CHROME_BIN=/usr/bin/chromium
+
+# Tools required by the harness and typical Angular builds/tests
+RUN apt-get update && \
+    apt-get install -y \
+        curl \
+        git \
+        ca-certificates \
+        python \
+        make \
+        g++ \
+        --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
+# Writable workspace
+RUN mkdir -p /app/project
+# This is where the repository will be available to the agent
+WORKDIR /app/project
+
+# Use a user-scoped npm cache (keeps permissions sane)
+ENV NPM_CONFIG_CACHE=/home/node/.npm
+
+# IMPORTANT: pull a history-free snapshot, NOT a git clone
+# If the full git history is included, AI agents could "see the future" and cheat.
+# Use the chosen base_commit here
+RUN curl -L https://github.com/akveo/ngx-admin/archive/dc6a442704bfef34b776b5eb15faf852d9e2f75c.tar.gz \
+    | tar -xz --strip-components=1
+
+# Initialize git repo and create baseline commit for diffing
+RUN git init --initial-branch=main && \
+    git config --global --add safe.directory /app/project && \
+    git config user.email "benchmark@benchmac.dev" && \
+    git config user.name "BenchMAC Baseline" && \
+    git add . && \
+    git commit -m "baseline: akveo/ngx-admin@dc6a442704bfef34b776b5eb15faf852d9e2f75c" && \
+    git tag baseline
+
+# Keep container idle; the harness will exec into it
+CMD ["bash", "-lc", "sleep infinity"]

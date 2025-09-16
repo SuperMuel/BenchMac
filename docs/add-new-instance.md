@@ -183,6 +183,26 @@ Verify that all the instances from a single repository are valid
   uv run pytest -m instance_validation tests/integration/test_baseline_validation.py -k "<owner>__<repo>"
 ```
 
+## 5) Tips
+
+### Research the target repository
+Before creating your Dockerfile, research the repository's existing setup:
+
+- **Review existing Dockerfiles**: Check if the repository already has Docker configuration
+- **Examine CI/CD pipelines**: Look at `.github/workflows/` or other CI files to understand build requirements
+- **Study BenchMAC examples**: Reference existing Dockerfiles in `data/dockerfiles/` for proven patterns and best practices
+
+### Use an iterative development approach
+Don't try to integrate the instance into the benchmark immediately. Instead, follow this development workflow:
+
+1. **Clone locally**: Clone the codebase to a temporary directory for easy exploration (e.g., `.benchmac/temp-codebases`)
+2. **Create standalone Dockerfile**: Build a new Dockerfile outside `data/dockerfiles/` to avoid disrupting the benchmark
+3. **Iterate and test**:
+   - Build the image and verify it works
+   - Run a container and execute install/build commands
+   - Analyze outputs and refine the Dockerfile as needed
+4. **Integrate when ready**: Once your local tests pass, integrate the instance into the benchmark and run the full validation suite
+
 ---
 
 ## 6) PR checklist
