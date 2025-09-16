@@ -18,6 +18,50 @@ with st.sidebar:
 
 st.caption("Browse agent runs loaded from results under experiments/results/*.jsonl.")
 
+
+def filter_patch_excluding_package_lock(
+    patch_text: str, include_package_lock: bool
+) -> str:
+    """Return patch text, optionally excluding package-lock.json file diffs.
+
+    Assumes git-style unified diff sections starting with 'diff --git a/... b/...'.
+    """
+    if include_package_lock:
+        return patch_text
+
+    lines = patch_text.splitlines()
+    if not lines:
+        return patch_text
+
+    filtered: list[str] = []
+    include_current = True
+    in_any_section = False
+
+    for line in lines:
+        if line.startswith("diff --git "):
+            in_any_section = True
+            parts = line.split()
+            # Expected: ['diff', '--git', 'a/path', 'b/path']
+            path_b = parts[3] if len(parts) >= 4 else ""
+            # Strip leading 'b/' if present
+            if path_b.startswith("b/"):
+                path_b = path_b[2:]
+            include_current = not path_b.endswith("package-lock.json")
+            if include_current:
+                filtered.append(line)
+            continue
+
+        if not in_any_section:
+            # Keep any preamble before first 'diff --git'
+            filtered.append(line)
+            continue
+
+        if include_current:
+            filtered.append(line)
+
+    return "\n".join(filtered)
+
+
 experiments: list[ExperimentResult] = load_all_experiments(settings.experiments_dir)
 
 if not experiments:
@@ -187,6 +231,31 @@ else:
                 if c.artifacts and c.artifacts.execution_trace:
                     st.subheader("Execution steps")
                     display_execution_steps(c.artifacts.execution_trace.steps)
+
+                # Model patch viewer
+                if c.submission.model_patch:
+                    st.subheader("Model patch")
+                    include_package_lock = st.toggle(
+                        "Show package-lock.json changes", value=False
+                    )
+                    patch_to_show = filter_patch_excluding_package_lock(
+                        c.submission.model_patch, include_package_lock
+                    )
+                    patch_lines = patch_to_show.splitlines()
+                    with st.expander(
+                        f"Unified diff ({len(patch_lines)} lines)", expanded=False
+                    ):
+                        st.download_button(
+                            "Download patch",
+                            data=patch_to_show,
+                            file_name=f"{c.submission.submission_id}.patch",
+                            mime="text/x-diff",
+                        )
+                        st.code(
+                            patch_to_show,
+                            language="diff",
+                            wrap_lines=True,
+                        )
             elif sel.is_failed:
                 f = cast(FailedExperiment, sel.root)
                 total_s = (f.ended_at - f.started_at).total_seconds()
