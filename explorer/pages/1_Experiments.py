@@ -88,9 +88,9 @@ else:
 
             rows.append(
                 {
-                    "status": "completed",
                     "instance_id": c.task.instance_id,
                     "agent": c.task.agent_config.key,
+                    "status": "completed",
                     "submission_id": str(c.submission.submission_id),
                     "started_at": c.started_at,
                     "ended_at": c.ended_at,
@@ -100,6 +100,16 @@ else:
                     ),
                     "model_only_s": (
                         round(model_only_s, 2) if model_only_s is not None else None
+                    ),
+                    "cost_usd": (
+                        round(c.artifacts.cost_usd, 2)
+                        if c.artifacts and c.artifacts.cost_usd is not None
+                        else None
+                    ),
+                    "n_calls": (
+                        int(c.artifacts.n_calls)
+                        if c.artifacts and c.artifacts.n_calls is not None
+                        else None
                     ),
                     "steps": (
                         len(c.artifacts.execution_trace.steps)
@@ -124,9 +134,9 @@ else:
 
             rows.append(
                 {
-                    "status": "failed",
                     "instance_id": f.task.instance_id,
                     "agent": f.task.agent_config.key,
+                    "status": "failed",
                     "submission_id": "",
                     "started_at": f.started_at,
                     "ended_at": f.ended_at,
@@ -136,6 +146,16 @@ else:
                     ),
                     "model_only_s": (
                         round(model_only_s, 2) if model_only_s is not None else None
+                    ),
+                    "cost_usd": (
+                        round(f.artifacts.cost_usd, 2)
+                        if f.artifacts and f.artifacts.cost_usd is not None
+                        else None
+                    ),
+                    "n_calls": (
+                        int(f.artifacts.n_calls)
+                        if f.artifacts and f.artifacts.n_calls is not None
+                        else None
                     ),
                     "steps": (
                         len(f.artifacts.execution_trace.steps)
@@ -151,9 +171,9 @@ else:
         df,
         hide_index=True,
         column_config={
-            "status": st.column_config.TextColumn("Status"),
             "instance_id": st.column_config.TextColumn("Instance"),
             "agent": st.column_config.TextColumn("Agent"),
+            "status": st.column_config.TextColumn("Status"),
             "submission_id": st.column_config.TextColumn("Submission"),
             "started_at": st.column_config.DatetimeColumn("Started"),
             "ended_at": st.column_config.DatetimeColumn("Ended"),
@@ -162,6 +182,8 @@ else:
             "model_only_s": st.column_config.NumberColumn(
                 "Model-only (s)", format="%.2f"
             ),
+            "cost_usd": st.column_config.NumberColumn("Cost (USD)", format="$%.2f"),
+            "n_calls": st.column_config.NumberColumn("Calls"),
             "steps": st.column_config.NumberColumn("Steps"),
         },
         on_select="rerun",
@@ -202,53 +224,84 @@ else:
                     max(0.0, total_s - commands_s) if commands_s is not None else None
                 )
 
-                cols = st.columns(5)
-                cols[0].metric("Status", "completed")
-                cols[1].metric("Duration", f"{total_s:.2f}s")
-                cols[2].metric(
-                    "Commands",
-                    f"{commands_s:.2f}s" if commands_s is not None else "N/A",
+                steps_available = bool(
+                    c.artifacts
+                    and c.artifacts.execution_trace
+                    and c.artifacts.execution_trace.steps
                 )
-                cols[3].metric(
-                    "Model-only",
-                    f"{model_only_s:.2f}s" if model_only_s is not None else "N/A",
-                )
-                cols[4].metric(
-                    "Steps",
-                    str(
+                diff_available = bool(c.submission.model_patch)
+
+                tab_labels: list[str] = ["Overview"]
+                if steps_available:
+                    tab_labels.append("Steps")
+                if diff_available:
+                    tab_labels.append("Diff")
+
+                tabs = st.tabs(tab_labels)
+
+                tab_idx = 0
+                with tabs[tab_idx]:
+                    top_cols = st.columns(4)
+                    top_cols[0].metric("Status", "completed")
+                    top_cols[1].metric("Duration", f"{total_s:.2f}s")
+                    top_cols[2].metric(
+                        "Commands",
+                        f"{commands_s:.2f}s" if commands_s is not None else "N/A",
+                    )
+                    top_cols[3].metric(
+                        "Model-only",
+                        f"{model_only_s:.2f}s" if model_only_s is not None else "N/A",
+                    )
+
+                    steps_value = str(
                         len(c.artifacts.execution_trace.steps)
                         if c.artifacts and c.artifacts.execution_trace
                         else 0
-                    ),
-                )
-
-                st.write(f"**Started:** {c.started_at}")
-                st.write(f"**Ended:** {c.ended_at}")
-                st.write("**Agent:** `" + c.task.agent_config.key + "`")
-                st.write("**Instance:** `" + c.task.instance_id + "`")
-                st.write("**Submission ID:** `" + str(c.submission.submission_id) + "`")
-
-                if c.artifacts and c.artifacts.execution_trace:
-                    st.subheader("Execution steps")
-                    display_execution_steps(c.artifacts.execution_trace.steps)
-
-                # Model patch viewer
-                if c.submission.model_patch:
-                    st.subheader("Model patch")
-                    include_package_lock = st.toggle(
-                        "Show package-lock.json changes", value=False
                     )
-                    patch_to_show = filter_patch_excluding_package_lock(
-                        c.submission.model_patch, include_package_lock
+                    cost_display = (
+                        f"${c.artifacts.cost_usd:.2f}"
+                        if c.artifacts and c.artifacts.cost_usd is not None
+                        else "N/A"
                     )
-                    patch_lines = patch_to_show.splitlines()
-                    with st.expander(
-                        f"Unified diff ({len(patch_lines)} lines)", expanded=False
-                    ):
+                    calls_display = (
+                        str(int(c.artifacts.n_calls))
+                        if c.artifacts and c.artifacts.n_calls is not None
+                        else "N/A"
+                    )
+                    bottom_cols = st.columns(4)
+                    bottom_cols[0].metric("Steps", steps_value)
+                    bottom_cols[1].metric("Cost", cost_display)
+                    bottom_cols[2].metric("Calls", calls_display)
+
+                    st.write(f"**Started:** {c.started_at}")
+                    st.write(f"**Ended:** {c.ended_at}")
+                    st.write("**Agent:** `" + c.task.agent_config.key + "`")
+                    st.write("**Instance:** `" + c.task.instance_id + "`")
+                    st.write(
+                        "**Submission ID:** `" + str(c.submission.submission_id) + "`"
+                    )
+
+                if steps_available and c.artifacts and c.artifacts.execution_trace:
+                    tab_idx += 1
+                    with tabs[tab_idx]:
+                        display_execution_steps(c.artifacts.execution_trace.steps)
+
+                if diff_available:
+                    tab_idx += 1
+                    with tabs[tab_idx]:
+                        st.subheader("Model patch")
+                        include_package_lock = st.toggle(
+                            "Show package-lock.json changes", value=False
+                        )
+                        patch_to_show = filter_patch_excluding_package_lock(
+                            c.submission.model_patch, include_package_lock
+                        )
+                        patch_lines = patch_to_show.splitlines()
+                        st.subheader(f"Unified diff ({len(patch_lines)} lines)")
                         st.download_button(
                             "Download patch",
                             data=patch_to_show,
-                            file_name=f"{c.submission.submission_id}.patch",
+                            file_name=(f"{c.submission.submission_id}.patch"),
                             mime="text/x-diff",
                         )
                         st.code(
@@ -268,28 +321,58 @@ else:
                     max(0.0, total_s - commands_s) if commands_s is not None else None
                 )
 
-                cols = st.columns(5)
-                cols[0].metric("Status", "failed")
-                cols[1].metric("Duration", f"{total_s:.2f}s")
-                cols[2].metric(
-                    "Commands",
-                    f"{commands_s:.2f}s" if commands_s is not None else "N/A",
+                steps_available = bool(
+                    f.artifacts
+                    and f.artifacts.execution_trace
+                    and f.artifacts.execution_trace.steps
                 )
-                cols[3].metric(
-                    "Model-only",
-                    f"{model_only_s:.2f}s" if model_only_s is not None else "N/A",
-                )
-                cols[4].metric(
-                    "Steps",
-                    str(
+
+                tab_labels = ["Overview"]
+                if steps_available:
+                    tab_labels.append("Steps")
+                tabs = st.tabs(tab_labels)
+
+                tab_idx = 0
+                with tabs[tab_idx]:
+                    top_cols = st.columns(4)
+                    top_cols[0].metric("Status", "failed")
+                    top_cols[1].metric("Duration", f"{total_s:.2f}s")
+                    top_cols[2].metric(
+                        "Commands",
+                        f"{commands_s:.2f}s" if commands_s is not None else "N/A",
+                    )
+                    top_cols[3].metric(
+                        "Model-only",
+                        f"{model_only_s:.2f}s" if model_only_s is not None else "N/A",
+                    )
+
+                    steps_value = str(
                         len(f.artifacts.execution_trace.steps)
                         if f.artifacts and f.artifacts.execution_trace
                         else 0
-                    ),
-                )
+                    )
+                    cost_display = (
+                        f"${f.artifacts.cost_usd:.2f}"
+                        if f.artifacts and f.artifacts.cost_usd is not None
+                        else "N/A"
+                    )
+                    calls_display = (
+                        str(int(f.artifacts.n_calls))
+                        if f.artifacts and f.artifacts.n_calls is not None
+                        else "N/A"
+                    )
+                    bottom_cols = st.columns(4)
+                    bottom_cols[0].metric("Steps", steps_value)
+                    bottom_cols[1].metric("Cost", cost_display)
+                    bottom_cols[2].metric("Calls", calls_display)
 
-                st.write(f"**Started:** {f.started_at}")
-                st.write(f"**Ended:** {f.ended_at}")
-                st.write("**Agent:** `" + f.task.agent_config.key + "`")
-                st.write("**Instance:** `" + f.task.instance_id + "`")
-                st.error(f.error)
+                    st.write(f"**Started:** {f.started_at}")
+                    st.write(f"**Ended:** {f.ended_at}")
+                    st.write("**Agent:** `" + f.task.agent_config.key + "`")
+                    st.write("**Instance:** `" + f.task.instance_id + "`")
+                    st.error(f.error)
+
+                if steps_available and f.artifacts and f.artifacts.execution_trace:
+                    tab_idx += 1
+                    with tabs[tab_idx]:
+                        display_execution_steps(f.artifacts.execution_trace.steps)

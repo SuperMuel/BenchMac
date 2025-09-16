@@ -55,6 +55,14 @@ class ExperimentArtifacts(BaseModel):
         default=None,
         description="Ordered command trace captured during the experiment run.",
     )
+    cost_usd: float | None = Field(
+        default=None,
+        description="The cost of the agent run in USD.",
+    )
+    n_calls: int | None = Field(
+        default=None,
+        description="The number of calls to the model.",
+    )
 
 
 class CompletedExperiment(BaseModel):

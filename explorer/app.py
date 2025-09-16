@@ -457,8 +457,8 @@ def display_agent_leaderboard(
                 "Overall Score": f"{scores['overall_score']:.1f}%",
                 "Total Evaluations": int(scores["total_evaluations"]),
                 "Patch Success": f"{scores['patch_success_rate']:.1f}%",
-                "Target Success": f"{scores['target_success_rate']:.1f}%",
                 "Install Success": f"{scores['install_success_rate']:.1f}%",
+                "Target Success": f"{scores['target_success_rate']:.1f}%",
                 "Build Success": f"{scores['build_success_rate']:.1f}%",
             }
         )

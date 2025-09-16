@@ -100,6 +100,9 @@ class MiniSweAgent(BaseAgent):
         with self.env:
             exit_status, result = self.agent.run(task=self.task_prompt)
 
+            cost_usd = self.agent.model.cost
+            n_calls = self.agent.model.n_calls
+
             save_traj(
                 self.agent,
                 settings.experiments_dir
@@ -111,17 +114,27 @@ class MiniSweAgent(BaseAgent):
                     "instance_id": self.instance.instance_id,
                     "submission_id": submission_id,
                     "agent_config": self.agent_config.model_dump(),
+                    "cost_usd": cost_usd,
+                    "n_calls": n_calls,
                 },
             )
 
             # Generate patch and write completed result
             model_patch = self.env.diff_with_base_commit()
-            artifacts = AgentRunArtifacts(execution_trace=self.env.execution_trace())
+            artifacts = AgentRunArtifacts(
+                execution_trace=self.env.execution_trace(),
+                cost_usd=cost_usd,
+                n_calls=n_calls,
+            )
 
             return AgentRunResult(model_patch=model_patch, artifacts=artifacts)
 
     def collect_artifacts(self) -> AgentRunArtifacts | None:
         try:
-            return AgentRunArtifacts(execution_trace=self.env.execution_trace())
+            return AgentRunArtifacts(
+                execution_trace=self.env.execution_trace(),
+                cost_usd=self.agent.model.cost,
+                n_calls=self.agent.model.n_calls,
+            )
         except Exception:
             return None

@@ -196,7 +196,9 @@ def process_single_task(
         artifacts = None
         if agent_result.artifacts is not None:
             artifacts = ExperimentArtifacts(
-                execution_trace=agent_result.artifacts.execution_trace
+                execution_trace=agent_result.artifacts.execution_trace,
+                cost_usd=agent_result.artifacts.cost_usd,
+                n_calls=agent_result.artifacts.n_calls,
             )
         completed = CompletedExperiment(
             task=task,
@@ -216,7 +218,9 @@ def process_single_task(
         agent_artifacts = agent.collect_artifacts()
         if agent_artifacts is not None:
             failed_artifacts = ExperimentArtifacts(
-                execution_trace=agent_artifacts.execution_trace
+                execution_trace=agent_artifacts.execution_trace,
+                cost_usd=agent_artifacts.cost_usd,
+                n_calls=agent_artifacts.n_calls,
             )
         failed = FailedExperiment(
             task=task,
