@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger as _default_logger
 
@@ -46,13 +46,13 @@ class InstanceEnvironment:
 
     # ----------------------- Lifecycle (context manager) -----------------------
 
-    def __enter__(self) -> "InstanceEnvironment":
+    def __enter__(self) -> Self:
         return self.start()
 
     def __exit__(self, *_: Any) -> None:
         self.close()
 
-    def start(self) -> "InstanceEnvironment":
+    def start(self) -> Self:
         """Ensure image exists and start a container (idempotent for a *live* env)."""
         if self._state is _EnvState.CLOSED:
             raise RuntimeError(

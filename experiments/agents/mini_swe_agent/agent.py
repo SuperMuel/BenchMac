@@ -9,7 +9,11 @@ from minisweagent.run.utils.save import save_traj
 
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
-from experiments.agents.base import BaseAgent
+from experiments.agents.base import (
+    AgentRunArtifacts,
+    AgentRunResult,
+    BaseAgent,
+)
 from experiments.agents.mini_swe_agent.environment import InstanceEnv
 from experiments.models import AgentConfig
 from src.bench_mac.models import BenchmarkInstance
@@ -89,10 +93,8 @@ class MiniSweAgent(BaseAgent):
         self,
         *,
         submission_id: str,
-    ) -> str:
-        """
-        Execute the agent and return the solution as a patch string.
-        """
+    ) -> AgentRunResult:
+        """Execute the agent and return the generated patch and artifacts."""
         logger.info(f"Running Mini SWE Agent for instance: {self.instance.instance_id}")
 
         with self.env:
@@ -114,5 +116,6 @@ class MiniSweAgent(BaseAgent):
 
             # Generate patch and write completed result
             model_patch = self.env.diff_with_base_commit()
+            artifacts = AgentRunArtifacts(execution_trace=self.env.execution_trace())
 
-            return model_patch
+            return AgentRunResult(model_patch=model_patch, artifacts=artifacts)

@@ -11,10 +11,15 @@ from loguru import logger
 
 from src.bench_mac.docker.builder import prepare_environment
 from src.bench_mac.docker.manager import DockerManager
-from src.bench_mac.models import BenchmarkInstance
+from src.bench_mac.models import (
+    BenchmarkInstance,
+    CommandResult,
+    ExecutionTrace,
+    utc_now,
+)
 
 
-class InstanceEnv:
+class InstanceEnv:  # TODO: consider using src/bench_mac/environment.py instead !!
     """
     An agent environment that uses the BenchMAC Docker infrastructure.
 
@@ -40,6 +45,7 @@ class InstanceEnv:
         self._project_workdir = (
             "/app/project"  # Consistent with executor.py #TODO: make it configurable
         )
+        self._steps: list[CommandResult] = []
 
         self._start_environment()
 
@@ -89,9 +95,22 @@ class InstanceEnv:
             )
 
         workdir = cwd or self._project_workdir
+        start_time = utc_now()
         exit_code, stdout, stderr = self.docker_manager.execute_in_container(
             self.container, command, workdir=workdir
         )
+        end_time = utc_now()
+
+        result = CommandResult(
+            command=command,
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        self._steps.append(result)
+
         if "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in stdout:
             return {
                 "output": f"COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n{stdout}\n{stderr}",
@@ -118,6 +137,10 @@ class InstanceEnv:
             self.container, diff_command, workdir=self._project_workdir
         )
         return stdout
+
+    def execution_trace(self) -> ExecutionTrace:
+        """Return the accumulated execution trace for this environment."""
+        return ExecutionTrace(steps=list(self._steps))
 
     def close(self) -> None:
         """Stops and removes the container, cleaning up all resources."""

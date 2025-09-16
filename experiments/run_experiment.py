@@ -25,6 +25,7 @@ from experiments.agents.mini_swe_agent.agent import MiniSweAgent
 from experiments.models import (
     AgentConfig,
     CompletedExperiment,
+    ExperimentArtifacts,
     ExperimentResult,
     ExperimentTask,
     FailedExperiment,
@@ -178,17 +179,23 @@ def process_single_task(
     try:
         # Run the agent
         console.print("Running agent")
-        model_patch = agent.run(submission_id=submission_id)
+        agent_result = agent.run(submission_id=submission_id)
         submission = Submission(
             submission_id=SubmissionID(submission_id),
             instance_id=InstanceID(task.instance_id),
-            model_patch=model_patch,
+            model_patch=agent_result.model_patch,
         )
+        artifacts = None
+        if agent_result.artifacts is not None:
+            artifacts = ExperimentArtifacts(
+                execution_trace=agent_result.artifacts.execution_trace
+            )
         completed = CompletedExperiment(
             task=task,
             submission=submission,
             started_at=started_at,
             ended_at=dt_factory(),
+            artifacts=artifacts,
         )
         return completed
     except Exception as e:

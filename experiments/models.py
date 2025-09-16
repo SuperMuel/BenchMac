@@ -3,7 +3,7 @@ from typing import Annotated, Literal, NewType
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 
-from bench_mac.models import Submission
+from bench_mac.models import ExecutionTrace, Submission
 
 
 class AgentConfig(BaseModel):
@@ -49,6 +49,13 @@ class ExperimentTask(BaseModel):
 ExperimentID = NewType("ExperimentID", str)
 
 
+class ExperimentArtifacts(BaseModel):
+    execution_trace: ExecutionTrace | None = Field(
+        default=None,
+        description="Ordered command trace captured during the experiment run.",
+    )
+
+
 class CompletedExperiment(BaseModel):
     id: ExperimentID = Field(
         default_factory=lambda: ExperimentID(str(uuid.uuid4())),
@@ -59,6 +66,10 @@ class CompletedExperiment(BaseModel):
     submission: Submission
     started_at: AwareDatetime
     ended_at: AwareDatetime
+    artifacts: ExperimentArtifacts | None = Field(
+        default=None,
+        description="Optional structured artifacts captured during the run.",
+    )
 
 
 class FailedExperiment(BaseModel):
@@ -71,6 +82,11 @@ class FailedExperiment(BaseModel):
     error: str
     started_at: AwareDatetime
     ended_at: AwareDatetime
+    artifacts: ExperimentArtifacts | None = Field(
+        default=None,
+        description="Optional structured artifacts captured during the run,"
+        " possibly empty or incomplete.",
+    )
 
 
 Discriminated = Annotated[
