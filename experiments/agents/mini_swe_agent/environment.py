@@ -9,9 +9,9 @@ from typing import Any
 from docker.models.containers import Container
 from loguru import logger
 
-from src.bench_mac.docker.builder import prepare_environment
-from src.bench_mac.docker.manager import DockerManager
-from src.bench_mac.models import (
+from bench_mac.docker.builder import prepare_environment
+from bench_mac.docker.manager import DockerManager
+from bench_mac.models import (
     BenchmarkInstance,
     CommandResult,
     ExecutionTrace,

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -139,8 +139,8 @@ class TestSubmission:
 class TestCommandResult:
     """Tests for the CommandResult model."""
 
-    def test_duration_seconds_calculation(self) -> None:
-        """Test that duration_seconds correctly calculates the time difference."""
+    def test_duration_calculation(self) -> None:
+        """Test that duration correctly calculates the time difference."""
         start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 1, 12, 0, 5, 500000, tzinfo=UTC)  # 5.5 seconds later
 
@@ -153,7 +153,7 @@ class TestCommandResult:
             end_time=end,
         )
 
-        assert command_output.duration_seconds == 5.5
+        assert command_output.duration == timedelta(seconds=5.5)
 
 
 @pytest.mark.unit

@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, NewType, Self
 from urllib.parse import urlparse
 
@@ -326,8 +326,8 @@ class CommandResult(BaseModel):
     )
 
     @property
-    def duration_seconds(self) -> float:
-        return (self.end_time - self.start_time).total_seconds()
+    def duration(self) -> timedelta:
+        return self.end_time - self.start_time
 
     @property
     def success(self) -> bool:
@@ -348,6 +348,16 @@ class ExecutionTrace(BaseModel):
     """
 
     steps: list[CommandResult]
+
+    @property
+    def total_duration(self) -> timedelta:
+        """
+        Returns the total duration of all command steps in the execution trace.
+        If there are no steps, returns timedelta(0).
+        """
+        if not self.steps:
+            return timedelta(0)
+        return sum((step.duration for step in self.steps), timedelta(0))
 
 
 class EvaluationReport(BaseModel):

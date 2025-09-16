@@ -422,12 +422,12 @@ def _print_evaluation_summary(
 
     # Add all metric rows
     add_metric_row("Patch Application", patch_success_count, patch_total_count)
+    add_metric_row("Install Success", install_success_count, install_total_count)
     add_metric_row(
         "Target Version Achieved",
         target_version_success_count,
         target_version_total_count,
     )
-    add_metric_row("Install Success", install_success_count, install_total_count)
     add_metric_row("Build Success", build_success_count, build_total_count)
 
     # Print all tables

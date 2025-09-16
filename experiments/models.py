@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from typing import Annotated, Literal, NewType
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
@@ -70,6 +71,10 @@ class CompletedExperiment(BaseModel):
         default=None,
         description="Optional structured artifacts captured during the run.",
     )
+
+    @property
+    def duration(self) -> timedelta:
+        return self.ended_at - self.started_at
 
 
 class FailedExperiment(BaseModel):

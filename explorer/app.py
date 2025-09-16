@@ -688,8 +688,8 @@ def main() -> None:
                 cols = st.columns(4)
                 metric_fields = [
                     ("Patch Application", metrics.patch_application_success),
-                    ("Target Version Achieved", metrics.target_version_achieved),
                     ("Install Success", metrics.install_success),
+                    ("Target Version Achieved", metrics.target_version_achieved),
                     ("Build Success", metrics.build_success),
                 ]
 
