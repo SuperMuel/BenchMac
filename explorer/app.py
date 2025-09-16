@@ -510,11 +510,12 @@ def display_execution_steps(steps: list[CommandResult]) -> None:
         return
 
     for step in steps:
-        # Show command in red if exit code is 1, otherwise normal
+        # Show command in ❌ if exit code is 1, otherwise ✅
+        escaped_command = step.command.replace("`", "\\`")
         command_display = (
-            f":red[{step.command}]"
+            f"❌`{escaped_command}`"
             if step.exit_code != 0
-            else f":green[{step.command}]"
+            else f"✅`{escaped_command}`"
         )
         with st.expander(command_display, expanded=False):
             col1, col2 = st.columns(2)
@@ -657,7 +658,7 @@ def main() -> None:
         if radar_chart:
             st.plotly_chart(  # type: ignore
                 radar_chart,
-                use_container_width=True,
+                width="stretch",
                 key="agent_radar_chart",
             )
 
