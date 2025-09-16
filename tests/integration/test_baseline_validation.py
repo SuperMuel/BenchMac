@@ -33,6 +33,80 @@ class TestBaselineInstanceValidation:
         load_instances(settings.instances_file, strict=True).values(),
         ids=lambda inst: inst.instance_id,  # Use instance_id for readable test names
     )
+    def test_base_angular_version_matches_package_json(
+        self, instance: BenchmarkInstance, docker_manager: DockerManager
+    ) -> None:
+        """Ensure the declared base Angular version matches package.json."""
+        logger.info(
+            f"--- Validating Angular version for Instance: {instance.instance_id} ---"
+        )
+
+        container = None
+        try:
+            instance_image_tag = prepare_environment(instance, docker_manager)
+            assert instance_image_tag, "Failed to prepare Docker environment."
+
+            container = docker_manager.run_container(instance_image_tag)
+            assert container, "Failed to run container."
+
+            project_dir = "/app/project"
+            version_check_command = (
+                "node -e \"const fs=require('fs');"
+                "const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));"
+                "const fields=['dependencies','devDependencies'];"
+                "const keys=['@angular/core','@angular/cli'];"
+                "let raw=null;"
+                "for (const field of fields) {"
+                " const section=pkg[field];"
+                " if (!section) continue;"
+                " for (const key of keys) {"
+                "  if (section[key]) { raw=section[key]; break; }"
+                " }"
+                " if (raw) break;"
+                "}"
+                "if (!raw) { console.error('Missing Angular dependency');"
+                " console.error('Check package.json for Angular deps');"
+                " process.exit(1); }"
+                "const match=String(raw).match(/\\d+(\\.\\d+){0,2}/);"
+                "if (!match) { console.error('Unable to parse version from ' + raw);"
+                " process.exit(1); }"
+                'console.log(match[0]);"'
+            )
+
+            exit_code, stdout, stderr = docker_manager.execute_in_container(
+                container, version_check_command, workdir=project_dir
+            )
+
+            assert exit_code == 0, (
+                "Angular version extraction failed for instance "
+                f"'{instance.instance_id}'.\n"
+                f"Command: {version_check_command}\n"
+                f"Stdout: {stdout}\n"
+                f"Stderr: {stderr}"
+            )
+
+            package_json_version = stdout.strip()
+            assert package_json_version == instance.source_angular_version, (
+                "package.json Angular version mismatch for instance "
+                f"'{instance.instance_id}'.\n"
+                f"Expected: {instance.source_angular_version}\n"
+                f"Found: {package_json_version}"
+            )
+
+            logger.success(
+                f"✅ Angular version matches for instance: {instance.instance_id}"
+            )
+
+        finally:
+            if container:
+                logger.info(f"Cleaning up container {container.short_id}...")
+                docker_manager.cleanup_container(container)
+
+    @pytest.mark.parametrize(
+        "instance",
+        load_instances(settings.instances_file, strict=True).values(),
+        ids=lambda inst: inst.instance_id,  # Use instance_id for readable test names
+    )
     def test_instance_baseline_is_green(
         self, instance: BenchmarkInstance, docker_manager: DockerManager
     ) -> None:
