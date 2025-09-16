@@ -683,7 +683,7 @@ def main() -> None:
             with st.expander(f"{status_emoji} `{instance_id}`", expanded=False):
                 st.markdown(
                     f"**Evaluation ID:** `{success.id}`  |  "
-                    " **Submission ID:** `{success.result.submission_id}`"
+                    f" **Submission ID:** `{success.result.submission_id}`"
                 )
                 st.divider()
                 cols = st.columns(4)

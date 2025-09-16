@@ -75,7 +75,6 @@ class MiniSweAgent(BaseAgent):
         self.env = InstanceEnv(instance, docker_manager)
 
         test_env = self.env.execute("ls -la")
-        logger.info(f"Test environment: {test_env}")
         assert "package.json" in str(test_env.get("output", "")), (
             "package.json not found in the environment. "
             "The repository is not cloned correctly, or the current directory "

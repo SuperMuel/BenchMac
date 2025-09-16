@@ -4,7 +4,7 @@
 import json
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import typer
@@ -50,6 +50,17 @@ def get_results_file_path(experiments_dir: Path, now: datetime | None = None) ->
     results_dir.mkdir(parents=True, exist_ok=True)
 
     return results_dir / f"results_{now.strftime('%Y-%m-%d_%H-%M-%S')}.jsonl"
+
+
+def _format_timedelta(td: timedelta) -> str:
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {seconds}s"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
 
 
 def collect_tasks(
@@ -206,6 +217,27 @@ def process_single_task(
             started_at=started_at,
             ended_at=dt_factory(),
             artifacts=artifacts,
+        )
+        # Post-completion summary
+        price_str = "unknown"
+        steps_str = "unknown"
+        duration_str = "unknown"
+        if completed.artifacts is not None:
+            if completed.artifacts.cost_usd is not None:
+                price_str = f"${completed.artifacts.cost_usd:.4f}"
+            if completed.artifacts.execution_trace is not None:
+                try:
+                    steps = len(completed.artifacts.execution_trace.steps)
+                    steps_str = str(steps)
+                    duration_td = completed.artifacts.execution_trace.total_duration
+                    duration_str = _format_timedelta(duration_td)
+                except Exception:
+                    # Be tolerant of partial/malformed traces
+                    pass
+        console.print(
+            "[green]✓ Completed:[/green] "
+            f"{task.instance_id} ({task.agent_config.model_name}) — "
+            f"price: {price_str}, steps: {steps_str}, total: {duration_str}"
         )
         task_logger.success("Task completed successfully")
         return completed
