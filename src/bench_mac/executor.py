@@ -53,8 +53,6 @@ def execute_submission(
     -------
     An ExecutionTrace object containing all command outputs.
     """
-    steps: list[CommandResult] = []
-
     try:
         with InstanceEnvironment(instance, docker_manager) as env:
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -70,34 +68,31 @@ def execute_submission(
             check_command = f"git apply --check -p0 {env_patch_path}"
             logger.debug(f"Executing patch check command: {check_command}")
             patch_check_out = env.exec(check_command)
-            steps.append(patch_check_out)
 
             if not patch_check_out.success:
                 logger.info("❌ Patch check failed. Halting evaluation.")
-                return ExecutionTrace(steps=steps)
+                return env.trace()
 
             # 5. Apply Patch
             apply_command = f"git apply -p0 {env_patch_path}"
             logger.debug(f"Executing patch apply command: {apply_command}")
             patch_apply_out = env.exec(apply_command)
-            steps.append(patch_apply_out)
 
             if not patch_apply_out.success:
                 logger.info("❌ Patch application failed. Halting evaluation.")
-                return ExecutionTrace(steps=steps)
+                return env.trace()
 
             logger.info("✅ Patch applied successfully.")
 
             # 6. Install Dependencies
             logger.debug(f"Executing install command: {instance.commands.install}")
             install_out = env.exec(instance.commands.install)
-            steps.append(install_out)
 
             if not install_out.success:
                 is_peer_dep_error = _is_peer_dep_error(install_out)
                 if not is_peer_dep_error:
                     logger.info("❌ Install failed. Halting evaluation.")
-                    return ExecutionTrace(steps=steps)
+                    return env.trace()
                 logger.info("❌ Install failed due to peer dependency conflict.")
 
                 original_install_command = instance.commands.install
@@ -106,7 +101,7 @@ def execute_submission(
                         "❌ Halting evaluation as the original install command "
                         "already had --legacy-peer-deps flag."
                     )
-                    return ExecutionTrace(steps=steps)
+                    return env.trace()
 
                 fixed_install_command = original_install_command + " --legacy-peer-deps"
                 logger.info(
@@ -114,14 +109,13 @@ def execute_submission(
                     f"{fixed_install_command}"
                 )
                 install_out = env.exec(fixed_install_command)
-                steps.append(install_out)
 
                 if not install_out.success:
                     logger.info(
                         "❌ Install failed even with --legacy-peer-deps flag. "
                         "Halting evaluation."
                     )
-                    return ExecutionTrace(steps=steps)
+                    return env.trace()
 
                 logger.info(
                     "✅ Dependencies installed successfully with "
@@ -135,7 +129,6 @@ def execute_submission(
             version_command = "npm ls @angular/cli @angular/core --json"
             logger.debug(f"Executing version check command: {version_command}")
             version_check_out = env.exec(version_command)
-            steps.append(version_check_out)
 
             if not version_check_out.success:
                 logger.info(
@@ -149,11 +142,10 @@ def execute_submission(
             # 8. Build
             logger.debug(f"Executing build command: {instance.commands.build}")
             build_out = env.exec(instance.commands.build)
-            steps.append(build_out)
 
             if not build_out.success:
                 logger.info("❌ Build failed. Halting evaluation.")
-                return ExecutionTrace(steps=steps)
+                return env.trace()
 
             logger.info("✅ Build completed successfully.")
 
@@ -163,4 +155,4 @@ def execute_submission(
         )
         raise e
 
-    return ExecutionTrace(steps=steps)
+    return env.trace()
