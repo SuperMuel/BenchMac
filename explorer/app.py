@@ -503,6 +503,27 @@ def get_status_emoji(metrics: MetricsReport) -> str:
     return "❌"
 
 
+def _escape_command_label(command: str) -> str:
+    """Escape characters that conflict with Streamlit's Markdown rendering."""
+    return command.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+
+
+def _label_single_line(command: str, max_len: int = 200) -> str:
+    """Make command safe for single-line expander labels.
+
+    - Replace newlines and carriage returns with spaces
+    - Collapse multiple spaces
+    - Truncate to max_len with ellipsis
+    - Then apply markdown-escape for backticks, $, and \\
+    """
+    s = command.replace("\r", " ").replace("\n", " ")
+    # collapse runs of whitespace
+    s = " ".join(s.split())
+    if len(s) > max_len:
+        s = s[: max_len - 1] + "…"
+    return _escape_command_label(s)
+
+
 def display_execution_steps(steps: list[CommandResult]) -> None:
     """Display execution steps in a nice format."""
     if not steps:
@@ -511,7 +532,7 @@ def display_execution_steps(steps: list[CommandResult]) -> None:
 
     for step in steps:
         # Show command in ❌ if exit code is 1, otherwise ✅
-        escaped_command = step.command.replace("`", "\\`")
+        escaped_command = _label_single_line(step.command)
         command_display = (
             f"❌`{escaped_command}`"
             if step.exit_code != 0

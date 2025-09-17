@@ -1,10 +1,17 @@
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, cast
 
 import pandas as pd
 import streamlit as st
 
 from bench_mac.config import settings
-from experiments.models import CompletedExperiment, ExperimentResult, FailedExperiment
+from experiments.models import (
+    CompletedExperiment,
+    ExperimentArtifacts,
+    ExperimentResult,
+    FailedExperiment,
+)
 from explorer.app import display_execution_steps, load_all_experiments
 
 st.set_page_config(page_title="Experiments", page_icon="🧪")
@@ -62,6 +69,264 @@ def filter_patch_excluding_package_lock(
     return "\n".join(filtered)
 
 
+@dataclass
+class ExperimentMetrics:
+    total_s: float
+    commands_s: float | None
+    model_only_s: float | None
+    steps: int
+    cost_usd: float | None
+    n_calls: int | None
+
+
+def compute_metrics(
+    started_at: datetime,
+    ended_at: datetime,
+    artifacts: ExperimentArtifacts | None,
+) -> ExperimentMetrics:
+    total_s = (ended_at - started_at).total_seconds()
+    commands_s: float | None = None
+    steps = 0
+    cost_usd: float | None = None
+    n_calls: int | None = None
+
+    if artifacts:
+        trace = artifacts.execution_trace
+        if trace:
+            commands_s = trace.total_duration.total_seconds()
+            steps = len(trace.steps)
+        if artifacts.cost_usd is not None:
+            cost_usd = round(artifacts.cost_usd, 2)
+        if artifacts.n_calls is not None:
+            n_calls = int(artifacts.n_calls)
+
+    model_only_s = max(0.0, total_s - commands_s) if commands_s is not None else None
+
+    return ExperimentMetrics(
+        total_s=total_s,
+        commands_s=commands_s,
+        model_only_s=model_only_s,
+        steps=steps,
+        cost_usd=cost_usd,
+        n_calls=n_calls,
+    )
+
+
+def build_table_row(
+    experiment: ExperimentResult,
+) -> tuple[dict[str, object], ExperimentResult] | None:
+    if experiment.is_completed:
+        completed = cast(CompletedExperiment, experiment.root)
+        metrics = compute_metrics(
+            completed.started_at, completed.ended_at, completed.artifacts
+        )
+        row = {
+            "instance_id": completed.task.instance_id,
+            "agent": completed.task.agent_config.key,
+            "status": "completed",
+            "submission_id": str(completed.submission.submission_id),
+            "started_at": completed.started_at,
+            "ended_at": completed.ended_at,
+            "duration_s": round(metrics.total_s, 2),
+            "commands_s": (
+                round(metrics.commands_s, 2) if metrics.commands_s is not None else None
+            ),
+            "model_only_s": (
+                round(metrics.model_only_s, 2)
+                if metrics.model_only_s is not None
+                else None
+            ),
+            "cost_usd": metrics.cost_usd,
+            "n_calls": metrics.n_calls,
+            "steps": metrics.steps,
+        }
+        return row, experiment
+
+    if experiment.is_failed:
+        failed = cast(FailedExperiment, experiment.root)
+        metrics = compute_metrics(failed.started_at, failed.ended_at, failed.artifacts)
+        row = {
+            "instance_id": failed.task.instance_id,
+            "agent": failed.task.agent_config.key,
+            "status": "failed",
+            "submission_id": "",
+            "started_at": failed.started_at,
+            "ended_at": failed.ended_at,
+            "duration_s": round(metrics.total_s, 2),
+            "commands_s": (
+                round(metrics.commands_s, 2) if metrics.commands_s is not None else None
+            ),
+            "model_only_s": (
+                round(metrics.model_only_s, 2)
+                if metrics.model_only_s is not None
+                else None
+            ),
+            "cost_usd": metrics.cost_usd,
+            "n_calls": metrics.n_calls,
+            "steps": metrics.steps,
+        }
+        return row, experiment
+
+    return None
+
+
+def format_seconds(value: float | None) -> str:
+    return f"{value:.2f}s" if value is not None else "N/A"
+
+
+def format_currency(value: float | None) -> str:
+    return f"${value:.2f}" if value is not None else "N/A"
+
+
+def format_int(value: int | None) -> str:
+    return str(value) if value is not None else "N/A"
+
+
+def render_overview_section(
+    status: str,
+    metrics: ExperimentMetrics,
+    *,
+    started_at: datetime,
+    ended_at: datetime,
+    agent_key: str,
+    instance_id: str,
+    submission_id: str | None = None,
+    error: str | None = None,
+) -> None:
+    top_cols = st.columns(4)
+    top_cols[0].metric("Status", status)
+    top_cols[1].metric("Duration", f"{metrics.total_s:.2f}s")
+    top_cols[2].metric("Commands", format_seconds(metrics.commands_s))
+    top_cols[3].metric("Model-only", format_seconds(metrics.model_only_s))
+
+    bottom_cols = st.columns(3)
+    bottom_cols[0].metric("Steps", str(metrics.steps))
+    bottom_cols[1].metric("Cost", format_currency(metrics.cost_usd))
+    bottom_cols[2].metric("Calls", format_int(metrics.n_calls))
+
+    st.write(f"**Started:** {started_at}")
+    st.write(f"**Ended:** {ended_at}")
+    st.write("**Agent:** `" + agent_key + "`")
+    st.write("**Instance:** `" + instance_id + "`")
+
+    if submission_id is not None:
+        st.write("**Submission ID:** `" + submission_id + "`")
+    if error:
+        st.error(error)
+
+
+def render_completed_experiment(experiment: CompletedExperiment) -> None:
+    metrics = compute_metrics(
+        experiment.started_at, experiment.ended_at, experiment.artifacts
+    )
+    trace = experiment.artifacts.execution_trace if experiment.artifacts else None
+    steps_available = bool(trace and trace.steps)
+    diff_available = bool(experiment.submission.model_patch)
+
+    tab_labels: list[str] = ["Overview"]
+    if steps_available:
+        tab_labels.append("Steps")
+    if diff_available:
+        tab_labels.append("Diff")
+
+    tabs = st.tabs(tab_labels)
+
+    tab_idx = 0
+    with tabs[tab_idx]:
+        render_overview_section(
+            "completed",
+            metrics,
+            started_at=experiment.started_at,
+            ended_at=experiment.ended_at,
+            agent_key=experiment.task.agent_config.key,
+            instance_id=experiment.task.instance_id,
+            submission_id=str(experiment.submission.submission_id),
+        )
+
+    if steps_available and trace:
+        tab_idx += 1
+        with tabs[tab_idx]:
+            display_execution_steps(trace.steps)
+
+    if diff_available:
+        tab_idx += 1
+        with tabs[tab_idx]:
+            st.subheader("Model patch")
+            include_package_lock = st.toggle(
+                "Show package-lock.json changes", value=False
+            )
+            patch_to_show = filter_patch_excluding_package_lock(
+                experiment.submission.model_patch, include_package_lock
+            )
+            patch_lines = patch_to_show.splitlines()
+            st.subheader(f"Unified diff ({len(patch_lines)} lines)")
+            st.download_button(
+                "Download patch",
+                data=patch_to_show,
+                file_name=f"{experiment.submission.submission_id}.patch",
+                mime="text/x-diff",
+            )
+            st.code(
+                patch_to_show,
+                language="diff",
+                wrap_lines=True,
+            )
+
+
+def render_failed_experiment(experiment: FailedExperiment) -> None:
+    metrics = compute_metrics(
+        experiment.started_at, experiment.ended_at, experiment.artifacts
+    )
+    trace = experiment.artifacts.execution_trace if experiment.artifacts else None
+    steps_available = bool(trace and trace.steps)
+
+    tab_labels = ["Overview"]
+    if steps_available:
+        tab_labels.append("Steps")
+
+    tabs = st.tabs(tab_labels)
+
+    tab_idx = 0
+    with tabs[tab_idx]:
+        render_overview_section(
+            "failed",
+            metrics,
+            started_at=experiment.started_at,
+            ended_at=experiment.ended_at,
+            agent_key=experiment.task.agent_config.key,
+            instance_id=experiment.task.instance_id,
+            error=experiment.error,
+        )
+
+    if steps_available and trace:
+        tab_idx += 1
+        with tabs[tab_idx]:
+            display_execution_steps(trace.steps)
+
+
+def extract_selected_rows(event: Any) -> list[int] | None:
+    if event is None:
+        return None
+
+    selection = getattr(event, "selection", None)
+    if selection is None and isinstance(event, dict):
+        selection = event.get("selection")
+
+    if selection is None:
+        return None
+
+    rows_attr = getattr(selection, "rows", None)
+    if isinstance(rows_attr, list):
+        return rows_attr
+
+    if isinstance(selection, dict):
+        rows_val = selection.get("rows")
+        if isinstance(rows_val, list):
+            return rows_val
+
+    return None
+
+
 experiments: list[ExperimentResult] = load_all_experiments(settings.experiments_dir)
 
 if not experiments:
@@ -74,96 +339,13 @@ else:
     row_experiments: list[ExperimentResult] = []
 
     for er in experiments:
-        if er.is_completed:
-            c = cast(CompletedExperiment, er.root)
-            total_s = c.duration.total_seconds()
-            commands_s = (
-                c.artifacts.execution_trace.total_duration.total_seconds()
-                if c.artifacts and c.artifacts.execution_trace
-                else None
-            )
-            model_only_s = (
-                max(0.0, total_s - commands_s) if commands_s is not None else None
-            )
+        table_entry = build_table_row(er)
+        if table_entry is None:
+            continue
 
-            rows.append(
-                {
-                    "instance_id": c.task.instance_id,
-                    "agent": c.task.agent_config.key,
-                    "status": "completed",
-                    "submission_id": str(c.submission.submission_id),
-                    "started_at": c.started_at,
-                    "ended_at": c.ended_at,
-                    "duration_s": round(total_s, 2),
-                    "commands_s": (
-                        round(commands_s, 2) if commands_s is not None else None
-                    ),
-                    "model_only_s": (
-                        round(model_only_s, 2) if model_only_s is not None else None
-                    ),
-                    "cost_usd": (
-                        round(c.artifacts.cost_usd, 2)
-                        if c.artifacts and c.artifacts.cost_usd is not None
-                        else None
-                    ),
-                    "n_calls": (
-                        int(c.artifacts.n_calls)
-                        if c.artifacts and c.artifacts.n_calls is not None
-                        else None
-                    ),
-                    "steps": (
-                        len(c.artifacts.execution_trace.steps)
-                        if c.artifacts and c.artifacts.execution_trace
-                        else 0
-                    ),
-                }
-            )
-            row_experiments.append(er)
-        elif er.is_failed:
-            f = cast(FailedExperiment, er.root)
-            total_s = (f.ended_at - f.started_at).total_seconds()
-            commands_s = (
-                f.artifacts.execution_trace.total_duration.total_seconds()
-                if f.artifacts and f.artifacts.execution_trace
-                else None
-            )
-            row_experiments.append(er)
-            model_only_s = (
-                max(0.0, total_s - commands_s) if commands_s is not None else None
-            )
-
-            rows.append(
-                {
-                    "instance_id": f.task.instance_id,
-                    "agent": f.task.agent_config.key,
-                    "status": "failed",
-                    "submission_id": "",
-                    "started_at": f.started_at,
-                    "ended_at": f.ended_at,
-                    "duration_s": round(total_s, 2),
-                    "commands_s": (
-                        round(commands_s, 2) if commands_s is not None else None
-                    ),
-                    "model_only_s": (
-                        round(model_only_s, 2) if model_only_s is not None else None
-                    ),
-                    "cost_usd": (
-                        round(f.artifacts.cost_usd, 2)
-                        if f.artifacts and f.artifacts.cost_usd is not None
-                        else None
-                    ),
-                    "n_calls": (
-                        int(f.artifacts.n_calls)
-                        if f.artifacts and f.artifacts.n_calls is not None
-                        else None
-                    ),
-                    "steps": (
-                        len(f.artifacts.execution_trace.steps)
-                        if f.artifacts and f.artifacts.execution_trace
-                        else 0
-                    ),
-                }
-            )
+        row, experiment_result = table_entry
+        rows.append(row)
+        row_experiments.append(experiment_result)
 
     df = pd.DataFrame(rows)
 
@@ -191,21 +373,7 @@ else:
         width="stretch",
     )
 
-    selection = None
-    if event is not None:
-        selection = getattr(event, "selection", None)
-        if selection is None and isinstance(event, dict):
-            selection = event.get("selection")
-
-    selected_rows: list[int] | None = None
-    if selection is not None:
-        rows_attr = getattr(selection, "rows", None)
-        if isinstance(rows_attr, list):
-            selected_rows = rows_attr
-        elif isinstance(selection, dict):
-            rows_val = selection.get("rows")
-            if isinstance(rows_val, list):
-                selected_rows = rows_val
+    selected_rows = extract_selected_rows(event)
 
     if selected_rows:
         sel_idx = int(selected_rows[0])
@@ -213,166 +381,6 @@ else:
             st.subheader("Selected experiment")
             sel = row_experiments[sel_idx]
             if sel.is_completed:
-                c = cast(CompletedExperiment, sel.root)
-                total_s = c.duration.total_seconds()
-                commands_s = (
-                    c.artifacts.execution_trace.total_duration.total_seconds()
-                    if c.artifacts and c.artifacts.execution_trace
-                    else None
-                )
-                model_only_s = (
-                    max(0.0, total_s - commands_s) if commands_s is not None else None
-                )
-
-                steps_available = bool(
-                    c.artifacts
-                    and c.artifacts.execution_trace
-                    and c.artifacts.execution_trace.steps
-                )
-                diff_available = bool(c.submission.model_patch)
-
-                tab_labels: list[str] = ["Overview"]
-                if steps_available:
-                    tab_labels.append("Steps")
-                if diff_available:
-                    tab_labels.append("Diff")
-
-                tabs = st.tabs(tab_labels)
-
-                tab_idx = 0
-                with tabs[tab_idx]:
-                    top_cols = st.columns(4)
-                    top_cols[0].metric("Status", "completed")
-                    top_cols[1].metric("Duration", f"{total_s:.2f}s")
-                    top_cols[2].metric(
-                        "Commands",
-                        f"{commands_s:.2f}s" if commands_s is not None else "N/A",
-                    )
-                    top_cols[3].metric(
-                        "Model-only",
-                        f"{model_only_s:.2f}s" if model_only_s is not None else "N/A",
-                    )
-
-                    steps_value = str(
-                        len(c.artifacts.execution_trace.steps)
-                        if c.artifacts and c.artifacts.execution_trace
-                        else 0
-                    )
-                    cost_display = (
-                        f"${c.artifacts.cost_usd:.2f}"
-                        if c.artifacts and c.artifacts.cost_usd is not None
-                        else "N/A"
-                    )
-                    calls_display = (
-                        str(int(c.artifacts.n_calls))
-                        if c.artifacts and c.artifacts.n_calls is not None
-                        else "N/A"
-                    )
-                    bottom_cols = st.columns(4)
-                    bottom_cols[0].metric("Steps", steps_value)
-                    bottom_cols[1].metric("Cost", cost_display)
-                    bottom_cols[2].metric("Calls", calls_display)
-
-                    st.write(f"**Started:** {c.started_at}")
-                    st.write(f"**Ended:** {c.ended_at}")
-                    st.write("**Agent:** `" + c.task.agent_config.key + "`")
-                    st.write("**Instance:** `" + c.task.instance_id + "`")
-                    st.write(
-                        "**Submission ID:** `" + str(c.submission.submission_id) + "`"
-                    )
-
-                if steps_available and c.artifacts and c.artifacts.execution_trace:
-                    tab_idx += 1
-                    with tabs[tab_idx]:
-                        display_execution_steps(c.artifacts.execution_trace.steps)
-
-                if diff_available:
-                    tab_idx += 1
-                    with tabs[tab_idx]:
-                        st.subheader("Model patch")
-                        include_package_lock = st.toggle(
-                            "Show package-lock.json changes", value=False
-                        )
-                        patch_to_show = filter_patch_excluding_package_lock(
-                            c.submission.model_patch, include_package_lock
-                        )
-                        patch_lines = patch_to_show.splitlines()
-                        st.subheader(f"Unified diff ({len(patch_lines)} lines)")
-                        st.download_button(
-                            "Download patch",
-                            data=patch_to_show,
-                            file_name=(f"{c.submission.submission_id}.patch"),
-                            mime="text/x-diff",
-                        )
-                        st.code(
-                            patch_to_show,
-                            language="diff",
-                            wrap_lines=True,
-                        )
+                render_completed_experiment(cast(CompletedExperiment, sel.root))
             elif sel.is_failed:
-                f = cast(FailedExperiment, sel.root)
-                total_s = (f.ended_at - f.started_at).total_seconds()
-                commands_s = (
-                    f.artifacts.execution_trace.total_duration.total_seconds()
-                    if f.artifacts and f.artifacts.execution_trace
-                    else None
-                )
-                model_only_s = (
-                    max(0.0, total_s - commands_s) if commands_s is not None else None
-                )
-
-                steps_available = bool(
-                    f.artifacts
-                    and f.artifacts.execution_trace
-                    and f.artifacts.execution_trace.steps
-                )
-
-                tab_labels = ["Overview"]
-                if steps_available:
-                    tab_labels.append("Steps")
-                tabs = st.tabs(tab_labels)
-
-                tab_idx = 0
-                with tabs[tab_idx]:
-                    top_cols = st.columns(4)
-                    top_cols[0].metric("Status", "failed")
-                    top_cols[1].metric("Duration", f"{total_s:.2f}s")
-                    top_cols[2].metric(
-                        "Commands",
-                        f"{commands_s:.2f}s" if commands_s is not None else "N/A",
-                    )
-                    top_cols[3].metric(
-                        "Model-only",
-                        f"{model_only_s:.2f}s" if model_only_s is not None else "N/A",
-                    )
-
-                    steps_value = str(
-                        len(f.artifacts.execution_trace.steps)
-                        if f.artifacts and f.artifacts.execution_trace
-                        else 0
-                    )
-                    cost_display = (
-                        f"${f.artifacts.cost_usd:.2f}"
-                        if f.artifacts and f.artifacts.cost_usd is not None
-                        else "N/A"
-                    )
-                    calls_display = (
-                        str(int(f.artifacts.n_calls))
-                        if f.artifacts and f.artifacts.n_calls is not None
-                        else "N/A"
-                    )
-                    bottom_cols = st.columns(4)
-                    bottom_cols[0].metric("Steps", steps_value)
-                    bottom_cols[1].metric("Cost", cost_display)
-                    bottom_cols[2].metric("Calls", calls_display)
-
-                    st.write(f"**Started:** {f.started_at}")
-                    st.write(f"**Ended:** {f.ended_at}")
-                    st.write("**Agent:** `" + f.task.agent_config.key + "`")
-                    st.write("**Instance:** `" + f.task.instance_id + "`")
-                    st.error(f.error)
-
-                if steps_available and f.artifacts and f.artifacts.execution_trace:
-                    tab_idx += 1
-                    with tabs[tab_idx]:
-                        display_execution_steps(f.artifacts.execution_trace.steps)
+                render_failed_experiment(cast(FailedExperiment, sel.root))
