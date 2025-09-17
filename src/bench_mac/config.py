@@ -34,17 +34,15 @@ class Settings(BaseSettings):
         description="The absolute path to the project's root directory.",
     )
 
-    dockerfiles_dir: Path = Field(
-        default_factory=lambda: Path(__file__).parent.parent.parent
-        / "data"
-        / "dockerfiles",
-        description="The default directory containing per-instance Dockerfiles.",
-    )
-
     @property
     def data_dir(self) -> Path:
         """Path to the directory containing benchmark data."""
         return self.project_root / "data"
+
+    @property
+    def dockerfiles_dir(self) -> Path:
+        """The default directory containing per-instance Dockerfiles."""
+        return self.data_dir / "dockerfiles"
 
     @property
     def instances_file(self) -> Path:
