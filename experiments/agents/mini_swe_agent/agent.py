@@ -24,7 +24,7 @@ def generate_task_prompt(instance: BenchmarkInstance) -> str:
     return dedent(
         f"""\
         ## Goal
-        Migrate the application from Angular version {instance.source_angular_version} to {instance.target_angular_version}.
+        Migrate the application from Angular version from {instance.source_angular_version} to {instance.target_angular_version}.
 
         ## Context
         - The codebase is available in `/app/project`
