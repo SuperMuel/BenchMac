@@ -8,8 +8,8 @@ import pytest
 
 from bench_mac.metrics import (
     _calculate_patch_application_success,
-    _calculate_target_version_achieved,
     calculate_metrics,
+    calculate_target_version_achieved,
 )
 from bench_mac.models import (
     BenchmarkInstance,
@@ -68,7 +68,7 @@ class TestCalculateTargetVersionAchieved:
             exit_code=0,
             stdout=json.dumps(version_output),
         )
-        assert _calculate_target_version_achieved(version_step, "16") is True
+        assert calculate_target_version_achieved(version_step, "16") is True
 
     def test_returns_true_even_if_exit_code_is_1_but_json_is_valid(self) -> None:
         # This is the critical test case reflecting reality.
@@ -79,43 +79,43 @@ class TestCalculateTargetVersionAchieved:
             stdout=json.dumps(version_output),
             stderr="npm ERR! peer dep missing...",
         )
-        assert _calculate_target_version_achieved(version_step, "13.1.0") is True
+        assert calculate_target_version_achieved(version_step, "13.1.0") is True
 
     def test_returns_false_on_major_version_mismatch(self) -> None:
         version_output = {"dependencies": {"@angular/core": {"version": "15.2.9"}}}
         version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
         )
-        assert _calculate_target_version_achieved(version_step, "16") is False
+        assert calculate_target_version_achieved(version_step, "16") is False
 
     def test_returns_false_if_angular_core_key_is_missing(self) -> None:
         version_output = {"dependencies": {"@angular/cli": {"version": "16.0.0"}}}
         version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
         )
-        assert _calculate_target_version_achieved(version_step, "16") is False
+        assert calculate_target_version_achieved(version_step, "16") is False
 
     def test_returns_false_if_dependencies_key_is_missing(self) -> None:
         version_output = {"name": "my-project"}  # Missing top-level 'dependencies'
         version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
         )
-        assert _calculate_target_version_achieved(version_step, "16") is False
+        assert calculate_target_version_achieved(version_step, "16") is False
 
     def test_returns_none_if_json_is_invalid(self) -> None:
         version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=0, stdout="this is not json"
         )
-        assert _calculate_target_version_achieved(version_step, "16") is None
+        assert calculate_target_version_achieved(version_step, "16") is None
 
     def test_returns_none_if_step_is_missing(self) -> None:
-        assert _calculate_target_version_achieved(None, "16") is None
+        assert calculate_target_version_achieved(None, "16") is None
 
     def test_returns_none_if_stdout_is_empty(self) -> None:
         version_step = create_command_output(
             command=self.NPM_LS_COMMAND, exit_code=1, stdout=""
         )
-        assert _calculate_target_version_achieved(version_step, "16") is None
+        assert calculate_target_version_achieved(version_step, "16") is None
 
 
 @pytest.fixture

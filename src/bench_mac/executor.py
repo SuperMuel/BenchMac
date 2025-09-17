@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bench_mac.environment import InstanceEnvironment
+from bench_mac.metrics import calculate_target_version_achieved
 
 if TYPE_CHECKING:  # pragma: no cover
     from loguru import Logger
@@ -130,14 +131,13 @@ def execute_submission(
             logger.debug(f"Executing version check command: {version_command}")
             version_check_out = env.exec(version_command)
 
-            if not version_check_out.success:
-                logger.info(
-                    f"❌ '{version_command}' command failed. Continuing execution."
-                )
-            # TODO: should we verify the version matches the target version here?
-            #  and stop if it doesn't ?
-            # continuing the evaluation makes no sense if the angular version is
-            # not even  the target version
+            target_version_achieved = calculate_target_version_achieved(
+                version_check_out, instance.target_angular_version
+            )
+
+            if not target_version_achieved:
+                logger.info("❌ Target version not achieved. Halting evaluation.")
+                return env.trace()
 
             # 8. Build
             logger.debug(f"Executing build command: {instance.commands.build}")

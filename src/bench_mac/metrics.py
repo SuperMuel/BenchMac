@@ -77,7 +77,7 @@ def _calculate_patch_application_success(
         return None
 
 
-def _calculate_target_version_achieved(
+def calculate_target_version_achieved(
     version_check_step: CommandResult | None, target_version: str
 ) -> bool | None:
     """
@@ -149,7 +149,7 @@ def calculate_metrics(
     )
     install_success = final_install_step.success if final_install_step else None
 
-    target_version_achieved = _calculate_target_version_achieved(
+    target_version_achieved = calculate_target_version_achieved(
         version_check_step, instance.target_angular_version
     )
 
