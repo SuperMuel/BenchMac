@@ -265,7 +265,14 @@ def process_single_task(
 
 
 def create_agent(instance: BenchmarkInstance, agent_config: AgentConfig) -> BaseAgent:
-    return MiniSweAgent(instance, agent_config, DockerManager())
+    if agent_config.scaffold == "swe-agent-mini":
+        return MiniSweAgent(instance, agent_config, DockerManager())
+    if agent_config.scaffold == "qwen-code":
+        from experiments.agents.qwen_code.agent import QwenCodeAgent
+
+        return QwenCodeAgent(instance, agent_config, DockerManager())
+
+    raise ValueError(f"Unsupported scaffold: {agent_config.scaffold}")
 
 
 DEFAULT_MODEL_NAMES = ["mistral/devstral-medium-2507"]
@@ -278,6 +285,11 @@ def main(
         "--model-name",
         "-m",
         help="Name of the model(s) to use (e.g., 'mistral/devstral'). Can be used multiple times.",
+    ),
+    scaffold: str = typer.Option(
+        "swe-agent-mini",
+        "--scaffold",
+        help="Agent scaffold implementation to use (e.g., 'swe-agent-mini', 'qwen-code').",
     ),
     instances_file: Path = typer.Option(  # noqa: B008
         settings.instances_file, help="Path to the benchmark instances file."
@@ -301,11 +313,15 @@ def main(
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
 
     # Create agent configurations from model names
-    agent_configs = [AgentConfig(model_name=model_name) for model_name in model_names]
+    agent_configs = [
+        AgentConfig(model_name=model_name, scaffold=scaffold)
+        for model_name in model_names
+    ]
     model_names_str = ", ".join(
         f"[cyan]{config.model_name}[/cyan]" for config in agent_configs
     )
     console.print(f"📝 Model(s): {model_names_str}")
+    console.print(f"🧱 Scaffold: [cyan]{scaffold}[/cyan]")
 
     # Load all instances first
     all_instances = load_instances(instances_file)

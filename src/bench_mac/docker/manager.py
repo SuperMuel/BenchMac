@@ -199,7 +199,11 @@ class DockerManager:
             raise
 
     def execute_in_container(
-        self, container: Container, command: str, workdir: str | None = None
+        self,
+        container: Container,
+        command: str,
+        workdir: str | None = None,
+        environment: dict[str, str] | None = None,
     ) -> tuple[int, str, str]:
         """
         Executes a shell command inside a running container.
@@ -232,6 +236,7 @@ class DockerManager:
             #   output = (b'out\n', b'err\n')
             demux=True,
             workdir=workdir,
+            environment=environment,
         )
 
         logger.debug(f"  > Exit code: {exit_code}")

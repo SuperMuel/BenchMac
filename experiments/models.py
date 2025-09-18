@@ -8,18 +8,18 @@ from bench_mac.models import ExecutionTrace, Submission
 
 
 class AgentConfig(BaseModel):
-    """
-    Configuration for an agent.
-    """
+    """Configuration for an agent run."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    scaffold: Literal["swe-agent-mini"] = "swe-agent-mini"
+    scaffold: Literal["swe-agent-mini", "qwen-code"] = "swe-agent-mini"
 
     model_name: str = Field(
         ...,
-        description="The name of the model to use for patch generation "
-        "(e.g., 'mistral/devstral-medium-2507').",
+        description=(
+            "The model identifier understood by the underlying scaffold (e.g., "
+            "'mistral/devstral-medium-2507', 'qwen/qwen-2.5-coder')."
+        ),
     )
 
     @property
