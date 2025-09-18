@@ -22,6 +22,8 @@ from rich.table import Table
 from rich.text import Text
 
 from bench_mac.config import settings
+from bench_mac.docker.builder import get_instance_image_tag, prepare_environment
+from bench_mac.docker.manager import DockerManager
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
     EvaluationCompleted,
@@ -474,6 +476,100 @@ def _print_evaluation_summary(
 
 
 # --- Main CLI Commands ---
+
+
+@app.command
+def refresh_images(
+    instance_id: Annotated[
+        list[str] | None,
+        Parameter(
+            help="Only rebuild the specified instance IDs. "
+            "Can be provided multiple times.",
+            negative=(),
+        ),
+    ] = None,
+    *,
+    instances_file: Path | None = None,
+    dry_run: bool = False,
+) -> None:
+    """Force a rebuild of benchmark Docker images so they stay in sync."""
+
+    instances_path = instances_file or settings.instances_file
+    if not instances_path.exists():
+        logger.error(f"❌ Error: Instances file not found at '{instances_path}'.")
+        raise SystemExit(1)
+
+    instances_map = load_instances(instances_path)
+    if not instances_map:
+        logger.warning("⚠️ No instances available to rebuild.")
+        return
+
+    if instance_id:
+        requested_ids = list(dict.fromkeys(instance_id))
+    else:
+        requested_ids = sorted(instances_map.keys())
+
+    unknown_ids = sorted(set(requested_ids) - set(instances_map.keys()))
+    if unknown_ids:
+        logger.error(
+            "❌ Requested instance IDs not found: {}".format(", ".join(unknown_ids))
+        )
+        raise SystemExit(1)
+
+    selected_instances = [instances_map[i] for i in requested_ids]
+
+    if dry_run:
+        for instance in selected_instances:
+            tag = get_instance_image_tag(instance)
+            logger.info(
+                "[dry-run] Would rebuild image '{}' for instance '{}'",
+                tag,
+                instance.instance_id,
+            )
+        logger.info(
+            "Dry run complete. {} image(s) would be rebuilt.",
+            len(selected_instances),
+        )
+        return
+
+    manager = DockerManager(quiet_init=False)
+
+    failures: list[tuple[str, str]] = []
+    for instance in selected_instances:
+        tag = get_instance_image_tag(instance)
+        logger.info(
+            "Rebuilding Docker image '{}' for instance '{}'...",
+            tag,
+            instance.instance_id,
+        )
+        try:
+            if manager.image_exists(tag):
+                manager.remove_image(tag)
+            prepare_environment(instance, manager)
+            logger.success(
+                f"✅ Refreshed instance '{instance.instance_id}' (image '{tag}')."
+            )
+        except Exception as exc:  # pragma: no cover - safeguards CLI usage
+            failures.append((instance.instance_id, str(exc)))
+            logger.exception(
+                "❌ Failed to refresh instance '{}' (image '{}'): {}",
+                instance.instance_id,
+                tag,
+                exc,
+            )
+
+    total = len(selected_instances)
+    if failures:
+        success_count = total - len(failures)
+        logger.error(
+            "Refreshed {}/{} image(s). {} failure(s) encountered.",
+            success_count,
+            total,
+            len(failures),
+        )
+        raise SystemExit(1)
+
+    logger.success("🎉 Successfully refreshed {} image(s).", total)
 
 
 @app.command

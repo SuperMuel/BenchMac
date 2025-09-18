@@ -8,9 +8,7 @@ from bench_mac.models import BenchmarkInstance
 
 
 # TODO: check if we should use the term "reference" instead of "tag"
-def _get_instance_image_tag(
-    instance: BenchmarkInstance, dockerfile_content: str
-) -> str:
+def get_instance_image_tag(instance: BenchmarkInstance) -> str:
     """
     Generates a consistent, unique tag for an Instance Image using its ID
     and a hash of its Dockerfile content.
@@ -18,7 +16,9 @@ def _get_instance_image_tag(
     instance_slug = slugify(instance.instance_id)  # slugify for extra security
 
     # Calculate a hash of the Dockerfile content
-    content_hash = hashlib.sha256(dockerfile_content.encode("utf-8")).hexdigest()
+    content_hash = hashlib.sha256(
+        instance.dockerfile_content.encode("utf-8")
+    ).hexdigest()
     short_hash = content_hash[:8]  # Use the first 8 characters for brevity
 
     tag = f"benchmac-instance:{instance_slug}-{short_hash}"
@@ -54,7 +54,7 @@ def prepare_environment(instance: BenchmarkInstance, manager: DockerManager) -> 
     dockerfile_content = instance.dockerfile_content
 
     # 2. Generate the content-aware image tag
-    instance_image_tag = _get_instance_image_tag(instance, dockerfile_content)
+    instance_image_tag = get_instance_image_tag(instance)
 
     # 3. Check if this specific version of the image already exists
     if manager.image_exists(instance_image_tag):

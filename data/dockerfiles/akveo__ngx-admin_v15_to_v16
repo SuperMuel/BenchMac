@@ -1,6 +1,6 @@
 # Pick a Node image compatible with Angular 15
 # Using Node 14 for better compatibility with older Angular/dependency versions
-FROM node:14-bullseye-slim
+FROM node:14-bullseye-slim@sha256:0f5b374fae506741ff14db84daff2937ae788e88fb48a6c66d15de5ee808ccd3
 
 # Minimal, repeatable CI-ish environment
 ENV CI=true \
@@ -8,11 +8,13 @@ ENV CI=true \
     LANG=C.UTF-8 \
     NG_CLI_ANALYTICS=false \
     NPM_CONFIG_AUDIT=false \
-    NPM_CONFIG_FUND=false \
-    CHROME_BIN=/usr/bin/chromium
+    NPM_CONFIG_FUND=false
 
 # Tools required by the harness and typical Angular builds/tests
-RUN apt-get update && \
+RUN echo 'deb http://snapshot.debian.org/archive/debian/20231101T000000Z bullseye main contrib non-free' > /etc/apt/sources.list && \
+    echo 'deb http://snapshot.debian.org/archive/debian-security/20231101T000000Z bullseye-security main contrib non-free' >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot && \
+    apt-get update && \
     apt-get install -y \
         curl \
         git \
@@ -24,13 +26,16 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
+RUN node --version > /etc/benchmac-node-version && \
+    npm --version > /etc/benchmac-npm-version
+
 # Writable workspace
 RUN mkdir -p /app/project
 # This is where the repository will be available to the agent
 WORKDIR /app/project
 
-# Use a user-scoped npm cache (keeps permissions sane)
-ENV NPM_CONFIG_CACHE=/home/node/.npm
+# Use a root-scoped npm cache so agents can install tooling as-needed
+ENV NPM_CONFIG_CACHE=/root/.npm
 
 # IMPORTANT: pull a history-free snapshot, NOT a git clone
 # If the full git history is included, AI agents could "see the future" and cheat.

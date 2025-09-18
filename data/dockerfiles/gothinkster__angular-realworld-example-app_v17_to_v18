@@ -7,35 +7,34 @@ ENV CI=true \
     LANG=C.UTF-8 \
     NG_CLI_ANALYTICS=false \
     NPM_CONFIG_AUDIT=false \
-    NPM_CONFIG_FUND=false \
-    CHROME_BIN=/usr/bin/chromium
+    NPM_CONFIG_FUND=false
 
-# Install system packages needed for Angular CI
+# Install system packages needed for deterministic Angular installs
 # - git: for repository cloning
 # - ca-certificates: for SSL certificate verification
-# - chromium and chromium-driver: for Angular testing with ChromeHeadless
-RUN apt-get update && \
+RUN echo 'deb http://snapshot.debian.org/archive/debian/20231101T000000Z bookworm main contrib non-free' > /etc/apt/sources.list && \
+    echo 'deb http://snapshot.debian.org/archive/debian-security/20231101T000000Z bookworm-security main contrib non-free' >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot && \
+    apt-get update && \
     apt-get install -y \
         curl \
         git \
         ca-certificates \
-        chromium \
-        chromium-driver \
         --no-install-recommends && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
-# Create project directory and give ownership to non-root user
-RUN mkdir -p /app/project && chown -R node:node /app
+RUN node --version > /etc/benchmac-node-version && \
+    npm --version > /etc/benchmac-npm-version
 
-# Switch to non-root 'node' user for safer container execution
-USER node
+# Create project directory for the benchmark workspace
+RUN mkdir -p /app/project
 
 # Set working directory to the expected project path
 WORKDIR /app/project
 
-# Use a writable npm cache location for the non-root user
-ENV NPM_CONFIG_CACHE=/home/node/.npm
+# Use a root-scoped npm cache so agents can install tooling as-needed
+ENV NPM_CONFIG_CACHE=/root/.npm
 
 # Download a history-free snapshot of the code at the specific commit (Angular 17)
 RUN curl -L https://github.com/gothinkster/angular-realworld-example-app/archive/f218b2f.tar.gz \

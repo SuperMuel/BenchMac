@@ -5,7 +5,7 @@ import pytest
 from slugify import slugify
 
 from bench_mac.docker.builder import (
-    _get_instance_image_tag,
+    get_instance_image_tag,
     prepare_environment,
 )
 from bench_mac.docker.manager import DockerManager
@@ -37,7 +37,7 @@ class TestGetInstanceImageTag:
             instance.dockerfile_content.encode("utf-8")
         ).hexdigest()[:8]
 
-        result = _get_instance_image_tag(instance, instance.dockerfile_content)
+        result = get_instance_image_tag(instance)
 
         assert result == f"benchmac-instance:{expected_slug}-{expected_hash8}"
 
@@ -53,8 +53,8 @@ class TestGetInstanceImageTag:
             override_dockerfile_content="FROM node:20\n",
         )
 
-        tag_a = _get_instance_image_tag(a, a.dockerfile_content)
-        tag_b = _get_instance_image_tag(b, b.dockerfile_content)
+        tag_a = get_instance_image_tag(a)
+        tag_b = get_instance_image_tag(b)
 
         assert tag_a != tag_b
         assert tag_a.startswith("benchmac-instance:same-id-")
@@ -68,7 +68,7 @@ class TestGetInstanceImageTag:
         )
 
         with pytest.raises(ValueError, match="Generated image tag is too long"):
-            _get_instance_image_tag(instance, instance.dockerfile_content)
+            get_instance_image_tag(instance)
 
 
 @pytest.mark.unit
@@ -78,7 +78,7 @@ class TestPrepareEnvironment:
             instance_id="exists",
             override_dockerfile_content="FROM node:18\n",
         )
-        expected_tag = _get_instance_image_tag(instance, instance.dockerfile_content)
+        expected_tag = get_instance_image_tag(instance)
         manager = FakeDockerManager(existing_tags={expected_tag})
 
         final_tag = prepare_environment(instance, cast(DockerManager, manager))

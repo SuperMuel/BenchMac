@@ -77,7 +77,7 @@ Create:
 ```dockerfile
 # Pick a Node image compatible with the source Angular version
 # (see Angular’s compatibility docs for exact ranges)
-FROM node:18-bookworm-slim
+FROM node:18-bookworm-slim@sha256:<digest-from-docker-hub>
 
 # Minimal, repeatable CI-ish environment
 ENV CI=true \
@@ -85,11 +85,13 @@ ENV CI=true \
     LANG=C.UTF-8 \
     NG_CLI_ANALYTICS=false \
     NPM_CONFIG_AUDIT=false \
-    NPM_CONFIG_FUND=false \
-    CHROME_BIN=/usr/bin/chromium
+    NPM_CONFIG_FUND=false
 
-# Tools required by the harness and typical Angular builds/tests
-RUN apt-get update && \
+# Freeze apt to the day you validated the instance (snapshot.debian.org keeps historical mirrors)
+RUN echo 'deb http://snapshot.debian.org/archive/debian/<yyyymmdd>T000000Z bookworm main contrib non-free' > /etc/apt/sources.list && \
+    echo 'deb http://snapshot.debian.org/archive/debian-security/<yyyymmdd>T000000Z bookworm-security main contrib non-free' >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot && \
+    apt-get update && \
     apt-get install -y \
         curl \
         git \
@@ -98,13 +100,17 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
-# Writable workspace
+# Capture the toolchain versions baked into the image for later auditing
+RUN node --version > /etc/benchmac-node-version && \
+    npm --version > /etc/benchmac-npm-version
+
+# Writable workspace (container keeps running as root for agent flexibility)
 RUN mkdir -p /app/project
 # This is where the repository will be available to the agent
 WORKDIR /app/project
 
-# Use a user-scoped npm cache (keeps permissions sane)
-ENV NPM_CONFIG_CACHE=/home/node/.npm
+# Use a root-scoped npm cache so agents can install extra tooling
+ENV NPM_CONFIG_CACHE=/root/.npm
 
 # IMPORTANT: pull a history-free snapshot, NOT a git clone
 # If the full git history is included, AI agents could "see the future" and cheat.
@@ -125,13 +131,16 @@ RUN git init --initial-branch=main && \
 CMD ["bash", "-lc", "sleep infinity"]
 ```
 
+> Snapshot hint: pick a date close to when you validated the instance (for example `20231101`). If your base image is built on Debian Bullseye instead of Bookworm, replace `bookworm` with `bullseye` in both snapshot URLs.
+
 **Requirements & gotchas:**
 
 * **Do not** `git clone` the repo. Always `curl | tar` an archive for a **history-free** snapshot.
 * **Do not** run `npm ci`, builds, tests, or lint in the Dockerfile. The harness and AI agents does that.
 * **Do create** a baseline git commit and tag after extracting source code. This allows the harness to get the progress using `git diff baseline`, even if the AI agent created commits.
-* Choose a **Node image** compatible with your **source AND target** Angular version.
-* Keep images slim and reproducible; avoid unnecessary packages.
+* Choose a **Node image** compatible with your **source AND target** Angular version, and record the SHA256 digest when you pull it the first time so every rebuild sees identical bits.
+* Keep images reproducible: pin apt through Debian snapshot mirrors, capture `node --version` / `npm --version`, and keep the container running as root so agents can install temporary tooling without permission friction.
+* Remove optional packages (Chromium, etc.) unless an instance truly needs them—`npm ci` and build flows are the only operations we run by default.
 
 ---
 
