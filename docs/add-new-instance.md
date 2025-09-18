@@ -131,7 +131,7 @@ RUN git init --initial-branch=main && \
 CMD ["bash", "-lc", "sleep infinity"]
 ```
 
-> Snapshot hint: pick a date close to when you validated the instance (for example `20231101`). If your base image is built on Debian Bullseye instead of Bookworm, replace `bookworm` with `bullseye` in both snapshot URLs.
+> Snapshot hint: pick a date close to when you validated the instance (for example `20250918`). If your base image is built on Debian Bullseye instead of Bookworm, replace `bookworm` with `bullseye` in both snapshot URLs.
 
 **Requirements & gotchas:**
 

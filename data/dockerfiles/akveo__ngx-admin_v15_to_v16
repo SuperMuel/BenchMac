@@ -11,8 +11,8 @@ ENV CI=true \
     NPM_CONFIG_FUND=false
 
 # Tools required by the harness and typical Angular builds/tests
-RUN echo 'deb http://snapshot.debian.org/archive/debian/20231101T000000Z bullseye main contrib non-free' > /etc/apt/sources.list && \
-    echo 'deb http://snapshot.debian.org/archive/debian-security/20231101T000000Z bullseye-security main contrib non-free' >> /etc/apt/sources.list && \
+RUN echo 'deb http://snapshot.debian.org/archive/debian/20250918T000000Z bullseye main contrib non-free' > /etc/apt/sources.list && \
+    echo 'deb http://snapshot.debian.org/archive/debian-security/20250918T000000Z bullseye-security main contrib non-free' >> /etc/apt/sources.list && \
     echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot && \
     apt-get update && \
     apt-get install -y \
