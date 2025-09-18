@@ -16,7 +16,7 @@ from experiments.agents.base import (
     BaseAgent,
 )
 from experiments.agents.mini_swe_agent.environment import InstanceEnv
-from experiments.models import AgentConfig
+from experiments.models import MiniSweAgentConfig
 
 
 def generate_task_prompt(instance: BenchmarkInstance) -> str:
@@ -66,7 +66,7 @@ class MiniSweAgent(BaseAgent):
     def __init__(
         self,
         instance: BenchmarkInstance,
-        agent_config: AgentConfig,
+        agent_config: MiniSweAgentConfig,
         docker_manager: DockerManager,
     ) -> None:
         self.instance = instance

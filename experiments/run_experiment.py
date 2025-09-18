@@ -23,16 +23,19 @@ from bench_mac.models import (
     SubmissionID,
 )
 from bench_mac.utils import load_instances
+from experiments.agents.angular_schematics import AngularSchematicsAgent
 from experiments.agents.base import BaseAgent
 from experiments.agents.mini_swe_agent.agent import MiniSweAgent
 from experiments.logging_utils import bind_run_context, setup_experiment_logging
 from experiments.models import (
     AgentConfig,
+    AngularSchematicsConfig,
     CompletedExperiment,
     ExperimentArtifacts,
     ExperimentResult,
     ExperimentTask,
     FailedExperiment,
+    MiniSweAgentConfig,
 )
 
 load_dotenv()
@@ -40,6 +43,37 @@ load_dotenv()
 # --- Configuration ---
 app = typer.Typer(add_completion=False)
 console = Console()
+
+
+SUPPORTED_SCAFFOLDS = {"swe-agent-mini", "angular-schematics"}
+DEFAULT_SCAFFOLDS = ("swe-agent-mini",)
+DEFAULT_MODEL_NAMES = ("mistral/devstral-medium-2507",)
+
+
+def build_agent_configs(
+    scaffolds: list[str],
+    model_names: list[str],
+) -> list[AgentConfig]:
+    configs: list[AgentConfig] = []
+    for scaffold in scaffolds:
+        scaffold_key = scaffold.strip().lower()
+
+        if scaffold_key not in SUPPORTED_SCAFFOLDS:
+            raise typer.BadParameter(
+                f"Unsupported scaffold '{scaffold}'. Supported: {', '.join(sorted(SUPPORTED_SCAFFOLDS))}"
+            )
+
+        if scaffold_key == "swe-agent-mini":
+            if not model_names:
+                raise typer.BadParameter(
+                    "At least one --model-name must be provided when using the swe-agent-mini scaffold."
+                )
+            for model_name in model_names:
+                configs.append(MiniSweAgentConfig(model_name=model_name))
+        elif scaffold_key == "angular-schematics":
+            configs.append(AngularSchematicsConfig())
+
+    return configs
 
 
 def get_results_file_path(experiments_dir: Path, now: datetime | None = None) -> Path:
@@ -156,7 +190,8 @@ def filter_completed_tasks(
         task_key = (task.instance_id, task.agent_config.key)
         if task_key in completed_combinations:
             console.print(
-                f"[blue]Skipping already completed task: {task.instance_id} ({task.agent_config.model_name})[/blue]"
+                f"[blue]Skipping already completed task: {task.instance_id} "
+                f"({task.agent_config.display_name})[/blue]"
             )
             skipped_count += 1
         else:
@@ -190,7 +225,7 @@ def process_single_task(
     started_at = dt_factory()
     task_logger = bind_run_context(
         instance=task.instance_id,
-        model=task.agent_config.model_name,
+        model=task.agent_config.display_name,
         submission=submission_id,
     )
 
@@ -236,14 +271,15 @@ def process_single_task(
                     pass
         console.print(
             "[green]✓ Completed:[/green] "
-            f"{task.instance_id} ({task.agent_config.model_name}) — "
+            f"{task.instance_id} ({task.agent_config.display_name}) — "
             f"price: {price_str}, steps: {steps_str}, total: {duration_str}"
         )
         task_logger.success("Task completed successfully")
         return completed
     except Exception as e:
         console.print(
-            f"[bold red]Error processing {task.instance_id} ({task.agent_config.model_name}): {e}[/bold red]"
+            f"[bold red]Error processing {task.instance_id} "
+            f"({task.agent_config.display_name}): {e}[/bold red]"
         )
         task_logger.opt(exception=True).error("Task failed during agent run")
         failed_artifacts = None
@@ -265,19 +301,30 @@ def process_single_task(
 
 
 def create_agent(instance: BenchmarkInstance, agent_config: AgentConfig) -> BaseAgent:
-    return MiniSweAgent(instance, agent_config, DockerManager())
+    docker_manager = DockerManager()
 
+    match agent_config:
+        case MiniSweAgentConfig():
+            return MiniSweAgent(instance, agent_config, docker_manager)
+        case AngularSchematicsConfig():
+            return AngularSchematicsAgent(instance, agent_config, docker_manager)
 
-DEFAULT_MODEL_NAMES = ["mistral/devstral-medium-2507"]
+    msg = f"Unsupported scaffold '{agent_config.scaffold}'"
+    raise ValueError(msg)
 
 
 @app.command()
 def main(
+    scaffolds: list[str] = typer.Option(  # noqa: B008
+        list(DEFAULT_SCAFFOLDS),
+        "--scaffold",
+        help="Agent scaffold(s) to run (e.g., 'swe-agent-mini', 'angular-schematics'). Can be used multiple times.",
+    ),
     model_names: list[str] = typer.Option(  # noqa: B008
-        DEFAULT_MODEL_NAMES,
+        list(DEFAULT_MODEL_NAMES),
         "--model-name",
         "-m",
-        help="Name of the model(s) to use (e.g., 'mistral/devstral'). Can be used multiple times.",
+        help="Name of the model(s) to use when applicable for the scaffold (e.g., 'mistral/devstral'). Can be used multiple times.",
     ),
     instances_file: Path = typer.Option(  # noqa: B008
         settings.instances_file, help="Path to the benchmark instances file."
@@ -300,12 +347,17 @@ def main(
     settings.initialize_directories()
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
 
-    # Create agent configurations from model names
-    agent_configs = [AgentConfig(model_name=model_name) for model_name in model_names]
-    model_names_str = ", ".join(
-        f"[cyan]{config.model_name}[/cyan]" for config in agent_configs
+    selected_scaffolds = scaffolds or list(DEFAULT_SCAFFOLDS)
+    agent_configs = build_agent_configs(selected_scaffolds, model_names)
+
+    if not agent_configs:
+        console.print("[yellow]No agent configurations specified. Exiting...[/yellow]")
+        return
+
+    agents_display = ", ".join(
+        f"[cyan]{config.display_name}[/cyan]" for config in agent_configs
     )
-    console.print(f"📝 Model(s): {model_names_str}")
+    console.print(f"📝 Agent(s): {agents_display}")
 
     # Load all instances first
     all_instances = load_instances(instances_file)
@@ -363,12 +415,15 @@ def main(
             submission_id = str(uuid.uuid4())
             task_logger = bind_run_context(
                 instance=task.instance_id,
-                model=task.agent_config.model_name,
+                model=task.agent_config.display_name,
                 submission=submission_id,
             )
             progress.update(
                 task_progress,
-                description=f"[cyan]Processing: {task.instance_id} ({task.agent_config.model_name})[/cyan]",
+                description=(
+                    f"[cyan]Processing: {task.instance_id} "
+                    f"({task.agent_config.display_name})[/cyan]"
+                ),
             )
 
             agent = create_agent(instance, task.agent_config)

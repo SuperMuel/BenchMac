@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from datetime import timedelta
 from typing import Annotated, Literal, NewType
@@ -7,17 +8,13 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 from bench_mac.models import ExecutionTrace, Submission
 
 
-class AgentConfig(BaseModel):
-    """
-    Configuration for an agent.
-    """
-
+class MiniSweAgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     scaffold: Literal["swe-agent-mini"] = "swe-agent-mini"
-
     model_name: str = Field(
         ...,
+        min_length=1,
         description="The name of the model to use for patch generation "
         "(e.g., 'mistral/devstral-medium-2507').",
     )
@@ -26,8 +23,50 @@ class AgentConfig(BaseModel):
     def key(self) -> str:
         return f"{self.scaffold}/{self.model_name}"
 
+    @property
+    def display_name(self) -> str:
+        return self.model_name
+
     def __hash__(self) -> int:
         return hash(self.key)
+
+
+class AngularSchematicsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scaffold: Literal["angular-schematics"] = "angular-schematics"
+    update_command_template: str = Field(
+        default=(
+            "npx --yes @angular/cli@{target_version} update "
+            "@angular/core@{target_version} @angular/cli@{target_version} "
+            "--allow-dirty --force --verbose"
+        ),
+        description=(
+            "Template for the Angular update command. "
+            "Use {target_version} as placeholder."
+        ),
+    )
+
+    @property
+    def key(self) -> str:
+        # Hash the update_command_template for uniqueness
+        template_hash = hashlib.sha256(
+            self.update_command_template.encode("utf-8")
+        ).hexdigest()[:8]
+        return f"{self.scaffold}/{template_hash}"
+
+    @property
+    def display_name(self) -> str:
+        return self.key
+
+    def __hash__(self) -> int:
+        return hash(self.key)
+
+
+AgentConfig = Annotated[
+    MiniSweAgentConfig | AngularSchematicsConfig,
+    Field(discriminator="scaffold"),
+]
 
 
 class ExperimentTask(BaseModel):

@@ -107,7 +107,11 @@ def group_completed_by_instance_and_model(
 
         # Determine agent_config for this submission
         agent_cfg = agent_by_submission_id.get(submission_id)
-        assert agent_cfg is not None
+        if agent_cfg is None:
+            st.warning(f"No agent config for submission: {submission_id}")
+            # Skip evaluations for submissions we don't have agent config for
+            # This can happen if the experiment is still running or hasn't completed yet
+            continue
 
         bucket = grouped.setdefault(agent_cfg, {})
         current = bucket.get(inst_id)
@@ -609,7 +613,7 @@ def main() -> None:
     )
 
     with st.spinner("Loading evaluations and experiments..."):
-        completed, harness_failures_list = load_all_evaluations(evaluations_dir)
+        completed_evals, harness_failures_list = load_all_evaluations(evaluations_dir)
         experiments = load_all_experiments(experiments_dir)
 
     # Build lookups from experiments
@@ -625,9 +629,60 @@ def main() -> None:
                 er_completed.task.agent_config
             )
         elif er.is_failed:
+            # Failed experiments don't have submissions, so skip them
             continue
 
-    grouped = group_completed_by_instance_and_model(completed, agent_by_submission_id)
+    experiment_without_evals = []
+    for er in experiments:
+        if er.is_failed:
+            continue  # Failed experiments can't have evaluations
+        completed_experiment = cast(CompletedExperiment, er.root)
+        evals = [
+            e
+            for e in completed_evals
+            if e.result.submission_id == completed_experiment.submission.submission_id
+        ]
+        if not evals:
+            experiment_without_evals.append(er)
+    if experiment_without_evals:
+        with st.expander(
+            f"{len(experiment_without_evals)} experiments haven't been evaluated.\n\n"
+            "You might want to run the evaluation again with `uv run bench-mac eval`",
+            icon="🚨",
+        ):
+            for er in experiment_without_evals:
+                st.write(f"{er.root.submission.submission_id}")
+
+    # Find evaluations whose submission_id is not present in any experiment
+    evals_without_experiment: list[EvaluationCompleted] = []
+    experiment_submission_ids = {
+        er.root.submission.submission_id
+        for er in experiments
+        if er.root.status == "completed"
+    }
+    for eval in completed_evals:
+        if eval.result.submission_id not in experiment_submission_ids:
+            evals_without_experiment.append(eval)
+    if evals_without_experiment:
+        with st.expander(
+            f"{len(evals_without_experiment)} evaluations do not "
+            "correspond to any known experiment. "
+            "This may indicate deleted experiment records.",
+            icon="🚨",
+        ):
+            for eval in evals_without_experiment:
+                st.write(eval.result.submission_id)
+
+    # Remove evaluations that don't correspond to any known experiment
+    completed_evals = [
+        eval
+        for eval in completed_evals
+        if eval.result.submission_id in experiment_submission_ids
+    ]
+
+    grouped = group_completed_by_instance_and_model(
+        completed_evals, agent_by_submission_id
+    )
     summary = extract_summary_data(grouped, harness_failures_list)
 
     # Harness failures section
@@ -642,7 +697,7 @@ def main() -> None:
                 st.error(f.error)
 
     # Network error detection
-    network_error_details = collect_network_error_details(completed)  # type: ignore[arg-type]
+    network_error_details = collect_network_error_details(completed_evals)  # type: ignore[arg-type]
     if network_error_details:
         st.header("⚠️ Network Errors Detected")
         st.warning(
@@ -663,7 +718,7 @@ def main() -> None:
                 st.divider()
 
     # Check if no evaluation results are available
-    if not completed:
+    if not completed_evals:
         st.info(
             "No evaluation results found. Please run some evaluations "
             "to see metrics and analysis."
