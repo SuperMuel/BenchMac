@@ -120,7 +120,7 @@ class TestBaselineInstanceValidation:
             # === 1. SETUP: Prepare the Docker Environment ===
             logger.info("Step 1: Preparing Docker environment...")
             # TODO: this test shouldn't use the lower-level prepare_environment function
-            # but rather use the higher-level InstanceEnv class
+            # but rather rely on InstanceEnvironment directly
             instance_image_tag = prepare_environment(instance, docker_manager)
             assert instance_image_tag, "Failed to prepare Docker environment."
 

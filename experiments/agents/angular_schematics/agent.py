@@ -7,7 +7,9 @@ from loguru import logger
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import BenchmarkInstance
 from experiments.agents.base import AgentRunArtifacts, AgentRunResult, BaseAgent
-from experiments.agents.mini_swe_agent.environment import InstanceEnv
+from experiments.agents.mini_swe_agent.environment import (
+    MiniSweAgentEnvironmentAdapter,
+)
 from experiments.models import AngularSchematicsConfig
 
 
@@ -28,7 +30,7 @@ class AngularSchematicsAgent(BaseAgent):
     ) -> None:
         self.instance = instance
         self.agent_config = agent_config
-        self.env = InstanceEnv(instance, docker_manager)
+        self.env = MiniSweAgentEnvironmentAdapter(instance, docker_manager)
         self._plan = self._build_plan()
 
     def _build_plan(self) -> list[_PlannedCommand]:

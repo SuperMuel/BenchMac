@@ -15,7 +15,9 @@ from experiments.agents.base import (
     AgentRunResult,
     BaseAgent,
 )
-from experiments.agents.mini_swe_agent.environment import InstanceEnv
+from experiments.agents.mini_swe_agent.environment import (
+    MiniSweAgentEnvironmentAdapter,
+)
 from experiments.models import MiniSweAgentConfig
 
 
@@ -72,7 +74,7 @@ class MiniSweAgent(BaseAgent):
         self.instance = instance
         self.agent_config = agent_config
         model = LitellmModel(model_name=agent_config.model_name)
-        self.env = InstanceEnv(instance, docker_manager)
+        self.env = MiniSweAgentEnvironmentAdapter(instance, docker_manager)
 
         test_env = self.env.execute("ls -la")
         assert "package.json" in str(test_env.get("output", "")), (
