@@ -216,7 +216,7 @@ class TestBenchmarkInstanceDockerfileValidation:
         # Point dockerfiles_dir to a temp directory that does not contain the file
         from bench_mac.config import settings
 
-        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+        monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
         instance = instance_factory.create_instance(
             instance_id="no-file-needed",
@@ -230,7 +230,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     ) -> None:
         from bench_mac.config import settings
 
-        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+        monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
         instance_id = "test-instance-has-file"
         dockerfile_path = tmp_path / instance_id
@@ -250,7 +250,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     ) -> None:
         from bench_mac.config import settings
 
-        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+        monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
         missing_id = "missing-instance"
         with pytest.raises(
@@ -266,7 +266,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     ) -> None:
         from bench_mac.config import settings
 
-        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+        monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
         instance_id = "empty-dockerfile-instance"
         dockerfile_path = tmp_path / instance_id
@@ -283,7 +283,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     ) -> None:
         from bench_mac.config import settings
 
-        monkeypatch.setattr(settings, "dockerfiles_dir", tmp_path, raising=False)
+        monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
         # Test empty string
         with pytest.raises(ValidationError, match=r"is empty\."):

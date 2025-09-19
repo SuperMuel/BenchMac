@@ -39,9 +39,13 @@ class Settings(BaseSettings):
         """Path to the directory containing benchmark data."""
         return self.project_root / "data"
 
+    _dockerfiles_dir_override: Path | None = None
+
     @property
     def dockerfiles_dir(self) -> Path:
         """The default directory containing per-instance Dockerfiles."""
+        if self._dockerfiles_dir_override is not None:
+            return self._dockerfiles_dir_override
         return self.data_dir / "dockerfiles"
 
     @property
