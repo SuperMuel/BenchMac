@@ -27,7 +27,8 @@ from bench_mac.models import (
     Submission,
     SubmissionID,
 )
-from bench_mac.utils import collect_network_error_details, iter_lines_from_jsonl_files
+from bench_mac.utils import collect_network_error_details
+from bench_mac.utils_jsonl import iter_lines_from_jsonl_files
 from experiments.models import (
     AgentConfig,
     CompletedExperiment,
