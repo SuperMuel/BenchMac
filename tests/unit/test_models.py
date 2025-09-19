@@ -167,6 +167,52 @@ class TestMetricsReport:
 
 
 @pytest.mark.unit
+class TestExecutionTrace:
+    """Tests for the ExecutionTrace model."""
+
+    def test_total_duration_returns_zero_for_empty_steps(self) -> None:
+        """Test that total_duration returns timedelta(0) when there are no steps."""
+        trace = ExecutionTrace(steps=[])
+        assert trace.total_duration == timedelta(0)
+
+    def test_total_duration_sums_all_step_durations(self) -> None:
+        """Test that total_duration correctly sums durations from all steps."""
+        start_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+        # Create steps with different durations
+        step1 = CommandResult(
+            command="npm install",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            start_time=start_time,
+            end_time=start_time + timedelta(seconds=5),  # 5 seconds
+        )
+        step2 = CommandResult(
+            command="ng build",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            start_time=start_time + timedelta(seconds=10),
+            end_time=start_time + timedelta(seconds=15),  # 5 seconds
+        )
+        step3 = CommandResult(
+            command="npm test",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            start_time=start_time + timedelta(seconds=20),
+            end_time=start_time + timedelta(seconds=22, microseconds=500000),
+        )  # 2.5 seconds duration
+
+        trace = ExecutionTrace(steps=[step1, step2, step3])
+
+        # Total should be 5 + 5 + 2.5 = 12.5 seconds
+        expected_duration = timedelta(seconds=12.5)
+        assert trace.total_duration == expected_duration
+
+
+@pytest.mark.unit
 class TestEvaluationResult:
     """Tests for the EvaluationResult model."""
 

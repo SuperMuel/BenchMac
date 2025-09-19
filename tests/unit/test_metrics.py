@@ -117,6 +117,15 @@ class TestCalculateTargetVersionAchieved:
         )
         assert calculate_target_version_achieved(version_step, "16") is None
 
+    def test_returns_none_if_version_string_is_malformed(self) -> None:
+        version_output = {
+            "dependencies": {"@angular/core": {"version": "not-a-version"}}
+        }
+        version_step = create_command_output(
+            command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
+        )
+        assert calculate_target_version_achieved(version_step, "16") is None
+
 
 @pytest.fixture
 def sample_instance() -> BenchmarkInstance:
