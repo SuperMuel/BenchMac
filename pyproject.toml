@@ -16,6 +16,7 @@ dependencies = [
     "python-slugify>=8.0.4",
     "requests>=2.32.4",
     "rich>=14.0.0",
+    "uuid6>=2025.0.1",
 ]
 
 [project.urls]

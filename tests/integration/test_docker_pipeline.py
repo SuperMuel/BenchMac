@@ -8,10 +8,10 @@ These tests require a running Docker daemon to be present on the host machine.
 They are marked as 'integration' and will be skipped by default.
 """
 
-import uuid
 from collections.abc import Generator
 
 import pytest
+from uuid6 import uuid7
 
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
@@ -26,7 +26,7 @@ def unique_tag(docker_manager: DockerManager) -> Generator[str, None, None]:
     This ensures that tests do not interfere with each other and handles
     the cleanup of the image after the test has completed.
     """
-    tag = f"benchmac-test-image:{uuid.uuid4().hex[:8]}"
+    tag = f"benchmac-test-image:{uuid7().hex[:8]}"
     yield tag
     if docker_manager and docker_manager.image_exists(tag):
         print(f"\nCleaning up image: {tag}")

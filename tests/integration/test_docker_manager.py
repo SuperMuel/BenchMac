@@ -8,12 +8,12 @@ standard test run.
 To run these tests: `pytest -m integration`
 """
 
-import uuid
 from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 from docker.models.containers import Container
+from uuid6 import uuid7
 
 from bench_mac.docker.manager import DockerManager
 
@@ -31,7 +31,7 @@ def unique_tag(docker_manager: DockerManager) -> Generator[str, None, None]:
     the cleanup of the image after the test has completed.
     """
     # Generate a short, unique tag to avoid collisions
-    tag = f"benchmac-test-image:{uuid.uuid4().hex[:8]}"
+    tag = f"benchmac-test-image:{uuid7().hex[:8]}"
     yield tag
     # Teardown: This code runs after the test function finishes
     print(f"\nCleaning up image: {tag}")

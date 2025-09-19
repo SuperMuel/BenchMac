@@ -1,5 +1,4 @@
 import re
-import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, NewType, Self
 from urllib.parse import urlparse
@@ -14,6 +13,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from uuid6 import uuid7
 
 from bench_mac.config import settings
 
@@ -212,7 +212,7 @@ class Submission(BaseModel):
     """
 
     submission_id: SubmissionID = Field(
-        default_factory=lambda: SubmissionID(str(uuid.uuid4())),
+        default_factory=lambda: SubmissionID(str(uuid7())),
         description="The unique identifier of the submission.",
     )
 
@@ -400,7 +400,7 @@ class EvaluationCompleted(BaseModel):
     """
 
     id: EvaluationID = Field(
-        default_factory=lambda: EvaluationID(str(uuid.uuid4())),
+        default_factory=lambda: EvaluationID(str(uuid7())),
         description="The unique identifier of the evaluation.",
     )
     status: Literal["completed"] = "completed"
@@ -422,7 +422,7 @@ class EvaluationFailed(BaseModel):
     """
 
     id: EvaluationID = Field(
-        default_factory=lambda: EvaluationID(str(uuid.uuid4())),
+        default_factory=lambda: EvaluationID(str(uuid7())),
         description="The unique identifier of the evaluation.",
     )
     status: Literal["failed"] = "failed"

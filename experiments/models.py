@@ -1,9 +1,9 @@
 import hashlib
-import uuid
 from datetime import timedelta
 from typing import Annotated, Literal, NewType
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
+from uuid6 import uuid7
 
 from bench_mac.models import ExecutionTrace, Submission
 
@@ -106,7 +106,7 @@ class ExperimentArtifacts(BaseModel):
 
 class CompletedExperiment(BaseModel):
     id: ExperimentID = Field(
-        default_factory=lambda: ExperimentID(str(uuid.uuid4())),
+        default_factory=lambda: ExperimentID(str(uuid7())),
         description="Unique identifier for the experiment.",
     )
     status: Literal["completed"] = "completed"
@@ -126,7 +126,7 @@ class CompletedExperiment(BaseModel):
 
 class FailedExperiment(BaseModel):
     id: ExperimentID = Field(
-        default_factory=lambda: ExperimentID(str(uuid.uuid4())),
+        default_factory=lambda: ExperimentID(str(uuid7())),
         description="Unique identifier for the experiment.",
     )
     status: Literal["failed"] = "failed"

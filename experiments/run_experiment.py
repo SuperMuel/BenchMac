@@ -2,7 +2,6 @@
 # this is temporary a Typer app, but we'll fusion this with the main CLI later
 
 import json
-import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -13,6 +12,7 @@ from loguru import logger
 from pydantic import ValidationError
 from rich.console import Console
 from rich.progress import Progress
+from uuid6 import uuid7
 
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
@@ -412,7 +412,7 @@ def main(
 
         for task in tasks:
             instance = instances[task.instance_id]
-            submission_id = str(uuid.uuid4())
+            submission_id = str(uuid7())
             task_logger = bind_run_context(
                 instance=task.instance_id,
                 model=task.agent_config.display_name,
