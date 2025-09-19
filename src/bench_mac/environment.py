@@ -116,10 +116,33 @@ class InstanceEnvironment:
             self._steps.append(result)
 
         self._logger.debug(
-            f"Command exit={result.exit_code} (len(stdout)={len(result.stdout)}, "
-            f"len(stderr)={len(result.stderr)})"
+            f"Command exit={result.exit_code} "
+            f"(len(stdout)={len(result.stdout)}, len(stderr)={len(result.stderr)})"
         )
         return result
+
+    def diff_from_baseline(
+        self,
+        *,
+        no_prefix: bool = True,
+        trace: bool = False,
+    ) -> CommandResult:
+        """
+        Return the git diff between the current workspace and the baseline tag.
+
+        Args:
+            no_prefix: If True, omits the a/ and b/ prefixes in the diff output.
+            trace: If True, records this diff command in the environment's execution
+                trace.
+        """
+
+        parts = ["git", "diff"]
+        if no_prefix:
+            parts.append("--no-prefix")
+        parts.append("baseline")
+
+        command = " ".join(parts)
+        return self.exec(command, trace=trace)
 
     def copy_in(self, local_src_path: Path, container_dest_path: str) -> None:
         """
