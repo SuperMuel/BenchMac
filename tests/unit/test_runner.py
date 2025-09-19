@@ -121,9 +121,9 @@ class TestBenchmarkRunner:
         # 2. Prepare lists to capture the data passed to our callbacks.
         results_log: list[EvaluationResult] = []
 
-        def on_result_callback(outcome: EvaluationResult):
+        def on_result_callback(result: EvaluationResult):
             """A fake callback that just records the result."""
-            results_log.append(outcome)
+            results_log.append(result)
 
         # 3. Instantiate the runner.
         runner = BenchmarkRunner(workers=2)

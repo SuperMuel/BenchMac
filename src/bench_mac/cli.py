@@ -158,7 +158,7 @@ def _run_interactive(
     total_tasks = len(tasks)
     success_count = 0
     failure_count = 0
-    outcomes: list[EvaluationResult] = []
+    results: list[EvaluationResult] = []
 
     progress = Progress(
         SpinnerColumn(),
@@ -177,22 +177,22 @@ def _run_interactive(
             "Evaluating...", total=total_tasks, successes=0, failures=0
         )
 
-        def on_result(outcome: EvaluationResult):
+        def on_result(result: EvaluationResult):
             nonlocal success_count, failure_count
 
-            # Collect outcome for summary
-            outcomes.append(outcome)
+            # Collect result for summary
+            results.append(result)
 
-            # Update counters based on outcome
-            if outcome.status == "completed":
+            # Update counters based on result
+            if result.status == "completed":
                 success_count += 1
-                logger.info(f"✅ Completed: {outcome.result.instance_id}")
+                logger.info(f"✅ Completed: {result.result.instance_id}")
             else:
                 failure_count += 1
-                logger.error(f"❌ FAILURE: {outcome.instance_id} - {outcome.error}")
+                logger.error(f"❌ FAILURE: {result.instance_id} - {result.error}")
 
             # Write result to file
-            f.write(outcome.model_dump_json() + "\n")
+            f.write(result.model_dump_json() + "\n")
 
             # Update the progress bar with new counts and advance by 1
             progress.update(
@@ -209,7 +209,7 @@ def _run_interactive(
             on_result=on_result,
         )
 
-    return outcomes
+    return results
 
 
 def _run_non_interactive(
@@ -222,23 +222,23 @@ def _run_non_interactive(
     """Handles the evaluation run with simple line-by-line logging for CI/CD."""
     task_list = list(tasks)
     total_tasks = len(task_list)
-    outcomes: list[EvaluationResult] = []
+    results: list[EvaluationResult] = []
     logger.info(f"Running in non-interactive mode. Evaluating {total_tasks} tasks.")
 
     with output_file.open("a", encoding="utf-8") as f:
 
-        def on_result(outcome: EvaluationResult):
-            # Collect outcome for summary
-            outcomes.append(outcome)
+        def on_result(result: EvaluationResult):
+            # Collect result for summary
+            results.append(result)
 
             # Write to file
-            f.write(outcome.model_dump_json() + "\n")
+            f.write(result.model_dump_json() + "\n")
 
             # Also print a summary to the console log
-            if outcome.status == "completed":
-                logger.info(f"✅ Completed: {outcome.result.instance_id}")
-            elif outcome.status == "failed":
-                logger.error(f"❌ Failed: {outcome.instance_id} - {outcome.error}")
+            if result.status == "completed":
+                logger.info(f"✅ Completed: {result.result.instance_id}")
+            elif result.status == "failed":
+                logger.error(f"❌ Failed: {result.instance_id} - {result.error}")
 
         runner.run(
             tasks=task_list,
@@ -247,15 +247,15 @@ def _run_non_interactive(
             on_result=on_result,
         )
 
-    return outcomes
+    return results
 
 
 def _load_eval_results_from_file(results_file: Path) -> list[EvaluationResult]:
     """Load EvaluationResult objects from a JSONL results file."""
-    outcomes: list[EvaluationResult] = []
+    results: list[EvaluationResult] = []
     if not results_file.exists():
         logger.error(f"❌ Results file not found: {results_file}")
-        return outcomes
+        return results
 
     with results_file.open("r", encoding="utf-8") as f:
         for line_num, line in enumerate(f, 1):
@@ -263,14 +263,14 @@ def _load_eval_results_from_file(results_file: Path) -> list[EvaluationResult]:
             if not line:
                 continue
             try:
-                outcome = EvaluationResultAdapter.validate_json(line)
-                outcomes.append(outcome)
+                result = EvaluationResultAdapter.validate_json(line)
+                results.append(result)
             except Exception as e:
                 logger.warning(
                     f"⚠️ Warning: Skipping invalid result on line {line_num}: {e}"
                 )
 
-    return outcomes
+    return results
 
 
 def _load_previous_evaluation_results(
@@ -321,7 +321,7 @@ def _load_previous_evaluation_results(
 
 
 def _print_evaluation_summary(
-    outcomes: list[EvaluationResult],
+    results: list[EvaluationResult],
     run_id: str | None = None,
     results_file: Path | None = None,
     logs_dir: Path | None = None,
@@ -330,8 +330,8 @@ def _print_evaluation_summary(
     console = Console()
 
     # Calculate metrics
-    total_jobs = len(outcomes)
-    successful_jobs = sum(1 for outcome in outcomes if outcome.status == "completed")
+    total_jobs = len(results)
+    successful_jobs = sum(1 for result in results if result.status == "completed")
     failed_jobs = total_jobs - successful_jobs
 
     # Metrics breakdown - initialize counters for all metrics
@@ -344,9 +344,9 @@ def _print_evaluation_summary(
     install_success_count = 0
     install_total_count = 0
 
-    for outcome in outcomes:
-        if outcome.status == "completed":
-            metrics = outcome.result.metrics
+    for result in results:
+        if result.status == "completed":
+            metrics = result.result.metrics
 
             # Patch application metrics
             if metrics.patch_application_success is not None:
@@ -388,7 +388,7 @@ def _print_evaluation_summary(
     # Only show the failed instance IDs if there are unsuccessful jobs
     if failed_jobs > 0 and total_jobs > 0:
         failed_instance_ids = [
-            outcome.instance_id for outcome in outcomes if outcome.status != "completed"
+            result.instance_id for result in results if result.status != "completed"
         ]
         results_table = Table(
             title="❌ Harness Failures",
@@ -442,7 +442,7 @@ def _print_evaluation_summary(
     console.print(Panel(metrics_table, expand=False))
     console.print()
 
-    network_error_details = collect_network_error_details(outcomes)
+    network_error_details = collect_network_error_details(results)
     if network_error_details:
         details_table = Table(title="Network errors by evaluation", show_header=True)
         details_table.add_column("Evaluation ID", style="bold cyan", max_width=12)
@@ -778,11 +778,11 @@ def eval(
 
     try:
         if sys.stdout.isatty():
-            outcomes = _run_interactive(
+            results = _run_interactive(
                 runner, tasks, output_file, logs_dir=logs_dir, run_id=run_id
             )
         else:
-            outcomes = _run_non_interactive(
+            results = _run_non_interactive(
                 runner, tasks, output_file, logs_dir=logs_dir, run_id=run_id
             )
 
@@ -790,7 +790,7 @@ def eval(
 
         # Print comprehensive summary
         _print_evaluation_summary(
-            outcomes,
+            results,
             run_id,
             output_file,
             logs_dir,

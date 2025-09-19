@@ -138,5 +138,5 @@ class BenchmarkRunner:
             }
 
             for future in as_completed(futures):
-                result_outcome = future.result()
-                on_result(result_outcome)  # Invoke the result callback
+                result = future.result()
+                on_result(result)

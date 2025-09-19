@@ -50,12 +50,12 @@ def load_all_evaluations(
 
     for file_path, line_num, line in iter_lines_from_jsonl_files(jsonl_files):
         try:
-            outcome = EvaluationResultAdapter.validate_json(line)
-            match outcome.status:
+            result = EvaluationResultAdapter.validate_json(line)
+            match result.status:
                 case "completed":
-                    successes.append(outcome)
+                    successes.append(result)
                 case "failed":
-                    failures.append(outcome)
+                    failures.append(result)
 
         except (json.JSONDecodeError, ValidationError, Exception) as e:
             st.warning(
