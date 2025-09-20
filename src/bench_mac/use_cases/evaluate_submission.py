@@ -15,7 +15,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from loguru import Logger
 
 
-def _is_peer_dep_error(install_output: CommandResult) -> bool:
+def is_peer_dep_error(install_output: CommandResult) -> bool:
     """Return True when npm install failed because of peer dependency conflicts."""
     if install_output.success:
         return False
@@ -28,7 +28,7 @@ def evaluate_submission(
     submission: Submission,
     environment_factory: EnvironmentFactory,
     *,
-    logger: Logger,
+    logger: "Logger",
 ) -> ExecutionTrace:
     """Execute the benchmark workflow using the provided environment factory."""
     try:
@@ -64,7 +64,7 @@ def evaluate_submission(
             install_out = env.exec(instance.commands.install)
 
             if not install_out.success:
-                if not _is_peer_dep_error(install_out):
+                if not is_peer_dep_error(install_out):
                     logger.info("❌ Install failed. Halting evaluation.")
                     return env.trace()
 

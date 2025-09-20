@@ -1,6 +1,6 @@
 import pytest
 
-from bench_mac.executor import _is_peer_dep_error
+from bench_mac.executor import is_peer_dep_error
 
 from ..utils import create_command_output
 
@@ -37,7 +37,7 @@ class TestIsPeerDepError:
             exit_code=1,
             stderr=PEER_DEP_ERROR_STDERR,
         )
-        assert _is_peer_dep_error(failed_output) is True
+        assert is_peer_dep_error(failed_output) is True
 
     def test_is_case_insensitive(self) -> None:
         """Verify the check is case-insensitive as intended."""
@@ -47,7 +47,7 @@ class TestIsPeerDepError:
             exit_code=1,
             stderr=stderr,
         )
-        assert _is_peer_dep_error(failed_output) is True
+        assert is_peer_dep_error(failed_output) is True
 
     def test_returns_false_if_command_was_successful(self) -> None:
         """A successful command should never be a peer dep error,
@@ -60,7 +60,7 @@ class TestIsPeerDepError:
             exit_code=0,
             stderr=stderr_with_keywords,
         )
-        assert _is_peer_dep_error(successful_output) is False
+        assert is_peer_dep_error(successful_output) is False
 
     @pytest.mark.parametrize(
         "other_error_message",
@@ -81,4 +81,4 @@ class TestIsPeerDepError:
             exit_code=1,
             stderr=other_error_message,
         )
-        assert _is_peer_dep_error(failed_output) is False
+        assert is_peer_dep_error(failed_output) is False
