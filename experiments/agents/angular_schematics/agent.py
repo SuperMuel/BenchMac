@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from loguru import logger
@@ -15,6 +13,15 @@ from experiments.models import AngularSchematicsConfig
 class _PlannedCommand:
     description: str
     command: str
+    error_msg_if_fails: str | None = None
+
+
+_INSTALL_FAILED_MSG = """Install stage failed during Angular Schematics run.
+This is not expected to happen, as per the 'green baseline' approach.
+To reproduce the issue, you may run the baseline_validation integration \
+test for that instance :
+`uv run pytest -m instance_validation -k "{instance_id}".
+"""
 
 
 class AngularSchematicsAgent(BaseAgent):
@@ -41,14 +48,13 @@ class AngularSchematicsAgent(BaseAgent):
             _PlannedCommand(
                 description="Install project dependencies",
                 command=self.instance.commands.install,
+                error_msg_if_fails=_INSTALL_FAILED_MSG.format(
+                    instance_id=self.instance.instance_id
+                ),
             ),
             _PlannedCommand(
                 description="Run Angular update schematics",
                 command=update_command,
-            ),
-            _PlannedCommand(
-                description="Build project for verification",
-                command=self.instance.commands.build,
             ),
         ]
 
@@ -86,7 +92,14 @@ class AngularSchematicsAgent(BaseAgent):
         with self.env:
             for planned in self._plan:
                 success = self._run_command(planned)
+                # TODO: Raise if the command fails for harness reasons -
+                # e.g network errors
+                if not success and planned.error_msg_if_fails:
+                    raise RuntimeError(planned.error_msg_if_fails)
+
                 if not success:
+                    # Don't raise, as we want to capture in the
+                    # results when this method fails
                     break
 
             model_patch = self.env.diff_from_baseline().stdout
