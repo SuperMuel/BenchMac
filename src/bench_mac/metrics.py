@@ -4,16 +4,9 @@ from logging import getLogger
 from packaging.version import parse as parse_version
 
 from .models import BenchmarkInstance, CommandResult, ExecutionTrace, MetricsReport
+from .trace_analyzer import TraceAnalyzer
 
 logger = getLogger(__name__)
-
-
-def _find_step(trace: ExecutionTrace, command_part: str) -> CommandResult | None:
-    """Finds the first step in the trace whose command contains a substring."""
-    for step in trace.steps:
-        if command_part in step.command:
-            return step
-    return None
 
 
 def _calculate_patch_application_success(
@@ -137,12 +130,13 @@ def calculate_metrics(
     """
     # Patch application metric
     # Check both the patch check and patch apply steps
-    patch_check_step = _find_step(trace, "git apply --check")
-    patch_apply_step = _find_step(trace, "git apply -p0")
-    install_steps = [s for s in trace.steps if "npm ci" in s.command]
-    final_install_step = install_steps[-1] if install_steps else None
-    version_check_step = _find_step(trace, "npm ls @angular/cli @angular/core --json")
-    build_step = _find_step(trace, instance.commands.build)
+    analyzer = TraceAnalyzer(trace, instance)
+
+    patch_check_step = analyzer.patch_check_step()
+    patch_apply_step = analyzer.patch_apply_step()
+    final_install_step = analyzer.final_install_step()
+    version_check_step = analyzer.version_check_step()
+    build_step = analyzer.build_step()
 
     patch_application_success = _calculate_patch_application_success(
         patch_check_step, patch_apply_step
