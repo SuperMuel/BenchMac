@@ -13,6 +13,7 @@ from collections.abc import Generator
 import pytest
 from uuid6 import uuid7
 
+from bench_mac.config import settings
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import BenchmarkInstance, InstanceCommands, InstanceID
@@ -76,8 +77,9 @@ class TestImageBuilder:
             # 3. Run a container and verify the project was cloned correctly
             container = docker_manager.run_container(image_tag=final_tag)
             # Check for a key file from the cloned repository
+            workdir = settings.project_workdir
             exit_code, _, stderr = docker_manager.execute_in_container(
-                container, "test -f /app/project/angular.json"
+                container, f"test -f {workdir}/angular.json"
             )
             assert exit_code == 0, f"Verification command failed: {stderr}"
 

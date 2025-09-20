@@ -33,6 +33,10 @@ class Settings(BaseSettings):
         default_factory=lambda: Path(__file__).parent.parent.parent,
         description="The absolute path to the project's root directory.",
     )
+    project_workdir: str = Field(
+        default="/app/project",
+        description="Default working directory inside evaluation containers.",
+    )
 
     @property
     def data_dir(self) -> Path:

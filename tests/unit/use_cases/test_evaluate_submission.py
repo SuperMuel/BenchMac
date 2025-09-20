@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
+from typing import Self
 
 import pytest
 from loguru import logger
 
+from bench_mac.config import settings
 from bench_mac.domain.services.ports import EnvironmentFactory, ExecutionEnvironment
 from bench_mac.models import (
     BenchmarkInstance,
@@ -27,7 +29,7 @@ class FakeExecutionEnvironment(ExecutionEnvironment):
         self._copied_files: list[tuple[Path, str]] = []
         self.closed = False
 
-    def __enter__(self) -> "FakeExecutionEnvironment":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -35,7 +37,7 @@ class FakeExecutionEnvironment(ExecutionEnvironment):
 
     @property
     def project_dir(self) -> str:
-        return "/app/project"
+        return settings.project_workdir
 
     def exec(
         self,

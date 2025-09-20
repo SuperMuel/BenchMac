@@ -6,6 +6,7 @@ from typing import Any
 
 from loguru import logger
 
+from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environment import InstanceEnvironment
 from bench_mac.models import BenchmarkInstance, ExecutionTrace
@@ -16,7 +17,7 @@ class MiniSweAgentEnvironmentAdapter:
 
     def __init__(self, instance: BenchmarkInstance, docker_manager: DockerManager):
         self.instance = instance
-        self._project_workdir = "/app/project"
+        self._project_workdir = settings.project_workdir
         self._env = InstanceEnvironment(
             instance,
             docker_manager,

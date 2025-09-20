@@ -2,6 +2,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.domain.services.ports import EnvironmentFactory, ExecutionEnvironment
 from bench_mac.environment import InstanceEnvironment
@@ -16,14 +17,15 @@ class DockerExecutionEnvironment(ExecutionEnvironment):
         instance: BenchmarkInstance,
         manager: DockerManager,
         *,
-        project_dir: str = "/app/project",
+        project_dir: str | None = None,
         logger: Any | None = None,
         auto_remove: bool = False,
     ) -> None:
+        resolved_project_dir = project_dir or settings.project_workdir
         self._instance_env = InstanceEnvironment(
             instance,
             manager,
-            project_dir=project_dir,
+            project_dir=resolved_project_dir,
             logger=logger,
             auto_remove=auto_remove,
         )
@@ -67,12 +69,12 @@ class DockerEnvironmentFactory(EnvironmentFactory):
         self,
         manager: DockerManager,
         *,
-        project_dir: str = "/app/project",
+        project_dir: str | None = None,
         logger: Any | None = None,
         auto_remove: bool = False,
     ) -> None:
         self._manager = manager
-        self._project_dir = project_dir
+        self._project_dir = project_dir or settings.project_workdir
         self._logger = logger
         self._auto_remove = auto_remove
 

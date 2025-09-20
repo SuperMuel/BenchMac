@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger as _default_logger
 
+from bench_mac.config import settings
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
 from bench_mac.models import (
@@ -29,13 +30,13 @@ class InstanceEnvironment:
         instance: BenchmarkInstance,
         manager: DockerManager,
         *,
-        project_dir: str = "/app/project",
+        project_dir: str | None = None,
         logger: Any | None = None,
         auto_remove: bool = False,
     ) -> None:
         self._instance = instance
         self._manager = manager
-        self._project_dir = project_dir
+        self._project_dir = project_dir or settings.project_workdir
         self._logger = logger or _default_logger
         self._auto_remove = auto_remove
 
