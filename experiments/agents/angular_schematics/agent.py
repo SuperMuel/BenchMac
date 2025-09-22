@@ -5,8 +5,8 @@ from loguru import logger
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environment import InstanceEnvironment
 from bench_mac.models import BenchmarkInstance
-from experiments.agents.base import AgentRunArtifacts, AgentRunResult, BaseAgent
-from experiments.models import AngularSchematicsConfig
+from experiments.agents.base import AgentRunResult, BaseAgent
+from experiments.models import AngularSchematicsConfig, ExperimentArtifacts
 
 
 @dataclass(frozen=True)
@@ -103,12 +103,12 @@ class AngularSchematicsAgent(BaseAgent):
                     break
 
             model_patch = self.env.diff_from_baseline().stdout
-            artifacts = AgentRunArtifacts(execution_trace=self.env.trace())
+            artifacts = ExperimentArtifacts(execution_trace=self.env.trace())
 
         return AgentRunResult(model_patch=model_patch, artifacts=artifacts)
 
-    def collect_artifacts(self) -> AgentRunArtifacts | None:
+    def collect_artifacts(self) -> ExperimentArtifacts | None:
         try:
-            return AgentRunArtifacts(execution_trace=self.env.trace())
+            return ExperimentArtifacts(execution_trace=self.env.trace())
         except Exception:  # pragma: no cover - best effort fallback
             return None

@@ -274,6 +274,7 @@ def process_single_task(
                 execution_trace=agent_result.artifacts.execution_trace,
                 cost_usd=agent_result.artifacts.cost_usd,
                 n_calls=agent_result.artifacts.n_calls,
+                model_responses=agent_result.artifacts.model_responses,
             )
         completed = CompletedExperiment(
             task=task,
@@ -318,6 +319,7 @@ def process_single_task(
                 execution_trace=agent_artifacts.execution_trace,
                 cost_usd=agent_artifacts.cost_usd,
                 n_calls=agent_artifacts.n_calls,
+                model_responses=agent_artifacts.model_responses,
             )
         failed = FailedExperiment(
             task=task,

@@ -2,22 +2,7 @@ from abc import ABC, abstractmethod
 
 from pydantic import BaseModel, Field
 
-from bench_mac.models import ExecutionTrace
-
-
-class AgentRunArtifacts(BaseModel):
-    execution_trace: ExecutionTrace | None = Field(
-        default=None,
-        description="Ordered command trace captured during the agent run.",
-    )
-    cost_usd: float | None = Field(
-        default=None,
-        description="The cost of the agent run in USD.",
-    )
-    n_calls: int | None = Field(
-        default=None,
-        description="The number of calls to the model.",
-    )
+from experiments.models import ExperimentArtifacts
 
 
 class AgentRunResult(BaseModel):
@@ -26,7 +11,7 @@ class AgentRunResult(BaseModel):
         description="A string containing the full, unified diff (.patch format) "
         "of all changes.",
     )
-    artifacts: AgentRunArtifacts | None = Field(
+    artifacts: ExperimentArtifacts | None = Field(
         default=None,
         description="Optional structured artifacts captured during the agent run.",
     )
@@ -42,6 +27,6 @@ class BaseAgent(ABC):
         """Execute the agent and return the generated patch and optional artifacts."""
         pass
 
-    def collect_artifacts(self) -> AgentRunArtifacts | None:
+    def collect_artifacts(self) -> ExperimentArtifacts | None:
         """Return any artifacts gathered outside of a successful run."""
         return None

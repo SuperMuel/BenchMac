@@ -148,6 +148,10 @@ class ExperimentArtifacts(BaseModel):
         default=None,
         description="The number of calls to the model.",
     )
+    model_responses: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Raw model responses captured at each query step.",
+    )
 
 
 class CompletedExperiment(BaseModel):
