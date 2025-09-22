@@ -18,10 +18,14 @@ class MiniSweAgentConfig(BaseModel):
         description="The name of the model to use for patch generation "
         "(e.g., 'mistral/devstral-medium-2507').",
     )
+    library_version: str = Field(
+        min_length=1,
+        description="Resolved minisweagent package version used to run the agent.",
+    )
 
     @property
     def key(self) -> str:
-        return f"{self.scaffold}/{self.model_name}"
+        return f"{self.scaffold}/{self.model_name}@minisweagent-{self.library_version}"
 
     @property
     def display_name(self) -> str:

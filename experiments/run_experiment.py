@@ -4,6 +4,8 @@
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 import typer
@@ -50,11 +52,20 @@ DEFAULT_SCAFFOLDS = ("swe-agent-mini",)
 DEFAULT_MODEL_NAMES = ("mistral/devstral-medium-2507",)
 
 
+def _resolve_minisweagent_version() -> str:
+    try:
+        return pkg_version("minisweagent")
+    except PackageNotFoundError as exc:  # pragma: no cover - defensive guard
+        msg = "minisweagent must be installed to run the swe-agent-mini scaffold"
+        raise RuntimeError(msg) from exc
+
+
 def build_agent_configs(
     scaffolds: list[str],
     model_names: list[str],
 ) -> list[AgentConfig]:
     configs: list[AgentConfig] = []
+    mini_swe_agent_version: str | None = None
     for scaffold in scaffolds:
         scaffold_key = scaffold.strip().lower()
 
@@ -68,8 +79,15 @@ def build_agent_configs(
                 raise typer.BadParameter(
                     "At least one --model-name must be provided when using the swe-agent-mini scaffold."
                 )
+            if mini_swe_agent_version is None:
+                mini_swe_agent_version = _resolve_minisweagent_version()
             for model_name in model_names:
-                configs.append(MiniSweAgentConfig(model_name=model_name))
+                configs.append(
+                    MiniSweAgentConfig(
+                        model_name=model_name,
+                        library_version=mini_swe_agent_version,
+                    )
+                )
         elif scaffold_key == "angular-schematics":
             configs.append(AngularSchematicsConfig())
 

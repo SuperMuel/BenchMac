@@ -96,7 +96,12 @@ class MiniSweAgent(BaseAgent):
         submission_id: str,
     ) -> AgentRunResult:
         """Execute the agent and return the generated patch and artifacts."""
-        logger.info(f"Running Mini SWE Agent for instance: {self.instance.instance_id}")
+        logger.info(
+            "Running Mini SWE Agent for instance: {instance_id} "
+            "using minisweagent {library_version}",
+            instance_id=self.instance.instance_id,
+            library_version=self.agent_config.library_version,
+        )
 
         with self.env:
             exit_status, result = self.agent.run(task=self.task_prompt)
