@@ -4,13 +4,11 @@ from typing import TYPE_CHECKING, Any
 
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environments import DockerEnvironmentFactory
-from bench_mac.models import BenchmarkInstance, ExecutionTrace, Submission
-from bench_mac.use_cases.evaluate_submission import (
+from bench_mac.evaluation import (
     evaluate_submission as evaluate_submission_use_case,
 )
-from bench_mac.use_cases.evaluate_submission import (
-    is_peer_dep_error,
-)
+from bench_mac.evaluation import is_peer_dep_error
+from bench_mac.models import BenchmarkInstance, ExecutionTrace, Submission
 
 if TYPE_CHECKING:  # pragma: no cover
     from loguru import Logger

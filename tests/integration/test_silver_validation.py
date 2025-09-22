@@ -21,8 +21,8 @@ from loguru import logger
 
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
+from bench_mac.evaluation import calculate_metrics
 from bench_mac.executor import execute_submission
-from bench_mac.metrics import calculate_metrics
 from bench_mac.models import EvaluationTask, InstanceID, Submission
 from bench_mac.utils import load_instances
 

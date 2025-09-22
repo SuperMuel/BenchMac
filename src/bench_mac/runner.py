@@ -7,9 +7,9 @@ from pathlib import Path
 from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
+from bench_mac.evaluation import calculate_metrics
 from bench_mac.executor import execute_submission
 from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
-from bench_mac.metrics import calculate_metrics
 from bench_mac.models import (
     EvaluationCompleted,
     EvaluationFailed,

@@ -7,6 +7,7 @@ from loguru import logger
 
 from bench_mac.config import settings
 from bench_mac.environments import EnvironmentFactory, ExecutionEnvironment
+from bench_mac.evaluation import evaluate_submission
 from bench_mac.models import (
     BenchmarkInstance,
     CommandResult,
@@ -14,7 +15,6 @@ from bench_mac.models import (
     InstanceID,
     Submission,
 )
-from bench_mac.use_cases.evaluate_submission import evaluate_submission
 from tests.conftest import InstanceFactory
 
 from ...utils import create_command_output

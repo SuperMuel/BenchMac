@@ -3,7 +3,13 @@ from logging import getLogger
 
 from packaging.version import parse as parse_version
 
-from .models import BenchmarkInstance, CommandResult, ExecutionTrace, MetricsReport
+from bench_mac.models import (
+    BenchmarkInstance,
+    CommandResult,
+    ExecutionTrace,
+    MetricsReport,
+)
+
 from .trace_analyzer import TraceAnalyzer
 
 logger = getLogger(__name__)
