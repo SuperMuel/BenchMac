@@ -1,5 +1,8 @@
+"""Docker-backed execution environment implementations."""
+
 from enum import Enum
 from pathlib import Path
+from types import TracebackType
 from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger as _default_logger
@@ -14,6 +17,8 @@ from bench_mac.models import (
     utc_now,
 )
 
+from .base import EnvironmentFactory, ExecutionEnvironment
+
 if TYPE_CHECKING:  # pragma: no cover
     from docker.models.containers import Container
 
@@ -24,7 +29,9 @@ class _EnvState(str, Enum):
     CLOSED = "closed"
 
 
-class InstanceEnvironment:
+class DockerExecutionEnvironment(ExecutionEnvironment):
+    """Docker-backed implementation of the execution-environment protocol."""
+
     def __init__(
         self,
         instance: BenchmarkInstance,
@@ -50,15 +57,21 @@ class InstanceEnvironment:
     def __enter__(self) -> Self:
         return self.start()
 
-    def __exit__(self, *_: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.close()
 
     def start(self) -> Self:
-        """Ensure image exists and start a container (idempotent for a *live* env)."""
+        """Ensure image exists and start a container (idempotent for a live env)."""
         if self._state is _EnvState.CLOSED:
             raise RuntimeError(
-                "This InstanceEnvironment has been closed and cannot be restarted. "
-                "Create a new InstanceEnvironment for another run."
+                "This DockerExecutionEnvironment has been closed "
+                "and cannot be restarted. "
+                "Create a new environment for another run."
             )
         if self._state is _EnvState.STARTED:
             return self
@@ -133,9 +146,8 @@ class InstanceEnvironment:
 
         Args:
             no_prefix: If True, omits the a/ and b/ prefixes in the diff output.
-            trace: If True, records this diff command in the environment's execution
-                trace.
-        """
+            trace: If True, records this diff command in the environment's execution trace.
+        """  # noqa: E501
 
         parts = ["git", "diff"]
         if no_prefix:
@@ -145,16 +157,14 @@ class InstanceEnvironment:
         command = " ".join(parts)
         return self.exec(command, trace=trace)
 
-    def copy_in(self, local_src_path: Path, container_dest_path: str) -> None:
-        """
-        Copy a local file or directory *into* the container at container_dest_path.
-        """
+    def copy_in(self, local_src_path: Path, dest_path: str) -> None:
+        """Copy a local file or directory into the container."""
         if not local_src_path.exists():
             raise FileNotFoundError(f"Local path does not exist: {local_src_path}")
         self._ensure_container()
         assert self._container is not None
         self._manager.copy_to_container(
-            self._container, src_path=local_src_path, dest_path=container_dest_path
+            self._container, src_path=local_src_path, dest_path=dest_path
         )
 
     # ----------------------- Results ------------------------------------------
@@ -197,7 +207,7 @@ class InstanceEnvironment:
         """Start the container if not already running (only while live)."""
         if self._state is _EnvState.CLOSED:
             raise RuntimeError(
-                "InstanceEnvironment is closed; cannot start or use a container."
+                "DockerExecutionEnvironment is closed; cannot start or use a container."
             )
         if self._container is not None:
             return
@@ -210,3 +220,29 @@ class InstanceEnvironment:
     @property
     def state(self) -> str:
         return self._state.value
+
+
+class DockerEnvironmentFactory(EnvironmentFactory):
+    """EnvironmentFactory that produces DockerExecutionEnvironment instances."""
+
+    def __init__(
+        self,
+        manager: DockerManager,
+        *,
+        project_dir: str | None = None,
+        logger: Any | None = None,
+        auto_remove: bool = False,
+    ) -> None:
+        self._manager = manager
+        self._project_dir = project_dir or settings.project_workdir
+        self._logger = logger
+        self._auto_remove = auto_remove
+
+    def create(self, instance: BenchmarkInstance) -> ExecutionEnvironment:
+        return DockerExecutionEnvironment(
+            instance,
+            self._manager,
+            project_dir=self._project_dir,
+            logger=self._logger,
+            auto_remove=self._auto_remove,
+        )

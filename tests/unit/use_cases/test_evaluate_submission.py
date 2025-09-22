@@ -6,7 +6,7 @@ import pytest
 from loguru import logger
 
 from bench_mac.config import settings
-from bench_mac.domain.services.ports import EnvironmentFactory, ExecutionEnvironment
+from bench_mac.environments import EnvironmentFactory, ExecutionEnvironment
 from bench_mac.models import (
     BenchmarkInstance,
     CommandResult,

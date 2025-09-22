@@ -1,4 +1,4 @@
-"""Adapter around the core InstanceEnvironment for experiment agents."""
+"""Adapter around the core DockerExecutionEnvironment for experiment agents."""
 
 from __future__ import annotations
 
@@ -8,17 +8,18 @@ from loguru import logger
 
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
-from bench_mac.environment import InstanceEnvironment
+from bench_mac.environments import DockerExecutionEnvironment
 from bench_mac.models import BenchmarkInstance, ExecutionTrace
 
 
 class MiniSweAgentEnvironmentAdapter:
-    """Adapter that exposes InstanceEnvironment via the mini-swe-agent interface."""
+    """Adapter that exposes DockerExecutionEnvironment
+    via the mini-swe-agent interface."""
 
     def __init__(self, instance: BenchmarkInstance, docker_manager: DockerManager):
         self.instance = instance
         self._project_workdir = settings.project_workdir
-        self._env = InstanceEnvironment(
+        self._env = DockerExecutionEnvironment(
             instance,
             docker_manager,
             project_dir=self._project_workdir,
@@ -52,7 +53,7 @@ class MiniSweAgentEnvironmentAdapter:
         return self._env.diff_from_baseline().stdout
 
     def execution_trace(self) -> ExecutionTrace:
-        """Expose the execution trace recorded by InstanceEnvironment."""
+        """Expose the execution trace recorded by the DockerExecutionEnvironment."""
         return self._env.trace()
 
     def close(self) -> None:

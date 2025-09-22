@@ -17,7 +17,7 @@ from loguru import logger
 
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
-from bench_mac.environment import InstanceEnvironment
+from bench_mac.environments import DockerExecutionEnvironment
 from bench_mac.models import BenchmarkInstance
 from bench_mac.utils import load_instances
 
@@ -64,7 +64,9 @@ class TestBaselineInstanceValidation:
             'console.log(match[0]);"'
         )
 
-        with InstanceEnvironment(instance, docker_manager, auto_remove=True) as env:
+        with DockerExecutionEnvironment(
+            instance, docker_manager, auto_remove=True
+        ) as env:
             result = env.exec(version_check_command)
 
             assert result.success, (
@@ -100,7 +102,9 @@ class TestBaselineInstanceValidation:
         by running install, build, lint, and test commands successfully.
         """
         logger.info(f"--- Validating Baseline for Instance: {instance.instance_id} ---")
-        with InstanceEnvironment(instance, docker_manager, auto_remove=True) as env:
+        with DockerExecutionEnvironment(
+            instance, docker_manager, auto_remove=True
+        ) as env:
             project_dir = env.project_dir
 
             # === 2a. VALIDATE GIT STATE ===

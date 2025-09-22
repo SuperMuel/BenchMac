@@ -1,3 +1,5 @@
+"""Core execution-environment protocols used by the harness."""
+
 from pathlib import Path
 from types import TracebackType
 from typing import Protocol, Self
@@ -33,7 +35,8 @@ class ExecutionEnvironment(Protocol):
         ...
 
     def copy_in(self, local_src_path: Path, dest_path: str) -> None:
-        """Copy a file into the environment."""
+        """Copy a file or directory into the environment."""
+        ...
 
     def trace(self) -> ExecutionTrace:
         """Return the accumulated execution trace."""

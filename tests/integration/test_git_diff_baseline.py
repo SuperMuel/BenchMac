@@ -1,5 +1,6 @@
-"""Integration test ensuring `InstanceEnvironment.diff_from_baseline` captures all
-edits."""
+"""Integration test ensuring `DockerExecutionEnvironment.diff_from_baseline`
+captures all edits.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ import pytest
 
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
-from bench_mac.environment import InstanceEnvironment
+from bench_mac.environments import DockerExecutionEnvironment
 from bench_mac.utils import load_instances
 
 
@@ -24,7 +25,7 @@ def test_git_diff_baseline_captures_all_changes(docker_manager: DockerManager) -
 
     instance = next(iter(instances.values()))
 
-    with InstanceEnvironment(instance, docker_manager, auto_remove=True) as env:
+    with DockerExecutionEnvironment(instance, docker_manager, auto_remove=True) as env:
         tracked_file = env.exec('bash -lc "git ls-files | head -n 1"').stdout.strip()
         assert tracked_file, "Unable to determine an existing tracked file to modify."
 

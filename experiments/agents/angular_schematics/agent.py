@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
-from bench_mac.environment import InstanceEnvironment
+from bench_mac.environments import DockerExecutionEnvironment
 from bench_mac.models import BenchmarkInstance
 from experiments.agents.base import AgentRunResult, BaseAgent
 from experiments.models import AngularSchematicsConfig, ExperimentArtifacts
@@ -35,7 +35,7 @@ class AngularSchematicsAgent(BaseAgent):
     ) -> None:
         self.instance = instance
         self.agent_config = agent_config
-        self.env = InstanceEnvironment(instance, docker_manager)
+        self.env = DockerExecutionEnvironment(instance, docker_manager)
         self._plan = self._build_plan()
 
     def _build_plan(self) -> list[_PlannedCommand]:
