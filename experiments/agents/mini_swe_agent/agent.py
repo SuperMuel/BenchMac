@@ -1,7 +1,7 @@
 from pathlib import Path
 from textwrap import dedent
 
-import yaml
+from jinja2 import Environment, StrictUndefined
 from loguru import logger
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.models.litellm_model import LitellmModel
@@ -20,41 +20,17 @@ from experiments.agents.mini_swe_agent.environment import (
 )
 from experiments.models import MiniSweAgentConfig
 
-
-def generate_task_prompt(instance: BenchmarkInstance) -> str:
-    """Generates a detailed, structured prompt for the agent."""
-    return dedent(
-        f"""\
-        ## Goal
-        Migrate the application from Angular version from {instance.source_angular_version} to {instance.target_angular_version}.
-
-        ## Context
-        - The codebase is available in `/app/project`
-        - The project is already cloned in the current directory. You do not need to clone it.
-        - NPM is already installed.
-        - Commands hints:
-            - Install dependencies: {instance.commands.install}
-            - Build the project: {instance.commands.build}
-
-        ## Rules
-        Do not change any application logic or functionality. Your focus is only on making the code compatible with the target Angular version.
-
-        ## Recommended Workflow
-
-        This workflows should be done step-by-step so that you can iterate on your changes and any possible problems.
-
-        1. Analyze the codebase by finding and reading relevant files
-        2. Edit the source code or run any command to migrate the codebase to the target Angular version
-        3. Test the application by running the build command
-        4. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
-        Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>
-        """  # noqa: E501
-    )
-
-
-AGENT_CONFIG = yaml.safe_load(
-    Path("experiments/agents/mini_swe_agent/mini_swe_agent_config.yaml").read_text()
+_TASK_TEMPLATE_ENV = Environment(
+    undefined=StrictUndefined,
+    trim_blocks=True,
+    lstrip_blocks=True,
 )
+
+
+def _render_task_prompt(template: str, instance: BenchmarkInstance) -> str:
+    """Render the instance-specific task prompt using a strict Jinja template."""
+    rendered = _TASK_TEMPLATE_ENV.from_string(template).render(instance=instance)
+    return dedent(rendered).strip()
 
 
 class MiniSweAgent(BaseAgent):
@@ -82,12 +58,21 @@ class MiniSweAgent(BaseAgent):
             "The repository is not cloned correctly, or the current directory "
             "is not the project directory."
         )
-        self.task_prompt = generate_task_prompt(instance)
+
+        self.task_prompt = _render_task_prompt(
+            agent_config.task_template, instance=self.instance
+        )
+
+        agent_kwargs = dict(agent_config.agent_settings)
+        if agent_config.step_limit is not None:
+            agent_kwargs["step_limit"] = int(agent_config.step_limit)
+        if agent_config.cost_limit_usd is not None:
+            agent_kwargs["cost_limit"] = float(agent_config.cost_limit_usd)
 
         self.agent = DefaultAgent(
             model,
             self.env,
-            **AGENT_CONFIG["agent"],
+            **agent_kwargs,
         )
 
     def run(
@@ -98,9 +83,9 @@ class MiniSweAgent(BaseAgent):
         """Execute the agent and return the generated patch and artifacts."""
         logger.info(
             "Running Mini SWE Agent for instance: {instance_id} "
-            "using minisweagent {library_version}",
+            "using minisweagent {swe_agent_mini_version}",
             instance_id=self.instance.instance_id,
-            library_version=self.agent_config.library_version,
+            swe_agent_mini_version=self.agent_config.swe_agent_mini_version,
         )
 
         with self.env:
@@ -124,6 +109,11 @@ class MiniSweAgent(BaseAgent):
                     "n_calls": n_calls,
                 },
             )
+
+            if exit_status != "Submitted":
+                raise RuntimeError(
+                    f"Mini SWE Agent stopped before submission: {exit_status}: {result}"
+                )
 
             # Generate patch and write completed result
             model_patch = self.env.diff_with_base_commit()

@@ -1,4 +1,6 @@
-agent:
+task_template: |
+  Migrate the application from Angular to {{ instance.target_angular_version }}.
+agent_settings:
   system_template: |
     You are a helpful assistant that can interact with a computer.
 

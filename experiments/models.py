@@ -1,6 +1,7 @@
 import hashlib
+import json
 from datetime import timedelta
-from typing import Annotated, Literal, NewType
+from typing import Annotated, Any, Literal, NewType
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 from uuid6 import uuid7
@@ -18,9 +19,19 @@ class MiniSweAgentConfig(BaseModel):
         description="The name of the model to use for patch generation "
         "(e.g., 'mistral/devstral-medium-2507').",
     )
-    library_version: str = Field(
+    swe_agent_mini_version: str = Field(
         min_length=1,
         description="Resolved minisweagent package version used to run the agent.",
+    )
+    agent_settings: dict[str, Any] = Field(
+        ...,
+        description="Keyword arguments passed to minisweagent.DefaultAgent.",
+    )
+    task_template: str = Field(
+        ...,
+        min_length=1,
+        description="Jinja template used to render the instance-specific task prompt.",
+        example="Migrate the application from Angular to {{ instance.target_angular_version }}.",  # noqa: E501
     )
 
     step_limit: int | None = Field(
@@ -35,13 +46,27 @@ class MiniSweAgentConfig(BaseModel):
 
     @property
     def key(self) -> str:
+        # Hash task_template and agent_settings for uniqueness
+        task_template_hash = hashlib.sha256(
+            self.task_template.encode("utf-8")
+        ).hexdigest()[:8]
+
+        # agent_settings may not be order-stable, so sort keys for deterministic hash
+        agent_settings_json = json.dumps(self.agent_settings, sort_keys=True)
+        agent_settings_hash = hashlib.sha256(
+            agent_settings_json.encode("utf-8")
+        ).hexdigest()[:8]
+
         key = f"{self.scaffold}/{self.model_name}"
-        if self.library_version:
-            key += f"@minisweagent-{self.library_version}"
+        if self.swe_agent_mini_version:
+            key += f"@minisweagent-{self.swe_agent_mini_version}"
         if self.step_limit:
             key += f"@step-limit-{self.step_limit}"
         if self.cost_limit_usd:
             key += f"@cost-limit-usd-{self.cost_limit_usd}"
+        key += f"@tasktpl-{task_template_hash}"
+        key += f"@agentsettings-{agent_settings_hash}"
+
         return key
 
     @property

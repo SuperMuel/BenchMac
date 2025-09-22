@@ -7,8 +7,10 @@ from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from typing import Any
 
 import typer
+import yaml
 from dotenv import load_dotenv
 from loguru import logger
 from pydantic import ValidationError
@@ -54,15 +56,20 @@ DEFAULT_MODEL_NAMES = ("mistral/devstral-medium-2507",)
 
 def _resolve_minisweagent_version() -> str:
     try:
-        return pkg_version("minisweagent")
+        return pkg_version("mini-swe-agent")
     except PackageNotFoundError as exc:  # pragma: no cover - defensive guard
         msg = "minisweagent must be installed to run the swe-agent-mini scaffold"
         raise RuntimeError(msg) from exc
 
 
 def build_agent_configs(
+    *,
     scaffolds: list[str],
     model_names: list[str],
+    task_templates: str,
+    agent_settings: dict[str, Any],
+    step_limit: int | None = None,
+    cost_limit_usd: float | None = None,
 ) -> list[AgentConfig]:
     configs: list[AgentConfig] = []
     mini_swe_agent_version: str | None = None
@@ -85,7 +92,11 @@ def build_agent_configs(
                 configs.append(
                     MiniSweAgentConfig(
                         model_name=model_name,
-                        library_version=mini_swe_agent_version,
+                        swe_agent_mini_version=mini_swe_agent_version,
+                        task_template=task_templates,
+                        agent_settings=agent_settings,
+                        step_limit=step_limit,
+                        cost_limit_usd=cost_limit_usd,
                     )
                 )
         elif scaffold_key == "angular-schematics":
@@ -358,6 +369,21 @@ def main(
         "--instance-id",
         help="Filter by specific instance ID(s). Can be used multiple times.",
     ),
+    swe_mini_config_yaml: Path = typer.Option(  # noqa: B008
+        Path("experiments/prompts/mini_swe_agent/minimal.yaml"),
+        "--swe-mini-config-yaml",
+        help="Path to the swe-mini config YAML file.",
+    ),
+    step_limit: int | None = typer.Option(
+        100,
+        "--step-limit",
+        help="Maximum number of steps for the swe-agent-mini scaffold.",
+    ),
+    cost_limit_usd: float | None = typer.Option(
+        1.0,
+        "--cost-limit-usd",
+        help="Maximum cost in USD for the swe-agent-mini scaffold.",
+    ),
 ) -> None:
     """
     Runs an LLM-powered agent on BenchMAC instances and generates a submission file.
@@ -366,7 +392,19 @@ def main(
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
 
     selected_scaffolds = scaffolds or list(DEFAULT_SCAFFOLDS)
-    agent_configs = build_agent_configs(selected_scaffolds, model_names)
+
+    swe_mini_config = yaml.safe_load(swe_mini_config_yaml.read_text())
+    task_templates = swe_mini_config["task_template"]
+    agent_settings = swe_mini_config["agent_settings"]
+
+    agent_configs = build_agent_configs(
+        scaffolds=selected_scaffolds,
+        model_names=model_names,
+        task_templates=task_templates,
+        agent_settings=agent_settings,
+        step_limit=step_limit,
+        cost_limit_usd=cost_limit_usd,
+    )
 
     if not agent_configs:
         console.print("[yellow]No agent configurations specified. Exiting...[/yellow]")
