@@ -126,16 +126,3 @@ agent:
 
     Note: In rare cases, if you need to reference a similar format in your command, you might have
     to proceed in two steps, first writing TRIPLEBACKTICKSBASH, then replacing them with ```bash.
-  step_limit: 100.
-  cost_limit: 1.
-environment:
-  env:
-    PAGER: cat
-    MANPAGER: cat
-    LESS: -R
-    PIP_PROGRESS_BAR: "off"
-    TQDM_DISABLE: "1"
-model:
-  model_kwargs:
-    temperature: 0.0
-    drop_params: true

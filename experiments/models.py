@@ -23,9 +23,26 @@ class MiniSweAgentConfig(BaseModel):
         description="Resolved minisweagent package version used to run the agent.",
     )
 
+    step_limit: int | None = Field(
+        default=100,
+        description="The maximum number of steps the agent can take.",
+    )
+
+    cost_limit_usd: float | None = Field(
+        default=1.0,
+        description="The maximum cost the agent can spend in USD.",
+    )
+
     @property
     def key(self) -> str:
-        return f"{self.scaffold}/{self.model_name}@minisweagent-{self.library_version}"
+        key = f"{self.scaffold}/{self.model_name}"
+        if self.library_version:
+            key += f"@minisweagent-{self.library_version}"
+        if self.step_limit:
+            key += f"@step-limit-{self.step_limit}"
+        if self.cost_limit_usd:
+            key += f"@cost-limit-usd-{self.cost_limit_usd}"
+        return key
 
     @property
     def display_name(self) -> str:
