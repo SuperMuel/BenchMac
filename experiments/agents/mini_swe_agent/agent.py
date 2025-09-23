@@ -4,7 +4,6 @@ from textwrap import dedent
 from jinja2 import Environment, StrictUndefined
 from loguru import logger
 from minisweagent.agents.default import DefaultAgent
-from minisweagent.models.litellm_model import LitellmModel
 from minisweagent.run.utils.save import save_traj
 
 from bench_mac.core.config import settings
@@ -15,6 +14,8 @@ from experiments.agents.mini_swe_agent.environment import (
     MiniSweAgentEnvironmentAdapter,
 )
 from experiments.models import ExperimentArtifacts, MiniSweAgentConfig
+
+from .tracing_model import TracingModel
 
 _TASK_TEMPLATE_ENV = Environment(
     undefined=StrictUndefined,
@@ -46,7 +47,8 @@ class MiniSweAgent(BaseAgent):
         self.instance = instance
         self.agent_config = agent_config
 
-        model = LitellmModel(model_name=agent_config.model_name)
+        # Use tracing subclass to collect raw LiteLLM responses for analysis
+        self.model = TracingModel(model_name=agent_config.model_name)
         self.env = MiniSweAgentEnvironmentAdapter(instance, docker_manager)
 
         test_env = self.env.execute("ls -la")
@@ -67,7 +69,7 @@ class MiniSweAgent(BaseAgent):
             agent_kwargs["cost_limit"] = float(agent_config.cost_limit_usd)
 
         self.agent = DefaultAgent(
-            model,
+            self.model,
             self.env,
             **agent_kwargs,
         )
@@ -118,7 +120,7 @@ class MiniSweAgent(BaseAgent):
                 execution_trace=self.env.execution_trace(),
                 cost_usd=cost_usd,
                 n_calls=n_calls,
-                # model_responses=model_responses,
+                model_responses=list(self.model.responses),
             )
 
             return AgentRunResult(model_patch=model_patch, artifacts=artifacts)
@@ -129,7 +131,7 @@ class MiniSweAgent(BaseAgent):
                 execution_trace=self.env.execution_trace(),
                 cost_usd=self.agent.model.cost,
                 n_calls=self.agent.model.n_calls,
-                # model_responses=model_responses,
+                model_responses=list(self.model.responses),
             )
         except Exception:
             return None
