@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -182,7 +182,7 @@ dev = [
 ]
 experiments = [
     { name = "logfire", specifier = ">=4.3.6" },
-    { name = "mini-swe-agent", specifier = ">=1.9.1" },
+    { name = "mini-swe-agent", specifier = ">=1.13.0" },
     { name = "opentelemetry-api", specifier = "==1.25.0" },
     { name = "opentelemetry-exporter-otlp", specifier = "==1.25.0" },
     { name = "opentelemetry-sdk", specifier = "==1.25.0" },
@@ -325,7 +325,7 @@ version = "3.20.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
-    { name = "docstring-parser", marker = "python_full_version < '4.0'" },
+    { name = "docstring-parser", marker = "python_full_version < '4'" },
     { name = "rich" },
     { name = "rich-rst" },
 ]
@@ -872,7 +872,7 @@ wheels = [
 
 [[package]]
 name = "mini-swe-agent"
-version = "1.9.1"
+version = "1.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
@@ -888,9 +888,9 @@ dependencies = [
     { name = "textual" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cc/73/421b44764acd74953d6c0aec00218e86d9b73e1fecbbb7f8e6f48858fae9/mini_swe_agent-1.9.1.tar.gz", hash = "sha256:06a45c604b5f9bf162f761036ded1a8aa5d96ad7f7e1238e26a093dfd6c7d3e0", size = 42248, upload-time = "2025-08-19T01:26:32.229Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/7f/01928db95950c04524b22664f008bda1a7d7a8535f44e4e136d4bd5e5042/mini_swe_agent-1.13.0.tar.gz", hash = "sha256:df57625ce9b072fef3cbc89fb8047d7eb080a8b277eb37cd1cf01eebeeb70121", size = 46794, upload-time = "2025-09-20T00:48:29.152Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3e/67/1efea9883cb71672d9e35c3a0bf00e60b06de6f7c0fc402c10d732b4e192/mini_swe_agent-1.9.1-py3-none-any.whl", hash = "sha256:aa60c6d9224cbcce755c161162c37f16a6472f9a115e4e9a80e3afb723974744", size = 61160, upload-time = "2025-08-19T01:26:31.09Z" },
+    { url = "https://files.pythonhosted.org/packages/05/56/21d0926fce170f2e995fe4fcee352cd636212e825d27e263468bcb33ce21/mini_swe_agent-1.13.0-py3-none-any.whl", hash = "sha256:f78b1b718d15d34f5ec6fe309691f2b7e2fc7e2c1c9b43552263955fe73b9090", size = 72332, upload-time = "2025-09-20T00:48:28.024Z" },
 ]
 
 [[package]]
