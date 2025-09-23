@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # --- Directory and Path Settings ---
     project_root: Path = Field(
-        default_factory=lambda: Path(__file__).parent.parent.parent,
+        default_factory=lambda: Path(__file__).parent.parent.parent.parent,
         description="The absolute path to the project's root directory.",
     )
     project_workdir: str = Field(
