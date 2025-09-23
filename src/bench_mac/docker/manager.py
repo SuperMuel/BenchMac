@@ -76,12 +76,19 @@ class DockerManager:
                 "❌ Error: Docker is not running or is not configured correctly."
             ) from e
 
-    def __init__(self, quiet_init: bool = True) -> None:
+    def __init__(
+        self,
+        client: DockerClient | None = None,
+        quiet_init: bool = True,
+    ) -> None:
         """
         Initializes the Docker client and verifies connection to the daemon.
 
         Parameters
         ----------
+        client
+            An optional pre-configured Docker client. When provided, connectivity
+            checks are skipped and the instance is used as-is.
         quiet_init
             If True, suppresses debug messages during initialization.
 
@@ -90,7 +97,11 @@ class DockerManager:
         DockerException
             If the Docker daemon is not running or cannot be reached.
         """
-        self._client = self.get_client(quiet=quiet_init)
+        self._client: DockerClient
+        if client is None:
+            self._client = self.get_client(quiet=quiet_init)
+        else:
+            self._client = client
 
     def image_exists(self, tag: str) -> bool:
         """Check if a Docker image with the given tag exists locally."""
