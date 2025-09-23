@@ -35,7 +35,6 @@ from experiments.models import (
     AgentConfig,
     AngularSchematicsConfig,
     CompletedExperiment,
-    ExperimentArtifacts,
     ExperimentResult,
     ExperimentTask,
     FailedExperiment,
@@ -270,12 +269,7 @@ def process_single_task(
         )
         artifacts = None
         if agent_result.artifacts is not None:
-            artifacts = ExperimentArtifacts(
-                execution_trace=agent_result.artifacts.execution_trace,
-                cost_usd=agent_result.artifacts.cost_usd,
-                n_calls=agent_result.artifacts.n_calls,
-                model_responses=agent_result.artifacts.model_responses,
-            )
+            artifacts = agent_result.artifacts
         completed = CompletedExperiment(
             task=task,
             submission=submission,
@@ -312,21 +306,13 @@ def process_single_task(
             f"({task.agent_config.display_name}): {e}[/bold red]"
         )
         task_logger.opt(exception=True).error("Task failed during agent run")
-        failed_artifacts = None
         agent_artifacts = agent.collect_artifacts()
-        if agent_artifacts is not None:
-            failed_artifacts = ExperimentArtifacts(
-                execution_trace=agent_artifacts.execution_trace,
-                cost_usd=agent_artifacts.cost_usd,
-                n_calls=agent_artifacts.n_calls,
-                model_responses=agent_artifacts.model_responses,
-            )
         failed = FailedExperiment(
             task=task,
             error=str(e),
             started_at=started_at,
             ended_at=dt_factory(),
-            artifacts=failed_artifacts,
+            artifacts=agent_artifacts,
         )
         return failed
 
