@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 from typing import Any
 
 from loguru import logger
@@ -69,6 +70,8 @@ class MiniSweAgentEnvironmentAdapter:
             "source_version": self.instance.source_angular_version,
             "target_version": self.instance.target_angular_version,
             "cwd": self._project_workdir,
+            # Provide the OS name for Jinja conditionals in templates
+            "system": platform.system(),
         }
 
     @property
