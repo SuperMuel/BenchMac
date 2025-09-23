@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from bench_mac.evaluation import TraceAnalyzer
-from bench_mac.models import (
+from bench_mac.core.models import (
     BenchmarkInstance,
     ExecutionTrace,
     InstanceCommands,
     InstanceID,
 )
+from bench_mac.evaluation import TraceAnalyzer
 
 from ..utils import create_command_output
 

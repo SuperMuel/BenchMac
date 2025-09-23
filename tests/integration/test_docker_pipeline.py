@@ -13,10 +13,10 @@ from collections.abc import Generator
 import pytest
 from uuid6 import uuid7
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
+from bench_mac.core.models import BenchmarkInstance, InstanceCommands, InstanceID
 from bench_mac.docker.builder import prepare_environment
 from bench_mac.docker.manager import DockerManager
-from bench_mac.models import BenchmarkInstance, InstanceCommands, InstanceID
 
 
 @pytest.fixture

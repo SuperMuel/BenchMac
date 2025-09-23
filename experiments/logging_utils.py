@@ -5,7 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
 
 DEFAULT_ROTATION = "10 MB"
 DEFAULT_RETENTION = "7 days"

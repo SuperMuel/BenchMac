@@ -5,16 +5,16 @@ from typing import Self
 import pytest
 from loguru import logger
 
-from bench_mac.config import settings
-from bench_mac.environments import EnvironmentFactory, ExecutionEnvironment
-from bench_mac.harness import evaluate_submission
-from bench_mac.models import (
+from bench_mac.core.config import settings
+from bench_mac.core.models import (
     BenchmarkInstance,
     CommandResult,
     ExecutionTrace,
     InstanceID,
     Submission,
 )
+from bench_mac.environments import EnvironmentFactory, ExecutionEnvironment
+from bench_mac.harness import evaluate_submission
 from tests.conftest import InstanceFactory
 
 from ...utils import create_command_output

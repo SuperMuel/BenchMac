@@ -6,10 +6,10 @@ from typing import Any
 
 from loguru import logger
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
+from bench_mac.core.models import BenchmarkInstance, ExecutionTrace
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environments import DockerExecutionEnvironment
-from bench_mac.models import BenchmarkInstance, ExecutionTrace
 
 
 class MiniSweAgentEnvironmentAdapter:

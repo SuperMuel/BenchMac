@@ -22,9 +22,9 @@ from pathlib import Path
 
 import cyclopts
 
-from bench_mac.config import settings
-from bench_mac.models import BenchmarkInstance
-from bench_mac.utils import load_instances
+from bench_mac.core.config import settings
+from bench_mac.core.models import BenchmarkInstance
+from bench_mac.core.utils import load_instances
 
 
 def run_command(command: list[str], cwd: Path | None = None) -> str:

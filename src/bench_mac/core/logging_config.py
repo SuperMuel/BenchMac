@@ -11,7 +11,7 @@ from typing import Any
 
 from loguru import logger
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
 
 
 def setup_main_process_logging(run_id: str, logs_dir: Path) -> None:

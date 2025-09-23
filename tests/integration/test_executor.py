@@ -2,15 +2,15 @@ import pytest
 from docker.errors import DockerException
 from loguru import logger
 
-from bench_mac.config import settings
-from bench_mac.docker.manager import DockerManager
-from bench_mac.evaluation import calculate_metrics
-from bench_mac.harness import run_submission_in_docker
-from bench_mac.models import (
+from bench_mac.core.config import settings
+from bench_mac.core.models import (
     BenchmarkInstance,
     Submission,
 )
-from bench_mac.utils import load_instances
+from bench_mac.core.utils import load_instances
+from bench_mac.docker.manager import DockerManager
+from bench_mac.evaluation import calculate_metrics
+from bench_mac.harness import run_submission_in_docker
 
 # A deliberately malformed patch that is guaranteed to fail application.
 # It tries to remove a line that is unlikely to exist in that exact form.
@@ -63,7 +63,7 @@ def silver_submission(test_instance: BenchmarkInstance) -> Submission:
     FileNotFoundError
         If the required patch file does not exist, indicating a test setup error.
     """
-    from bench_mac.config import settings
+    from bench_mac.core.config import settings
 
     patch_file = settings.silver_patches_dir / f"{test_instance.instance_id}.patch"
 

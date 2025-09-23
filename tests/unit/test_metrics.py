@@ -6,16 +6,16 @@ import json
 
 import pytest
 
-from bench_mac.evaluation.metrics import (
-    _calculate_patch_application_success,
-    calculate_metrics,
-    calculate_target_version_achieved,
-)
-from bench_mac.models import (
+from bench_mac.core.models import (
     BenchmarkInstance,
     ExecutionTrace,
     InstanceCommands,
     InstanceID,
+)
+from bench_mac.evaluation.metrics import (
+    _calculate_patch_application_success,
+    calculate_metrics,
+    calculate_target_version_achieved,
 )
 
 from ..utils import create_command_output

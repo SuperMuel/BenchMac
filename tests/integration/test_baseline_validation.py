@@ -15,11 +15,11 @@ successfully installed, built, linted, and tested.
 import pytest
 from loguru import logger
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
+from bench_mac.core.models import BenchmarkInstance
+from bench_mac.core.utils import load_instances
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environments import DockerExecutionEnvironment
-from bench_mac.models import BenchmarkInstance
-from bench_mac.utils import load_instances
 
 
 @pytest.mark.instance_validation

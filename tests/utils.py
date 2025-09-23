@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from bench_mac.models import CommandResult, utc_now
+from bench_mac.core.models import CommandResult, utc_now
 
 
 def create_command_output(

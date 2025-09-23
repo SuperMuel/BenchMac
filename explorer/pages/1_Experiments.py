@@ -5,7 +5,7 @@ from typing import Any, cast
 import pandas as pd
 import streamlit as st
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
 from experiments.models import (
     CompletedExperiment,
     ExperimentArtifacts,

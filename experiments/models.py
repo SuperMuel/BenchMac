@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal, NewType
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 from uuid6 import uuid7
 
-from bench_mac.models import ExecutionTrace, Submission
+from bench_mac.core.models import ExecutionTrace, Submission
 
 
 class MiniSweAgentConfig(BaseModel):

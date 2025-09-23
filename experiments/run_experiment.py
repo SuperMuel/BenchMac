@@ -18,15 +18,15 @@ from rich.console import Console
 from rich.progress import Progress
 from uuid6 import uuid7
 
-from bench_mac.config import settings
-from bench_mac.docker.manager import DockerManager
-from bench_mac.models import (
+from bench_mac.core.config import settings
+from bench_mac.core.models import (
     BenchmarkInstance,
     InstanceID,
     Submission,
     SubmissionID,
 )
-from bench_mac.utils import load_instances
+from bench_mac.core.utils import load_instances
+from bench_mac.docker.manager import DockerManager
 from experiments.agents.angular_schematics import AngularSchematicsAgent
 from experiments.agents.base import BaseAgent
 from experiments.agents.mini_swe_agent.agent import MiniSweAgent

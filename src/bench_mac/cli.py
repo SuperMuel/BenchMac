@@ -21,21 +21,21 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
-from bench_mac.config import settings
-from bench_mac.docker.builder import get_instance_image_tag, prepare_environment
-from bench_mac.docker.manager import DockerManager
-from bench_mac.harness import BenchmarkRunner
-from bench_mac.logging_config import setup_main_process_logging
-from bench_mac.models import (
+from bench_mac.core.config import settings
+from bench_mac.core.logging_config import setup_main_process_logging
+from bench_mac.core.models import (
     EvaluationCompleted,
     EvaluationResult,
     EvaluationResultAdapter,
     EvaluationTask,
     utc_now,
 )
-from bench_mac.utils import collect_network_error_details, load_instances
-from bench_mac.utils_jsonl import iter_lines_from_jsonl_files
-from bench_mac.version import harness_version
+from bench_mac.core.utils import collect_network_error_details, load_instances
+from bench_mac.core.utils_jsonl import iter_lines_from_jsonl_files
+from bench_mac.core.version import harness_version
+from bench_mac.docker.builder import get_instance_image_tag, prepare_environment
+from bench_mac.docker.manager import DockerManager
+from bench_mac.harness import BenchmarkRunner
 from experiments.models import (
     CompletedExperiment,
     ExperimentResult,

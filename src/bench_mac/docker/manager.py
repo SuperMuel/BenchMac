@@ -18,7 +18,7 @@ from docker.models.containers import Container
 from docker.models.images import Image
 from loguru import logger
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
 
 
 class DockerManager:

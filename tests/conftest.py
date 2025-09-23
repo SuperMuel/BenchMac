@@ -4,7 +4,12 @@ from typing import cast
 
 import pytest
 
-from bench_mac.models import BenchmarkInstance, InstanceCommands, InstanceID, Submission
+from bench_mac.core.models import (
+    BenchmarkInstance,
+    InstanceCommands,
+    InstanceID,
+    Submission,
+)
 
 _UNSET = object()
 

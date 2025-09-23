@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 from loguru import logger
 
+from bench_mac.core.models import BenchmarkInstance
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environments import DockerExecutionEnvironment
-from bench_mac.models import BenchmarkInstance
 from experiments.agents.base import AgentRunResult, BaseAgent
 from experiments.models import AngularSchematicsConfig, ExperimentArtifacts
 

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from bench_mac.models import (
+from bench_mac.core.models import (
     BenchmarkInstance,
     EvaluationID,
     EvaluationResult,

@@ -2,9 +2,9 @@
 
 from typing import TYPE_CHECKING, Any
 
+from bench_mac.core.models import BenchmarkInstance, ExecutionTrace, Submission
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environments import DockerEnvironmentFactory
-from bench_mac.models import BenchmarkInstance, ExecutionTrace, Submission
 
 from .workflow import evaluate_submission, is_peer_dep_error
 

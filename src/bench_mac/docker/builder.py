@@ -3,8 +3,8 @@ import hashlib
 from loguru import logger
 from slugify import slugify
 
+from bench_mac.core.models import BenchmarkInstance
 from bench_mac.docker.manager import DockerManager
-from bench_mac.models import BenchmarkInstance
 
 
 # TODO: check if we should use the term "reference" instead of "tag"

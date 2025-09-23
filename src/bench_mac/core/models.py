@@ -15,7 +15,7 @@ from pydantic import (
 )
 from uuid6 import uuid7
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
 
 
 def utc_now() -> datetime:

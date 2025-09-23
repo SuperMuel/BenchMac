@@ -4,8 +4,7 @@ from typing import Any
 
 import pytest
 
-from bench_mac.harness import BenchmarkRunner, WorkerContext
-from bench_mac.models import (
+from bench_mac.core.models import (
     CommandResult,
     EvaluationCompleted,
     EvaluationFailed,
@@ -18,6 +17,7 @@ from bench_mac.models import (
     Submission,
     utc_now,
 )
+from bench_mac.harness import BenchmarkRunner, WorkerContext
 
 # --- Test Fixtures and Fake Data ---
 

@@ -16,8 +16,8 @@ import plotly.graph_objects as go  # type: ignore
 import streamlit as st
 from pydantic import ValidationError
 
-from bench_mac.config import settings
-from bench_mac.models import (
+from bench_mac.core.config import settings
+from bench_mac.core.models import (
     CommandResult,
     EvaluationCompleted,
     EvaluationFailed,
@@ -27,8 +27,8 @@ from bench_mac.models import (
     Submission,
     SubmissionID,
 )
-from bench_mac.utils import collect_network_error_details
-from bench_mac.utils_jsonl import iter_lines_from_jsonl_files
+from bench_mac.core.utils import collect_network_error_details
+from bench_mac.core.utils_jsonl import iter_lines_from_jsonl_files
 from experiments.models import (
     AgentConfig,
     CompletedExperiment,

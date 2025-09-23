@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger as _default_logger
 
-from bench_mac.config import settings
-from bench_mac.docker.builder import prepare_environment
-from bench_mac.docker.manager import DockerManager
-from bench_mac.models import (
+from bench_mac.core.config import settings
+from bench_mac.core.models import (
     BenchmarkInstance,
     CommandResult,
     ExecutionTrace,
     utc_now,
 )
+from bench_mac.docker.builder import prepare_environment
+from bench_mac.docker.manager import DockerManager
 
 from .base import EnvironmentFactory, ExecutionEnvironment
 

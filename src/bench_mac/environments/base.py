@@ -4,7 +4,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Protocol, Self
 
-from bench_mac.models import BenchmarkInstance, CommandResult, ExecutionTrace
+from bench_mac.core.models import BenchmarkInstance, CommandResult, ExecutionTrace
 
 
 class ExecutionEnvironment(Protocol):

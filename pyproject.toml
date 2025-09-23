@@ -56,10 +56,10 @@ omit = [
     "tests/*",
     "src/**/__init__.py",
     "scripts/*",
-    "src/bench_mac/config.py",
-    "src/bench_mac/logging_config.py",
+    "src/bench_mac/core/config.py",
+    "src/bench_mac/core/logging_config.py",
     "src/bench_mac/cli.py",
-    "src/bench_mac/version.py",
+    "src/bench_mac/core/version.py",
 ]
 
 [tool.coverage.report]

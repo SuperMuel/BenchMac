@@ -6,10 +6,11 @@ from pathlib import Path
 
 from loguru import logger
 
-from bench_mac.docker.manager import DockerManager
-from bench_mac.evaluation import calculate_metrics
-from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
-from bench_mac.models import (
+from bench_mac.core.logging_config import (
+    get_instance_logger,
+    setup_worker_process_logging,
+)
+from bench_mac.core.models import (
     EvaluationCompleted,
     EvaluationFailed,
     EvaluationReport,
@@ -17,6 +18,8 @@ from bench_mac.models import (
     EvaluationTask,
     utc_now,
 )
+from bench_mac.docker.manager import DockerManager
+from bench_mac.evaluation import calculate_metrics
 
 from .submission import run_submission_in_docker
 

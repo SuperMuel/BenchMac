@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from bench_mac.models import (
+from bench_mac.core.models import (
     CommandResult,
     EvaluationReport,
     ExecutionTrace,
@@ -260,7 +260,7 @@ class TestBenchmarkInstanceDockerfileValidation:
         self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
     ) -> None:
         # Point dockerfiles_dir to a temp directory that does not contain the file
-        from bench_mac.config import settings
+        from bench_mac.core.config import settings
 
         monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
@@ -274,7 +274,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     def test_uses_existing_dockerfile_when_present(
         self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
     ) -> None:
-        from bench_mac.config import settings
+        from bench_mac.core.config import settings
 
         monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
@@ -294,7 +294,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     def test_raises_when_no_override_and_no_file(
         self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
     ) -> None:
-        from bench_mac.config import settings
+        from bench_mac.core.config import settings
 
         monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
@@ -310,7 +310,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     def test_raises_when_dockerfile_is_empty(
         self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
     ) -> None:
-        from bench_mac.config import settings
+        from bench_mac.core.config import settings
 
         monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 
@@ -327,7 +327,7 @@ class TestBenchmarkInstanceDockerfileValidation:
     def test_raises_when_override_dockerfile_content_is_empty(
         self, instance_factory: Any, tmp_path: Any, monkeypatch: Any
     ) -> None:
-        from bench_mac.config import settings
+        from bench_mac.core.config import settings
 
         monkeypatch.setattr(settings, "_dockerfiles_dir_override", tmp_path)
 

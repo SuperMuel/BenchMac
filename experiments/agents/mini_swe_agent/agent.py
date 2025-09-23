@@ -11,9 +11,9 @@ from minisweagent.models import GLOBAL_MODEL_STATS
 from minisweagent.models.litellm_model import LitellmModel
 from minisweagent.run.utils.save import save_traj
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
+from bench_mac.core.models import BenchmarkInstance
 from bench_mac.docker.manager import DockerManager
-from bench_mac.models import BenchmarkInstance
 from experiments.agents.base import AgentRunResult, BaseAgent
 from experiments.agents.mini_swe_agent.environment import (
     MiniSweAgentEnvironmentAdapter,

@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from bench_mac.models import BenchmarkInstance, CommandResult, ExecutionTrace
+from bench_mac.core.models import BenchmarkInstance, CommandResult, ExecutionTrace
 
 
 @dataclass(frozen=True, slots=True)

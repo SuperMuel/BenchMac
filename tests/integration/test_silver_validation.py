@@ -19,12 +19,12 @@ a baseline for success.
 import pytest
 from loguru import logger
 
-from bench_mac.config import settings
+from bench_mac.core.config import settings
+from bench_mac.core.models import EvaluationTask, InstanceID, Submission
+from bench_mac.core.utils import load_instances
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluation import calculate_metrics
 from bench_mac.harness import run_submission_in_docker
-from bench_mac.models import EvaluationTask, InstanceID, Submission
-from bench_mac.utils import load_instances
 
 # --- Test Data Generation ---
 

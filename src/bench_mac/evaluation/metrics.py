@@ -3,7 +3,7 @@ from logging import getLogger
 
 from packaging.version import parse as parse_version
 
-from bench_mac.models import (
+from bench_mac.core.models import (
     BenchmarkInstance,
     CommandResult,
     ExecutionTrace,
