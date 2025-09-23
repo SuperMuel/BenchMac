@@ -5,11 +5,11 @@ from loguru import logger
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluation import calculate_metrics
-from bench_mac.executor import execute_submission
 from bench_mac.models import (
     BenchmarkInstance,
     Submission,
 )
+from bench_mac.orchestration import run_submission_in_docker
 from bench_mac.utils import load_instances
 
 # A deliberately malformed patch that is guaranteed to fail application.
@@ -95,7 +95,7 @@ class TestExecuteSubmission:
         Verify that a known-good patch is evaluated as successful.
         """
         # --- ACT ---
-        trace = execute_submission(
+        trace = run_submission_in_docker(
             test_instance,
             silver_submission,
             docker_manager,
@@ -124,7 +124,7 @@ class TestExecuteSubmission:
         )
 
         # --- ACT ---
-        trace = execute_submission(
+        trace = run_submission_in_docker(
             test_instance,
             bad_submission,
             docker_manager,

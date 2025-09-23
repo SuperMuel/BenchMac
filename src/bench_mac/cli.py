@@ -32,7 +32,7 @@ from bench_mac.models import (
     EvaluationTask,
     utc_now,
 )
-from bench_mac.runner import BenchmarkRunner
+from bench_mac.orchestration import BenchmarkRunner
 from bench_mac.utils import collect_network_error_details, load_instances
 from bench_mac.utils_jsonl import iter_lines_from_jsonl_files
 from bench_mac.version import harness_version

@@ -22,8 +22,8 @@ from loguru import logger
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluation import calculate_metrics
-from bench_mac.executor import execute_submission
 from bench_mac.models import EvaluationTask, InstanceID, Submission
+from bench_mac.orchestration import run_submission_in_docker
 from bench_mac.utils import load_instances
 
 # --- Test Data Generation ---
@@ -91,7 +91,7 @@ def test_silver_patch_passes_full_evaluation(
     """
     # --- ACT ---
     # Execute the full evaluation pipeline for the given silver submission.
-    trace = execute_submission(
+    trace = run_submission_in_docker(
         instance=task.instance,
         submission=task.submission,
         docker_manager=docker_manager,

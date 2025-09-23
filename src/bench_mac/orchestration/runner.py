@@ -8,7 +8,6 @@ from loguru import logger
 
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluation import calculate_metrics
-from bench_mac.executor import execute_submission
 from bench_mac.logging_config import get_instance_logger, setup_worker_process_logging
 from bench_mac.models import (
     EvaluationCompleted,
@@ -18,6 +17,8 @@ from bench_mac.models import (
     EvaluationTask,
     utc_now,
 )
+
+from .submission import run_submission_in_docker
 
 
 @dataclass
@@ -53,7 +54,7 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
         docker_manager = DockerManager(quiet_init=True)
 
         # 1. Get the raw execution trace
-        trace = execute_submission(
+        trace = run_submission_in_docker(
             context.task.instance,
             context.task.submission,
             docker_manager,

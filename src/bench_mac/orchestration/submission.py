@@ -4,10 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from bench_mac.docker.manager import DockerManager
 from bench_mac.environments import DockerEnvironmentFactory
-from bench_mac.evaluation import (
-    evaluate_submission as evaluate_submission_use_case,
-)
-from bench_mac.evaluation import is_peer_dep_error
+from bench_mac.evaluation import evaluate_submission, is_peer_dep_error
 from bench_mac.models import BenchmarkInstance, ExecutionTrace, Submission
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -15,19 +12,18 @@ if TYPE_CHECKING:  # pragma: no cover
 else:  # pragma: no cover
     Logger = Any
 
-__all__ = ["execute_submission", "is_peer_dep_error"]
+__all__ = ["is_peer_dep_error", "run_submission_in_docker"]
 
 
-def execute_submission(
+def run_submission_in_docker(
     instance: BenchmarkInstance,
     submission: Submission,
     docker_manager: DockerManager,
     *,
     logger: Logger,
 ) -> ExecutionTrace:
-    """Delegate evaluation to the domain use case using Docker infrastructure."""
     environment_factory = DockerEnvironmentFactory(docker_manager)
-    return evaluate_submission_use_case(
+    return evaluate_submission(
         instance,
         submission,
         environment_factory,

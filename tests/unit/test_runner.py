@@ -17,7 +17,7 @@ from bench_mac.models import (
     Submission,
     utc_now,
 )
-from bench_mac.runner import BenchmarkRunner, WorkerContext
+from bench_mac.orchestration import BenchmarkRunner, WorkerContext
 
 # --- Test Fixtures and Fake Data ---
 
@@ -114,7 +114,7 @@ class TestBenchmarkRunner:
 
         # 1. Replace the real, slow worker function with our fast, fake one.
         monkeypatch.setattr(
-            "bench_mac.runner.run_single_evaluation_task",
+            "bench_mac.orchestration.runner.run_single_evaluation_task",
             fake_run_single_evaluation_task,
         )
 
