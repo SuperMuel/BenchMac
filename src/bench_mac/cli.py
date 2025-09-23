@@ -24,6 +24,7 @@ from rich.text import Text
 from bench_mac.config import settings
 from bench_mac.docker.builder import get_instance_image_tag, prepare_environment
 from bench_mac.docker.manager import DockerManager
+from bench_mac.harness import BenchmarkRunner
 from bench_mac.logging_config import setup_main_process_logging
 from bench_mac.models import (
     EvaluationCompleted,
@@ -32,7 +33,6 @@ from bench_mac.models import (
     EvaluationTask,
     utc_now,
 )
-from bench_mac.orchestration import BenchmarkRunner
 from bench_mac.utils import collect_network_error_details, load_instances
 from bench_mac.utils_jsonl import iter_lines_from_jsonl_files
 from bench_mac.version import harness_version

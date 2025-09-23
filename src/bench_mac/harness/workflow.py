@@ -3,14 +3,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bench_mac.environments import EnvironmentFactory
+from bench_mac.evaluation import calculate_target_version_achieved
 from bench_mac.models import (
     BenchmarkInstance,
     CommandResult,
     ExecutionTrace,
     Submission,
 )
-
-from .metrics import calculate_target_version_achieved
 
 if TYPE_CHECKING:  # pragma: no cover
     from loguru import Logger

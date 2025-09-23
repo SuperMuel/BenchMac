@@ -1,6 +1,6 @@
 import pytest
 
-from bench_mac.orchestration import is_peer_dep_error
+from bench_mac.harness import is_peer_dep_error
 
 from ..utils import create_command_output
 

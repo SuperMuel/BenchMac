@@ -5,11 +5,11 @@ from loguru import logger
 from bench_mac.config import settings
 from bench_mac.docker.manager import DockerManager
 from bench_mac.evaluation import calculate_metrics
+from bench_mac.harness import run_submission_in_docker
 from bench_mac.models import (
     BenchmarkInstance,
     Submission,
 )
-from bench_mac.orchestration import run_submission_in_docker
 from bench_mac.utils import load_instances
 
 # A deliberately malformed patch that is guaranteed to fail application.
