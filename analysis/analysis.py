@@ -27,17 +27,17 @@ Usage example (script-ish):
 
 """
 
-from __future__ import annotations
-
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
+from langchain.chat_models.base import BaseChatModel
+from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
-from pydantic import ValidationError
-from uuid6 import uuid7
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from uuid6 import UUID, uuid7
 
 from bench_mac.core.config import settings
 from bench_mac.core.models import (
@@ -57,14 +57,31 @@ from .prompt import ANALYSIS_PROMPT
 # --- Public API dataclasses & protocols ---
 
 
-class SupportsInvoke(Protocol):
-    """Minimal protocol for LLM-like objects (LangChain-compatible).
+class AnalysisTask(BaseModel):
+    """
+    A task for analyzing an experiment/evaluation pair using an LLM.
 
-    Any object exposing `invoke(input: str) -> Any` is accepted.
+    Represents the work needed to generate an analysis of agent behavior,
+    evaluation results, and migration outcomes for a specific benchmark instance.
     """
 
-    def invoke(self, input: str) -> Any:  # pragma: no cover - thin adapter
-        ...
+    model_config = ConfigDict(frozen=True)
+
+    experiment: CompletedExperiment = Field(
+        ...,
+        description="The completed experiment with agent run data and generated patch.",
+    )
+    evaluation: EvaluationCompleted = Field(
+        ...,
+        description="The completed evaluation containing execution trace and metrics.",
+    )
+    trace_id: str = Field(
+        default_factory=lambda: str(uuid7()),
+        description="Unique identifier for tracing this analysis task.",
+    )
+    model_name: str = Field(
+        default="gpt-5", description="Name of the LLM model to use for analysis."
+    )
 
 
 @dataclass(frozen=True)
@@ -172,12 +189,44 @@ def select_latest_pair(
 # --- Formatting helpers ---
 
 
-def _truncate(text: str, max_len: int) -> str:
-    if max_len <= 0:
-        return ""
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 1] + "\u2026"
+def truncate_xml_with_warning(body: str, *, tag: str, max_len: int) -> str:
+    """
+    Truncate the content inside an XML tag if it exceeds max_len,
+    appending a warning comment.
+
+    Args:
+        body: The string content to wrap and possibly truncate.
+        tag: The XML tag name (without angle brackets).
+        max_len: The maximum allowed length for the body.
+
+    Returns:
+        The XML string with the body (possibly truncated) and
+        a warning comment if truncated.
+    """
+    assert max_len > 0, "Max length must be positive"
+
+    if len(body) > max_len:
+        truncated = True
+        display_body = body[: max_len - 1] + "\u2026"
+    else:
+        truncated = False
+        display_body = body
+
+    xml = f"<{tag}>\n{display_body}\n</{tag}>"
+
+    if truncated:
+        warning = "WARNING: truncated to fit display"
+        warning += f" ({max_len - 1} out of {len(body)} chars displayed)"
+
+        xml += f" <!-- {warning} -->"
+
+        print(
+            "Warning: some of the output was truncated to fit display."
+            f" ({max_len - 1} out of {len(body)} chars displayed)"
+            f"({tag=})"
+        )
+
+    return xml
 
 
 # --- Mini SWE Agent trajectory helpers ---
@@ -187,35 +236,40 @@ def load_mini_swe_messages(
     submission_id: str,
     *,
     experiments_dir: Path | None = None,
-) -> list[dict[str, Any]] | None:
+) -> list[dict[str, Any]]:
     """Load messages from swe-agent-mini trajectory file if present.
 
     File path: `<experiments_dir>/swe_agent_mini/<submission_id>.traj.json`
     Returns list of message dicts with at least `role` and `content`.
+    Raises FileNotFoundError, ValueError, or json.JSONDecodeError on error.
     """
     base_dir = experiments_dir or settings.experiments_dir
     traj_path = base_dir / "swe_agent_mini" / f"{submission_id}.traj.json"
     if not traj_path.exists():
-        return None
+        raise FileNotFoundError(f"Trajectory file not found: {traj_path}")
     try:
         data = json.loads(traj_path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
+    except Exception as exc:
+        raise ValueError(
+            f"Failed to load or parse trajectory file: {traj_path}"
+        ) from exc
     messages = data.get("messages")
     if not isinstance(messages, list):
-        return None
+        raise ValueError(f"Trajectory file missing 'messages' list: {traj_path}")
     # basic shape validation
     out: list[dict[str, Any]] = []
     for m in messages:
         if isinstance(m, dict) and "role" in m and "content" in m:
             out.append(m)
-    return out or None
+        else:
+            print(f"Warning: Invalid message in trajectory file: {traj_path}")
+    if not out:
+        raise ValueError(f"No valid messages found in trajectory file: {traj_path}")
+    return out
 
 
 def format_agent_messages(
     messages: Sequence[dict[str, Any]],
-    *,
-    max_messages: int | None = None,
 ) -> str:
     """Render agent messages as a sequential transcript.
 
@@ -223,61 +277,58 @@ def format_agent_messages(
     XML-like wrappers for command outputs when present). We only add lightweight
     role markers.
     """
-    if max_messages is not None and len(messages) > max_messages:
-        messages = messages[:max_messages]
+    assert messages, "Empty messages list given to format_agent_messages"
+    assert all(m.get("role") for m in messages), "Some messages are missing role"
+    assert all(m.get("content") for m in messages), "Some messages are missing content"
 
     rendered: list[str] = []
     for msg in messages:
-        role = str(msg.get("role", "unknown")).strip()
-        content = str(msg.get("content", "")).rstrip()
-        rendered.append(f"<role>{role}</role>\n{content}")
-    return "\n\n".join(rendered) if rendered else "<empty>"
+        role = str(msg.get("role", "unknown"))
+        content = str(msg.get("content"))
+        rendered.append(f"<{role}>\n{content}\n</{role}>")
+
+    return "\n\n".join(rendered)
 
 
 def format_command_result(
     step: CommandResult,
     *,
-    truncate_stdout: int = 2000,
-    truncate_stderr: int = 1200,
+    truncate_stdout: int = 10_000,
+    truncate_stderr: int = 10_000,
 ) -> str:
     """Single step pretty-print for inclusion in a plain-text prompt."""
-    stdout = _truncate(step.stdout, truncate_stdout) if step.stdout else ""
-    stderr = _truncate(step.stderr, truncate_stderr) if step.stderr else ""
+    formatted_stdout = truncate_xml_with_warning(
+        step.stdout, tag="stdout", max_len=truncate_stdout
+    )
+    formatted_stderr = truncate_xml_with_warning(
+        step.stderr, tag="stderr", max_len=truncate_stderr
+    )
 
     duration_seconds = step.duration.total_seconds()
     parts = [
-        f"<command>{step.command}</command>",
+        f"<command>\n{step.command}\n</command>",
         f"exit_code={step.exit_code}",
         f"duration_seconds={duration_seconds:.3f}",
     ]
-    if stdout:
-        parts.append("<stdout>\n" + stdout + "\n</stdout>")
-    if stderr:
-        parts.append("<stderr>\n" + stderr + "\n</stderr>")
+    parts.append(formatted_stdout)
+    parts.append(formatted_stderr)
     return "\n".join(parts)
 
 
 def format_execution_trace(
     trace: ExecutionTrace | None,
-    *,
-    header: str,
-    max_steps: int | None = None,
 ) -> str:
-    if trace is None:
-        return f"{header}\n<no trace available>"
+    assert trace, "Empty trace given to format_execution_trace"
 
     steps = trace.steps
-    if max_steps is not None and len(steps) > max_steps:
-        steps = steps[:max_steps]
 
     rendered = [format_command_result(s) for s in steps]
-    body = "\n\n".join(rendered) if rendered else "<empty>"
-    return (f"{header}\n" + body) if header else body
+    return "\n\n".join(rendered)
 
 
 def format_metrics_report(metrics: MetricsReport) -> str:
     payload = metrics.model_dump()
-    return json.dumps(payload, indent=2, sort_keys=True)
+    return json.dumps(payload, indent=2)
 
 
 # --- Patch filtering helpers ---
@@ -337,9 +388,6 @@ def filter_patch_excluding_lockfiles(patch_text: str) -> str:
 def build_analysis_prompt(
     experiment: CompletedExperiment,
     evaluation: EvaluationCompleted,
-    *,
-    max_agent_steps: int | None = 60,
-    max_eval_steps: int | None = None,
 ) -> str:
     """Render ANALYSIS_PROMPT with formatted agent/eval traces and metrics."""
     # Prefer mini-SWE trajectory messages when available
@@ -347,24 +395,11 @@ def build_analysis_prompt(
     agent_cfg = experiment.task.agent_config
     assert agent_cfg.scaffold == "swe-agent-mini"
     messages = load_mini_swe_messages(experiment.submission.submission_id)
-    if messages:
-        formatted_agent_trace = format_agent_messages(
-            messages, max_messages=max_agent_steps
-        )
-    else:
-        # Fallback to artifacts execution trace if no trajectory present
-        agent_trace = (
-            experiment.artifacts.execution_trace if experiment.artifacts else None
-        )
-        formatted_agent_trace = format_execution_trace(
-            agent_trace, header="", max_steps=max_agent_steps
-        )
+    assert messages
 
-    formatted_evaluation_trace = format_execution_trace(
-        evaluation.result.execution,
-        header="Evaluation Trace",
-        max_steps=max_eval_steps,
-    )
+    formatted_agent_trace = format_agent_messages(messages)
+
+    formatted_evaluation_trace = format_execution_trace(evaluation.result.execution)
 
     formatted_metrics_report = format_metrics_report(evaluation.result.metrics)
 
@@ -377,9 +412,10 @@ def build_analysis_prompt(
     base_commit = inst.base_commit
     source_version = inst.source_angular_version
     target_version = inst.target_angular_version
+    dockerfile_content = inst.dockerfile_content
 
     # Prepare generated patch (filtered + optionally truncated to 10k chars)
-    raw_patch = experiment.submission.model_patch or ""
+    raw_patch = experiment.submission.model_patch
     filtered_patch = filter_patch_excluding_lockfiles(raw_patch)
     max_chars = 10_000
     if len(filtered_patch) > max_chars:
@@ -401,6 +437,7 @@ def build_analysis_prompt(
         base_commit=base_commit,
         source_version=source_version,
         target_version=target_version,
+        dockerfile_content=dockerfile_content,
     )
 
 
@@ -417,8 +454,51 @@ load_dotenv()
 assert os.getenv("OPENAI_API_KEY")
 assert os.getenv("LANGSMITH_TRACING")
 
-model_name = "gpt-5"
-llm = ChatOpenAI(model=model_name)
+
+ANALYSIS_MODEL_NAME = "gpt-5"
+llm = ChatOpenAI(model=ANALYSIS_MODEL_NAME)
+
+
+def run_analysis_task(
+    task: AnalysisTask,
+    *,
+    llm: BaseChatModel,
+    on_prompt: Callable[[str, AnalysisTask], None] | None = None,
+) -> BaseMessage:
+    """
+    Run analysis for the given task.
+
+    Returns an updated AnalysisTask with results or error status.
+    """
+
+    # Build prompt
+    prompt = build_analysis_prompt(task.experiment, task.evaluation)
+
+    if on_prompt:
+        on_prompt(prompt, task)
+
+    # Set up metadata for LLM call
+    metadata = {
+        "experiment_id": task.experiment.id,
+        "submission_id": task.experiment.submission.submission_id,
+        "instance_id": task.experiment.submission.instance_id,
+        "evaluation_id": task.evaluation.id,
+        "scaffold": task.experiment.task.agent_config.scaffold,
+        "model_name": task.experiment.task.agent_config.model_name
+        if task.experiment.task.agent_config.scaffold == "swe-agent-mini"
+        else None,
+    }
+
+    config = RunnableConfig(
+        metadata=metadata,
+        run_id=UUID(task.trace_id),
+        run_name="analysis",
+    )
+
+    # Invoke LLM with config
+    result = llm.invoke(prompt, config=config)
+
+    return result
 
 
 if __name__ == "__main__":
@@ -429,45 +509,44 @@ if __name__ == "__main__":
     completed, _ = load_evaluations()
     print("Selecting latest experiment/evaluation pair...")
     pair = select_latest_pair(experiments, completed)
-    exp, evalc = pair.experiment, pair.evaluation
 
-    print(f"Building analysis prompt for experiment {exp.id}, evaluation {evalc.id}...")
-    trace_id = uuid7()
-    print(f"Generated trace_id: {trace_id}")
-    prompt = build_analysis_prompt(exp, evalc)
-    prompt_dir = Path("analysis") / "prompts"
-    prompt_dir.mkdir(parents=True, exist_ok=True)
-    out_path = prompt_dir / f"trace_{trace_id}_eval_{evalc.id}_exp_{exp.id}.md"
-    print(f"Writing prompt to {out_path}")
-    with out_path.open("w", encoding="utf-8") as f:
-        f.write(prompt)
+    print("Creating analysis task...")
+    task = AnalysisTask(
+        experiment=pair.experiment,
+        evaluation=pair.evaluation,
+        model_name=ANALYSIS_MODEL_NAME,
+    )
+    print(f"Created task with trace_id: {task.trace_id}")
 
-    metadata = {
-        "experiment_id": exp.id,
-        "submission_id": exp.submission.submission_id,
-        "instance_id": exp.submission.instance_id,
-        "evaluation_id": evalc.id,
-        "scaffold": exp.task.agent_config.scaffold,
-        "model_name": exp.task.agent_config.model_name
-        if exp.task.agent_config.scaffold == "swe-agent-mini"
-        else None,
-    }
+    tasks_dir = Path("analysis") / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    task_path = tasks_dir / f"{task.trace_id}.json"
+    task_path.write_text(task.model_dump_json(indent=2))
 
-    config = RunnableConfig(
-        metadata=metadata,
-        run_id=trace_id,
-        run_name="analysis",
+    print(
+        f"Running analysis for experiment {task.experiment.id}, "
+        f"evaluation {task.evaluation.id}..."
     )
 
-    print(f"Invoking {model_name} for analysis...")
-    result = llm.invoke(prompt, config=config)
-    result_dir = Path("analysis/results")
+    def _on_prompt(prompt: str, task: AnalysisTask) -> None:
+        prompt_dir = Path("analysis") / "prompts"
+        prompt_dir.mkdir(parents=True, exist_ok=True)
+        prompt_path = (
+            prompt_dir
+            / f"trace_{task.trace_id}_eval_{task.evaluation.id}_exp_{task.experiment.id}.md"  # noqa: E501
+        )
+        prompt_path.write_text(prompt)
+
+    result = run_analysis_task(task, llm=llm, on_prompt=_on_prompt)
+
+    result_dir = Path("analysis") / "results"
     result_dir.mkdir(parents=True, exist_ok=True)
-    result_path = result_dir / f"trace_{trace_id}_eval_{evalc.id}_exp_{exp.id}.md"
+    base_name = (
+        f"trace_{task.trace_id}_eval_{task.evaluation.id}_exp_{task.experiment.id}"
+    )
+    result_md_path = result_dir / f"{base_name}.md"
+    result_md_path.write_text(result.text())
+    result_json_path = result_dir / f"{base_name}.json"
+    result_json_path.write_text(result.model_dump_json(indent=2))
 
-    print(f"Writing LLM result to {result_path}")
-    with result_path.open("w", encoding="utf-8") as f:
-        f.write(result.text())
-
-    print(f"Analysis complete. Output written to {result_path}")
-    print(result + "\n")
+    print(result)

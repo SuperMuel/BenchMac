@@ -51,6 +51,14 @@ Your final output must be a Markdown report with the following sections. Only in
 - **Migration Task:** Angular v{source_version} → v{target_version}
 </task_definition>
 
+<dockerfile_content>
+This is the Dockerfile content for the instance, used for both the patch generation and evaluation stages.
+
+```dockerfile
+{dockerfile_content}
+```
+</dockerfile_content>
+
 <patch_generation_stage>
 Below is the full agent trace, including system prompt, agent thoughts, actions, and command results (stdout, stderr, exit code) returned by the scaffold.
 
