@@ -34,6 +34,7 @@ packages = ["src/bench_mac", "experiments", "explorer"]
 include = ["src/bench_mac", "experiments", "explorer", "README.md", "LICENSE"]
 
 [dependency-groups]
+analysis = ["langchain>=0.3.27", "langchain-openai>=0.3.33"]
 dev = [
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
@@ -163,6 +164,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 ]
 "scripts/*" = [
     "T201", # Allow print statements in scripts
+]
+"analysis/*" = [
+    "T201", # Allow print statements in analysis
 ]
 
 
