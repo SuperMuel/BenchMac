@@ -225,6 +225,14 @@ class Submission(BaseModel):
         description="A string containing the full, unified diff (.patch format) of all changes.",  # noqa: E501
     )
 
+    @field_validator("model_patch")
+    @classmethod
+    def _ensure_model_patch_not_empty(cls, value: str) -> str:
+        """Reject submissions that do not include any actual diff content."""
+        if not value or not value.strip():
+            raise ValueError("model_patch must contain a non-empty unified diff")
+        return value
+
     metadata: SubmissionMetadata = Field(
         default_factory=SubmissionMetadata,
         description="Metadata for the submission.",

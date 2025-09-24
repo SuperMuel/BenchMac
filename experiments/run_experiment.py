@@ -263,6 +263,10 @@ def process_single_task(
         console.print("Running agent")
         task_logger.info("Starting agent run")
         agent_result = agent.run(submission_id=submission_id)
+        if not agent_result.model_patch or not agent_result.model_patch.strip():
+            raise RuntimeError(
+                "Agent produced an empty diff; submission aborted before evaluation."
+            )
         submission = Submission(
             submission_id=SubmissionID(submission_id),
             instance_id=InstanceID(task.instance_id),
