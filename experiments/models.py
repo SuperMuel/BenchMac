@@ -31,7 +31,9 @@ class MiniSweAgentConfig(BaseModel):
         ...,
         min_length=1,
         description="Jinja template used to render the instance-specific task prompt.",
-        example="Migrate the application from Angular to {{ instance.target_angular_version }}.",  # noqa: E501
+        examples=[
+            "Migrate the application from Angular to {{ instance.target_angular_version }}.",  # noqa: E501
+        ],
     )
 
     step_limit: int | None = Field(

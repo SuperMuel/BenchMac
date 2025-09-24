@@ -9,6 +9,7 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any
 
+import litellm
 import typer
 import yaml
 from dotenv import load_dotenv
@@ -384,6 +385,8 @@ def main(
     swe_mini_config = yaml.safe_load(swe_mini_config_yaml.read_text())
     task_templates = swe_mini_config["task_template"]
     agent_settings = swe_mini_config["agent_settings"]
+
+    litellm.drop_params = True
 
     agent_configs = build_agent_configs(
         scaffolds=selected_scaffolds,
