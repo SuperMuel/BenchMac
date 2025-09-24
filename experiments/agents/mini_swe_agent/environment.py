@@ -1,9 +1,6 @@
 """Adapter around the core DockerExecutionEnvironment for experiment agents."""
 
-from __future__ import annotations
-
-import platform
-from typing import Any
+from typing import Any, Self
 
 from loguru import logger
 
@@ -70,8 +67,6 @@ class MiniSweAgentEnvironmentAdapter:
             "source_version": self.instance.source_angular_version,
             "target_version": self.instance.target_angular_version,
             "cwd": self._project_workdir,
-            # Provide the OS name for Jinja conditionals in templates
-            "system": platform.system(),
         }
 
     @property
@@ -79,7 +74,7 @@ class MiniSweAgentEnvironmentAdapter:
         """Configuration for the environment, required by the Environment protocol."""
         return {}
 
-    def __enter__(self) -> MiniSweAgentEnvironmentAdapter:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_: Any, **__: Any) -> None:
