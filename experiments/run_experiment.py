@@ -97,6 +97,58 @@ DEFAULT_SCAFFOLDS = ("swe-agent-mini",)
 DEFAULT_MODEL_NAMES = ("mistral/devstral-medium-2507",)
 
 
+def _is_known_model(model_name: str) -> bool:
+    """Return True if a model is known to litellm (built-in or registered).
+
+    Accepts provider-prefixed names like ``openai/gpt-4o`` by also checking the
+    suffix after the first ``/``.
+    """
+    candidates: list[str] = [model_name]
+    if "/" in model_name:
+        candidates.append(model_name.split("/", 1)[1])
+
+    for candidate in candidates:
+        # 1) Directly in the cost map (includes manual registrations)
+        try:
+            if candidate in litellm.model_cost:
+                return True
+        except Exception:
+            pass
+
+        # 2) Aggregated known model list
+        try:
+            model_list_set = getattr(litellm, "model_list_set", None)
+            if model_list_set and candidate in model_list_set:
+                return True
+        except Exception:
+            pass
+
+        # 3) By provider groupings
+        try:
+            for models in getattr(litellm, "models_by_provider", {}).values():
+                if isinstance(models, set | list | tuple) and candidate in models:
+                    return True
+        except Exception:
+            pass
+
+    return False
+
+
+def _validate_model_names_or_exit(model_names: list[str]) -> None:
+    """Validate that all provided model names are known to litellm.
+
+    Raises a Typer error when one or more models are unknown.
+    """
+    unknown = [m for m in model_names if not _is_known_model(m)]
+    if unknown:
+        missing = ", ".join(unknown)
+        msg = (
+            "Unknown model(s): "
+            f"{missing}. Register them via litellm.register_model(...) or choose valid built-in models."
+        )
+        raise typer.BadParameter(msg)
+
+
 @dataclass(slots=True)
 class TaskEvent:
     status: Literal["started", "completed", "failed"]
@@ -627,6 +679,10 @@ def main(
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
 
     selected_scaffolds = scaffolds or list(DEFAULT_SCAFFOLDS)
+
+    # Validate model names early if swe-agent-mini is selected
+    if any(s.strip().lower() == "swe-agent-mini" for s in selected_scaffolds):
+        _validate_model_names_or_exit(model_names)
 
     swe_mini_config = yaml.safe_load(swe_mini_config_yaml.read_text())
     task_templates = swe_mini_config["task_template"]
