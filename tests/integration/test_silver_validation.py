@@ -148,3 +148,64 @@ Validation failed: Target version was not achieved for the silver patch.
   - Expected Major Version: {task.instance.target_angular_version}
   - Metric Result from Trace: {metrics.target_version_achieved}
 """
+
+
+def _force_node_18_base_image(dockerfile: str) -> str:
+    """Return Dockerfile content with the first FROM line downgraded to Node 18."""
+    lines = dockerfile.splitlines()
+    for idx, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.upper().startswith("FROM "):
+            lines[idx] = (
+                f"{line[: len(line) - len(stripped)]}FROM node:18-bookworm-slim"
+            )
+            break
+    else:
+        raise ValueError("Dockerfile does not contain a FROM directive.")
+
+    suffix = "\n" if dockerfile.endswith("\n") else ""
+    return "\n".join(lines) + suffix
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.xfail(reason="Guard for Node.js runtime mismatch is not yet enforced.")
+def test_guard_blocks_runtime_mismatch(docker_manager: DockerManager) -> None:
+    """Verify that the evaluation pipeline will refuse to continue when
+    the Docker image provides an outdated Node.js runtime.
+
+    The silver patch upgrades the project to Angular 20 and declares
+    a Node >= 20 engine requirement. By replacing the instance's Dockerfile
+    with a Node 18 base image, this test recreates the infrastructure
+    mismatch scenario that caused unfair agent failures in production.
+    The guard must catch this before dependency installation begins,
+    fail loudly, and instruct maintainers to upgrade the evaluation image.
+    """
+    instances_map = load_instances(settings.instances_file, strict=True)
+    instance = instances_map["gothinkster__angular-realworld-example-app_v19_to_v20"]
+
+    downgraded_dockerfile = _force_node_18_base_image(instance.dockerfile_content)
+
+    patched_instance = instance.model_copy(
+        update={"dockerfile_content": downgraded_dockerfile}
+    )
+
+    silver_patch_path = settings.silver_patches_dir / f"{instance.instance_id}.patch"
+    if not silver_patch_path.exists():
+        raise FileNotFoundError(
+            f"Silver patch not found at {silver_patch_path}. Please generate it with "
+            "`uv run scripts/generate_silvers.py`"
+        )
+
+    submission = Submission(
+        instance_id=instance.instance_id,
+        model_patch=silver_patch_path.read_text(),
+    )
+
+    with pytest.raises(RuntimeError):
+        run_submission_in_docker(
+            instance=patched_instance,
+            submission=submission,
+            docker_manager=docker_manager,
+            logger=logger,
+        )
