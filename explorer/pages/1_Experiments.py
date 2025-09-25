@@ -121,6 +121,7 @@ def build_table_row(
             completed.started_at, completed.ended_at, completed.artifacts
         )
         row = {
+            "experiment_id": str(completed.id),
             "instance_id": completed.task.instance_id,
             "agent": completed.task.agent_config.key,
             "status": "completed",
@@ -146,6 +147,7 @@ def build_table_row(
         failed = cast(FailedExperiment, experiment.root)
         metrics = compute_metrics(failed.started_at, failed.ended_at, failed.artifacts)
         row = {
+            "experiment_id": str(failed.id),
             "instance_id": failed.task.instance_id,
             "agent": failed.task.agent_config.key,
             "status": "failed",
@@ -429,6 +431,7 @@ else:
         df,
         hide_index=True,
         column_config={
+            "experiment_id": st.column_config.TextColumn("Experiment ID"),
             "instance_id": st.column_config.TextColumn("Instance"),
             "agent": st.column_config.TextColumn("Agent"),
             "status": st.column_config.TextColumn("Status"),
