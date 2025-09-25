@@ -328,7 +328,13 @@ def execute_task(
     dt_factory: Callable[[], datetime] | None = None,
     provider_lock: Semaphore | None = None,
 ) -> tuple[ExperimentResult, Path, list[TaskEvent]]:
-    """Run a single task end-to-end and persist the result JSON."""
+    """Run a single task end-to-end and persist the result JSON.
+
+    When ``provider_lock`` is provided we deliberately serialize execution for
+    agents that talk to the same external model provider. This prevents two
+    MiniSWE runs from hammering the same LLM API concurrently, which helps us
+    respect provider rate limits even if the global worker pool is larger.
+    """
     assert task.instance_id == instance.instance_id
 
     task_logger = bind_run_context(
@@ -403,6 +409,7 @@ def render_task_event(event: TaskEvent) -> None:
 
 
 def resolve_provider_key(task: ExperimentTask) -> str:
+    """Return a coarse provider identifier used for concurrency throttling."""
     agent_config = task.agent_config
     match agent_config:
         case MiniSweAgentConfig():
@@ -422,10 +429,19 @@ def dispatch_tasks(
     progress: Progress,
     progress_task_id: int,
     max_workers: int,
+    provider_limit: int,
 ) -> None:
+    """Execute tasks with global and per-provider concurrency limits.
+
+    ``max_workers`` bounds the total number of live Docker containers, while
+    ``provider_limit`` caps how many workers can hit the same provider at once.
+    Keeping this small prevents a single LLM backend from triggering API
+    throttling without blocking unrelated providers.
+    """
     total_tasks = len(tasks)
     completed = 0
     max_workers = max(1, max_workers)
+    provider_limit = max(1, provider_limit)
     executor = ThreadPoolExecutor(max_workers=max_workers)
     futures: dict[
         Future[tuple[ExperimentResult, Path, list[TaskEvent]]],
@@ -441,7 +457,11 @@ def dispatch_tasks(
             provider_key = resolve_provider_key(task)
             provider_lock = provider_locks.get(provider_key)
             if provider_lock is None:
-                provider_lock = Semaphore(1)
+                # Many hosted LLM APIs (OpenAI, Anthropic, Groq, etc.) impose
+                # shared tenant rate limits; keeping this semaphore small
+                # reduces the likelihood of 429 responses while still allowing
+                # other providers to progress in parallel.
+                provider_lock = Semaphore(provider_limit)
                 provider_locks[provider_key] = provider_lock
 
             future = executor.submit(
@@ -458,7 +478,7 @@ def dispatch_tasks(
             task, submission_id = futures[future]
             try:
                 _, _, events = future.result()
-            except Exception as exc:  # pragma: no cover - defensive guard
+            except Exception as exc:
                 logger.opt(exception=True).error(
                     "Task execution crashed: instance={instance} model={model}",
                     instance=task.instance_id,
@@ -558,6 +578,11 @@ def main(
         "--max-workers",
         help="Maximum number of experiment tasks processed concurrently.",
     ),
+    provider_workers: int = typer.Option(
+        1,
+        "--provider-workers",
+        help="Maximum concurrent tasks per provider.",
+    ),
 ) -> None:
     """
     Runs an LLM-powered agent on BenchMAC instances and generates a submission file.
@@ -617,6 +642,15 @@ def main(
     if max_workers < 1:
         raise typer.BadParameter("--max-workers must be greater than 0")
 
+    if provider_workers < 1:
+        raise typer.BadParameter("--provider-workers must be greater than 0")
+
+    console.print(
+        "🔒 Per-provider worker limit: "
+        f"[cyan]{provider_workers}[/cyan] concurrent task(s)"
+        " (override with --provider-workers)"
+    )
+
     if results_dir is None:
         results_dir = create_results_run_dir(settings.experiments_dir)
     else:
@@ -658,6 +692,7 @@ def main(
                 progress=progress,
                 progress_task_id=task_progress,
                 max_workers=max_workers,
+                provider_limit=provider_workers,
             )
 
     except KeyboardInterrupt:
