@@ -47,6 +47,7 @@ experiments = [
     "opentelemetry-exporter-otlp==1.25.0",
     "opentelemetry-sdk==1.25.0",
     "typer>=0.16.1",
+    "litellm>=1.77.4",
 ]
 explorer = ["pandas>=2.3.2", "plotly>=6.3.0", "streamlit>=1.49.1"]
 
