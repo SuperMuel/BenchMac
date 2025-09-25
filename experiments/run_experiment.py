@@ -298,6 +298,44 @@ def process_single_task(
         return failed
 
 
+def execute_task(
+    *,
+    task: ExperimentTask,
+    instance: BenchmarkInstance,
+    submission_id: str,
+    results_dir: Path,
+    dt_factory: Callable[[], datetime] | None = None,
+) -> tuple[ExperimentResult, Path]:
+    """Run a single task end-to-end and persist the result JSON."""
+    assert task.instance_id == instance.instance_id
+
+    task_logger = bind_run_context(
+        instance=task.instance_id,
+        model=task.agent_config.display_name,
+        submission=submission_id,
+    )
+
+    agent = create_agent(instance, task.agent_config)
+    task_logger.debug("Agent created for task")
+
+    result = process_single_task(
+        task,
+        agent,
+        submission_id,
+        dt_factory=dt_factory,
+    )
+
+    result_wrapper = ExperimentResult(root=result)
+    result_path = save_experiment_result(result_wrapper, results_dir)
+
+    task_logger.info(
+        "Persisted result to {results_path}",
+        results_path=str(result_path),
+    )
+
+    return result_wrapper, result_path
+
+
 def create_agent(instance: BenchmarkInstance, agent_config: AgentConfig) -> BaseAgent:
     docker_manager = DockerManager()
 
@@ -446,11 +484,6 @@ def main(
             for task in tasks:
                 instance = instances[task.instance_id]
                 submission_id = str(uuid7())
-                task_logger = bind_run_context(
-                    instance=task.instance_id,
-                    model=task.agent_config.display_name,
-                    submission=submission_id,
-                )
                 progress.update(
                     task_progress,
                     description=(
@@ -459,21 +492,11 @@ def main(
                     ),
                 )
 
-                agent = create_agent(instance, task.agent_config)
-                task_logger.debug("Agent created for task")
-
-                result = process_single_task(
-                    task,
-                    agent,
-                    submission_id,
-                )
-
-                result_wrapper = ExperimentResult(root=result)
-                result_path = save_experiment_result(result_wrapper, results_dir)
-
-                task_logger.info(
-                    "Persisted result to {results_path}",
-                    results_path=str(result_path),
+                execute_task(
+                    task=task,
+                    instance=instance,
+                    submission_id=submission_id,
+                    results_dir=results_dir,
                 )
 
                 progress.advance(task_progress)
