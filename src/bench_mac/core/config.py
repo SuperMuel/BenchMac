@@ -107,8 +107,9 @@ class Settings(BaseSettings):
         """Creates all necessary cache and data directories."""
         logger.info("Initializing BenchMAC directories...")
         self.data_dir.mkdir(exist_ok=True)
-        self.silver_patches_dir.mkdir(exist_ok=True)
+        self.benchmac_temp_dir.mkdir(exist_ok=True)
         self.cache_dir.mkdir(exist_ok=True)
+        self.silver_patches_dir.mkdir(exist_ok=True)
         self.silver_patches_repos_dir.mkdir(exist_ok=True)
         self.evaluations_dir.mkdir(exist_ok=True)
         self.dockerfiles_dir.mkdir(exist_ok=True)

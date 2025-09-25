@@ -35,7 +35,7 @@ from pathlib import Path
 import cyclopts
 
 from bench_mac.core.config import settings
-from bench_mac.core.models import BenchmarkInstance, Submission
+from bench_mac.core.models import BenchmarkInstance, InstanceID, Submission
 from bench_mac.core.utils import load_instances
 
 # --- Configuration ---
@@ -53,6 +53,7 @@ SILVER_SOLUTIONS = {
     "gothinkster__angular-realworld-example-app_v16_to_v17": "f218b2f",
     "gothinkster__angular-realworld-example-app_v17_to_v18": "2555e2f",
     "gothinkster__angular-realworld-example-app_v18_to_v19": "a6f16d0",
+    "gothinkster__angular-realworld-example-app_v19_to_v20": "a420aa2",
 }  # TODO: export this in config file
 
 
@@ -173,7 +174,9 @@ def main(instance_id: str | None = None) -> None:
                 temp_repos_dir,
             )
             # Create a Submission object and add it to our list
-            submission = Submission(instance_id=target_id, model_patch=patch_content)
+            submission = Submission(
+                instance_id=InstanceID(target_id), model_patch=patch_content
+            )
             all_submissions.append(submission)
         except Exception as e:
             print(f"❌ An unexpected error occurred while processing {target_id}: {e}")
