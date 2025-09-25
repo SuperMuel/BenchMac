@@ -2,11 +2,12 @@
 # this is temporary a Typer app, but we'll fusion this with the main CLI later
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import litellm
 import typer
@@ -56,6 +57,16 @@ console = Console()
 SUPPORTED_SCAFFOLDS = {"swe-agent-mini", "angular-schematics"}
 DEFAULT_SCAFFOLDS = ("swe-agent-mini",)
 DEFAULT_MODEL_NAMES = ("mistral/devstral-medium-2507",)
+
+
+@dataclass(slots=True)
+class TaskEvent:
+    status: Literal["started", "completed", "failed"]
+    message: str
+    instance_id: str
+    agent_display_name: str
+    submission_id: str
+    details: dict[str, Any] | None = None
 
 
 def _resolve_minisweagent_version() -> str:
@@ -213,7 +224,7 @@ def process_single_task(
     agent: BaseAgent,
     submission_id: str,
     dt_factory: Callable[[], datetime] | None = None,
-) -> CompletedExperiment | FailedExperiment:
+) -> tuple[CompletedExperiment | FailedExperiment, list[TaskEvent]]:
     """
     Process a single experiment task by running the agent and returning the result.
 
@@ -234,10 +245,29 @@ def process_single_task(
         submission=submission_id,
     )
 
+    events: list[TaskEvent] = []
+
+    def add_event(
+        status: Literal["started", "completed", "failed"],
+        message: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        events.append(
+            TaskEvent(
+                status=status,
+                message=message,
+                instance_id=task.instance_id,
+                agent_display_name=task.agent_config.display_name,
+                submission_id=submission_id,
+                details=details,
+            )
+        )
+
+    add_event("started", "Starting agent run")
+    task_logger.info("Starting agent run")
+
     try:
-        # Run the agent
-        console.print("Running agent")
-        task_logger.info("Starting agent run")
         agent_result = agent.run(submission_id=submission_id)
         if not agent_result.model_patch or not agent_result.model_patch.strip():
             raise RuntimeError(
@@ -258,34 +288,22 @@ def process_single_task(
             ended_at=dt_factory(),
             artifacts=artifacts,
         )
-        # Post-completion summary
-        price_str = "unknown"
-        steps_str = "unknown"
-        duration_str = "unknown"
-        if completed.artifacts is not None:
-            if completed.artifacts.cost_usd is not None:
-                price_str = f"${completed.artifacts.cost_usd:.4f}"
-            if completed.artifacts.execution_trace is not None:
+        details: dict[str, Any] = {}
+        artifacts = completed.artifacts
+        if artifacts is not None:
+            if artifacts.cost_usd is not None:
+                details["cost_usd"] = artifacts.cost_usd
+            if artifacts.execution_trace is not None:
                 try:
-                    steps = len(completed.artifacts.execution_trace.steps)
-                    steps_str = str(steps)
-                    duration_td = completed.artifacts.execution_trace.total_duration
-                    duration_str = _format_timedelta(duration_td)
+                    details["steps"] = len(artifacts.execution_trace.steps)
+                    duration_td = artifacts.execution_trace.total_duration
+                    details["duration"] = _format_timedelta(duration_td)
                 except Exception:
-                    # Be tolerant of partial/malformed traces
                     pass
-        console.print(
-            "[green]✓ Completed:[/green] "
-            f"{task.instance_id} ({task.agent_config.display_name}) — "
-            f"price: {price_str}, steps: {steps_str}, total: {duration_str}"
-        )
+        add_event("completed", "Task completed successfully", details=details or None)
         task_logger.success("Task completed successfully")
-        return completed
+        return completed, events
     except Exception as e:
-        console.print(
-            f"[bold red]Error processing {task.instance_id} "
-            f"({task.agent_config.display_name}): {e}[/bold red]"
-        )
         task_logger.opt(exception=True).error("Task failed during agent run")
         agent_artifacts = agent.collect_artifacts()
         failed = FailedExperiment(
@@ -295,7 +313,8 @@ def process_single_task(
             ended_at=dt_factory(),
             artifacts=agent_artifacts,
         )
-        return failed
+        add_event("failed", "Task failed", details={"error": str(e)})
+        return failed, events
 
 
 def execute_task(
@@ -305,7 +324,7 @@ def execute_task(
     submission_id: str,
     results_dir: Path,
     dt_factory: Callable[[], datetime] | None = None,
-) -> tuple[ExperimentResult, Path]:
+) -> tuple[ExperimentResult, Path, list[TaskEvent]]:
     """Run a single task end-to-end and persist the result JSON."""
     assert task.instance_id == instance.instance_id
 
@@ -318,7 +337,7 @@ def execute_task(
     agent = create_agent(instance, task.agent_config)
     task_logger.debug("Agent created for task")
 
-    result = process_single_task(
+    result, events = process_single_task(
         task,
         agent,
         submission_id,
@@ -333,7 +352,41 @@ def execute_task(
         results_path=str(result_path),
     )
 
-    return result_wrapper, result_path
+    return result_wrapper, result_path, events
+
+
+def render_task_event(event: TaskEvent) -> None:
+    """Render a task event to the console."""
+
+    header = f"{event.instance_id} ({event.agent_display_name})"
+
+    if event.status == "started":
+        console.print(f"[cyan]Running agent:[/cyan] {header}")
+        return
+
+    if event.status == "completed":
+        cost = event.details.get("cost_usd") if event.details else None
+        steps = event.details.get("steps") if event.details else None
+        duration = event.details.get("duration") if event.details else None
+
+        price_str = f"${cost:.4f}" if isinstance(cost, int | float) else "unknown"
+        steps_str = str(steps) if isinstance(steps, int) else "unknown"
+        duration_str = duration if isinstance(duration, str) else "unknown"
+
+        console.print(
+            "[green]✓ Completed:[/green] "
+            f"{header} — price: {price_str}, steps: {steps_str}, total: {duration_str}"
+        )
+        return
+
+    if event.status == "failed":
+        error = "unknown error"
+        if event.details and isinstance(event.details.get("error"), str):
+            error = event.details["error"]
+        console.print(f"[bold red]Error processing {header}: {error}[/bold red]")
+        return
+
+    console.print(event.message)
 
 
 def create_agent(instance: BenchmarkInstance, agent_config: AgentConfig) -> BaseAgent:
@@ -492,12 +545,15 @@ def main(
                     ),
                 )
 
-                execute_task(
+                _result_wrapper, _result_path, events = execute_task(
                     task=task,
                     instance=instance,
                     submission_id=submission_id,
                     results_dir=results_dir,
                 )
+
+                for event in events:
+                    render_task_event(event)
 
                 progress.advance(task_progress)
 
