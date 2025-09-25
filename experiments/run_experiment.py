@@ -51,6 +51,42 @@ from experiments.storage import (
 
 load_dotenv()
 
+
+litellm.register_model(  # pyright: ignore[reportPrivateImportUsage]
+    {
+        "mistral/magistral-medium-2509": {
+            "max_tokens": 128000,
+            "input_cost_per_token": 2e-06,
+            "output_cost_per_token": 5e-06,
+            "litellm_provider": "mistral",
+            "mode": "chat",
+        },
+        "mistral/magistral-small-2509": {
+            "max_tokens": 128000,
+            "input_cost_per_token": 5e-07,
+            "output_cost_per_token": 1.5e-06,
+            "litellm_provider": "mistral",
+            "mode": "chat",
+        },
+        "mistral/mistral-medium-2508": {
+            "max_tokens": 128000,
+            "input_cost_per_token": 4e-07,
+            "output_cost_per_token": 2e-06,
+            "litellm_provider": "mistral",
+            "mode": "chat",
+        },
+        "mistral/mistral-small-2506": {
+            "max_tokens": 128000,
+            "input_cost_per_token": 1e-07,
+            "output_cost_per_token": 3e-07,
+            "litellm_provider": "mistral",
+            "mode": "chat",
+        },
+    }
+)
+litellm.drop_params = True
+
+
 # --- Configuration ---
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -595,8 +631,6 @@ def main(
     swe_mini_config = yaml.safe_load(swe_mini_config_yaml.read_text())
     task_templates = swe_mini_config["task_template"]
     agent_settings = swe_mini_config["agent_settings"]
-
-    litellm.drop_params = True
 
     agent_configs = build_agent_configs(
         scaffolds=selected_scaffolds,

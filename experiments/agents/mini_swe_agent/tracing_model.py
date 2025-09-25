@@ -25,4 +25,4 @@ class TracingModel(LitellmModel):
         except Exception:
             # Tracing must not interfere with agent execution
             pass
-        return out
+        return {"content": out.get("content", "")}
