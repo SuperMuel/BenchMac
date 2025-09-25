@@ -443,40 +443,40 @@ def main(
                 "[cyan]Processing Tasks...", total=len(tasks)
             )
 
-        for task in tasks:
-            instance = instances[task.instance_id]
-            submission_id = str(uuid7())
-            task_logger = bind_run_context(
-                instance=task.instance_id,
-                model=task.agent_config.display_name,
-                submission=submission_id,
-            )
-            progress.update(
-                task_progress,
-                description=(
-                    f"[cyan]Processing: {task.instance_id} "
-                    f"({task.agent_config.display_name})[/cyan]"
-                ),
-            )
+            for task in tasks:
+                instance = instances[task.instance_id]
+                submission_id = str(uuid7())
+                task_logger = bind_run_context(
+                    instance=task.instance_id,
+                    model=task.agent_config.display_name,
+                    submission=submission_id,
+                )
+                progress.update(
+                    task_progress,
+                    description=(
+                        f"[cyan]Processing: {task.instance_id} "
+                        f"({task.agent_config.display_name})[/cyan]"
+                    ),
+                )
 
-            agent = create_agent(instance, task.agent_config)
-            task_logger.debug("Agent created for task")
+                agent = create_agent(instance, task.agent_config)
+                task_logger.debug("Agent created for task")
 
-            result = process_single_task(
-                task,
-                agent,
-                submission_id,
-            )
+                result = process_single_task(
+                    task,
+                    agent,
+                    submission_id,
+                )
 
-            result_wrapper = ExperimentResult(root=result)
-            result_path = save_experiment_result(result_wrapper, results_dir)
+                result_wrapper = ExperimentResult(root=result)
+                result_path = save_experiment_result(result_wrapper, results_dir)
 
-            task_logger.info(
-                "Persisted result to {results_path}",
-                results_path=str(result_path),
-            )
+                task_logger.info(
+                    "Persisted result to {results_path}",
+                    results_path=str(result_path),
+                )
 
-            progress.advance(task_progress)
+                progress.advance(task_progress)
 
     except KeyboardInterrupt:
         console.print(
