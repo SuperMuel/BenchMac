@@ -34,6 +34,7 @@ from experiments.models import (
     CompletedExperiment,
     ExperimentResult,
 )
+from experiments.storage import iter_experiment_results
 
 
 @st.cache_data(show_spinner=False)
@@ -77,15 +78,11 @@ def load_all_experiments(experiments_dir: Path) -> list[ExperimentResult]:
     if not results_dir.exists():
         return results
 
-    json_files = list(results_dir.rglob("*.json"))
-    for file_path in sorted(json_files):
-        try:
-            with file_path.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            result = ExperimentResult.model_validate(data)
-            results.append(result)
-        except (json.JSONDecodeError, ValidationError) as e:
-            st.warning(f"Skipping invalid experiment result in {file_path.name}: {e}")
+    def on_error(path: Path, error: Exception) -> None:
+        st.warning(f"Skipping invalid experiment result in {path.name}: {error}")
+
+    for result, _ in iter_experiment_results(results_dir, on_error=on_error):
+        results.append(result)
 
     return results
 

@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from collections.abc import Generator, Sequence
@@ -9,9 +8,6 @@ from typing import Annotated
 import cyclopts
 from cyclopts import Parameter
 from loguru import logger
-
-# Third party might raise ValidationError on pydantic validation
-from pydantic import ValidationError
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.progress import (
@@ -43,6 +39,7 @@ from experiments.models import (
     ExperimentResult,
     FailedExperiment,
 )
+from experiments.storage import iter_experiment_results
 
 app = cyclopts.App(
     help="BenchMAC: A benchmark for evaluating AI on Angular Codebase Migrations.",
@@ -58,23 +55,23 @@ def _load_experiment_results(
         logger.warning(f"Results directory not found: {results_dir}")
         return
 
-    json_files = list(results_dir.rglob("*.json"))
-    if not json_files:
+    found_any = False
+
+    def on_error(path: Path, error: Exception) -> None:
+        logger.warning(
+            f"⚠️ Warning: Skipping invalid experiment result in {path}: {error}"
+        )
+
+    for experiment_result, file_path in iter_experiment_results(
+        results_dir, on_error=on_error
+    ):
+        found_any = True
+        yield experiment_result, file_path
+
+    if not found_any:
         logger.warning(
             f"No experiment result files found in results directory: {results_dir}"
         )
-        return
-
-    for file_path in sorted(json_files):
-        try:
-            with file_path.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            experiment_result = ExperimentResult.model_validate(data)
-            yield (experiment_result, file_path)
-        except (json.JSONDecodeError, ValidationError, Exception) as e:
-            logger.warning(
-                f"⚠️ Warning: Skipping invalid experiment result in {file_path}: {e}"
-            )
 
 
 def _prepare_tasks(

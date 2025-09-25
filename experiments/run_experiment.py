@@ -1,7 +1,6 @@
 # ruff: noqa: E501
 # this is temporary a Typer app, but we'll fusion this with the main CLI later
 
-import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError
@@ -14,7 +13,6 @@ import typer
 import yaml
 from dotenv import load_dotenv
 from loguru import logger
-from pydantic import ValidationError
 from rich.console import Console
 from rich.progress import Progress
 from uuid6 import uuid7
@@ -40,6 +38,12 @@ from experiments.models import (
     ExperimentTask,
     FailedExperiment,
     MiniSweAgentConfig,
+)
+from experiments.storage import (
+    RESULTS_DIR_NAME,
+    create_results_run_dir,
+    load_all_experiment_results,
+    save_experiment_result,
 )
 
 load_dotenv()
@@ -105,24 +109,6 @@ def build_agent_configs(
     return configs
 
 
-def get_results_run_dir(experiments_dir: Path, now: datetime | None = None) -> Path:
-    if now is None:
-        now = datetime.now(UTC)
-    assert experiments_dir.is_dir() and experiments_dir.exists()
-    results_root = experiments_dir / "results"
-    results_root.mkdir(parents=True, exist_ok=True)
-
-    base_name = f"run_{now.strftime('%Y-%m-%d_%H-%M-%S')}"
-    run_dir = results_root / base_name
-    suffix = 1
-    # Avoid clashes when multiple runs start within the same second.
-    while run_dir.exists():
-        run_dir = results_root / f"{base_name}_{suffix}"
-        suffix += 1
-    run_dir.mkdir(parents=True, exist_ok=False)
-    return run_dir
-
-
 def _format_timedelta(td: timedelta) -> str:
     total_seconds = int(td.total_seconds())
     hours, remainder = divmod(total_seconds, 3600)
@@ -164,28 +150,12 @@ def collect_old_results(experiments_dir: Path) -> list[ExperimentResult]:
     Returns:
         List of all ExperimentResult objects found in results files
     """
-    results: list[ExperimentResult] = []
-    results_root = experiments_dir / "results"
+    results_root = experiments_dir / RESULTS_DIR_NAME
 
-    if not results_root.exists():
-        logger.warning(f"Results directory not found: {results_root}")
-        return results
+    def on_error(path: Path, error: Exception) -> None:
+        console.print(f"[yellow]Warning: Could not parse {path}: {error}[/yellow]")
 
-    result_files = list(results_root.rglob("*.json"))
-
-    for result_file in result_files:
-        try:
-            with result_file.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-            result = ExperimentResult.model_validate(data)
-            results.append(result)
-        except (json.JSONDecodeError, ValidationError) as e:
-            console.print(
-                f"[yellow]Warning: Could not parse {result_file}: {e}[/yellow]"
-            )
-            continue
-
-    return results
+    return load_all_experiment_results(results_root, on_error=on_error)
 
 
 def filter_completed_tasks(
@@ -440,7 +410,7 @@ def main(
         instances = all_instances
 
     if results_dir is None:
-        results_dir = get_results_run_dir(settings.experiments_dir)
+        results_dir = create_results_run_dir(settings.experiments_dir)
     else:
         if results_dir.exists() and not results_dir.is_dir():
             msg = f"Provided results path is not a directory: {results_dir}"
@@ -499,12 +469,7 @@ def main(
             )
 
             result_wrapper = ExperimentResult(root=result)
-            result_id = result_wrapper.root.id
-            result_path = results_dir / f"{result_id}.json"
-            result_path.write_text(
-                result_wrapper.model_dump_json(indent=2),
-                encoding="utf-8",
-            )
+            result_path = save_experiment_result(result_wrapper, results_dir)
 
             task_logger.info(
                 "Persisted result to {results_path}",
