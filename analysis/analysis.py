@@ -37,6 +37,7 @@ from langchain.chat_models.base import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from tqdm import tqdm
 from uuid6 import UUID, uuid7
 
 from bench_mac.core.config import settings
@@ -47,6 +48,7 @@ from bench_mac.core.models import (
     EvaluationResultAdapter,
     ExecutionTrace,
     MetricsReport,
+    SubmissionID,
 )
 from bench_mac.core.utils import load_instances
 from bench_mac.core.utils_jsonl import iter_lines_from_jsonl_files
@@ -153,6 +155,77 @@ def _iter_completed_experiments(
     for er in results:
         if er.is_completed:
             yield er.root  # type: ignore[return-value]
+
+
+def match_experiments_and_evaluations(
+    completed_experiments: Sequence[CompletedExperiment],
+    completed_evaluations: Sequence[EvaluationCompleted],
+) -> list[tuple[CompletedExperiment, EvaluationCompleted]]:
+    """Match experiments and evaluations by submission_id."""
+    all_submission_ids: set[SubmissionID] = {
+        exp.submission.submission_id for exp in completed_experiments
+    } | {ev.result.submission_id for ev in completed_evaluations}
+
+    sub_to_evals: dict[SubmissionID, list[EvaluationCompleted]] = {
+        sub_id: [
+            ev for ev in completed_evaluations if ev.result.submission_id == sub_id
+        ]
+        for sub_id in all_submission_ids
+    }
+
+    submissions_without_evals: set[SubmissionID] = {
+        sub_id for sub_id in all_submission_ids if not sub_to_evals[sub_id]
+    }
+
+    if submissions_without_evals:
+        print(
+            f"Warning: {len(submissions_without_evals)} submissions have no evaluations"
+        )
+
+    # Build lookup of the latest CompletedExperiment per submission_id,
+    # while preserving the first-seen order of submission_ids from the input
+    # experiments sequence for deterministic output ordering.
+    exp_by_sub: dict[SubmissionID, CompletedExperiment] = {}
+    order: list[SubmissionID] = []
+    for exp in completed_experiments:
+        sub_id = exp.submission.submission_id
+        if sub_id not in exp_by_sub:
+            order.append(sub_id)
+            exp_by_sub[sub_id] = exp
+        else:
+            if exp.ended_at > exp_by_sub[sub_id].ended_at:
+                exp_by_sub[sub_id] = exp
+
+    # For each submission_id, keep only the latest EvaluationCompleted
+    latest_eval_by_sub: dict[SubmissionID, EvaluationCompleted] = {}
+    for sub_id, evals in sub_to_evals.items():
+        if not evals:
+            continue
+        latest_eval_by_sub[sub_id] = max(evals, key=lambda e: e.ended_at)
+
+    # Warn about evaluations that have no matching experiment
+    exp_sub_ids = set(exp_by_sub.keys())
+    eval_only_submissions = set(latest_eval_by_sub.keys()) - exp_sub_ids
+    if eval_only_submissions:
+        count = len(eval_only_submissions)
+        print(f"Warning: {count} evaluations have no matching experiment")
+
+    # Build (experiment, evaluation) pairs in experiment input order, skipping
+    # submissions with no evaluation.
+    pairs: list[tuple[CompletedExperiment, EvaluationCompleted]] = []
+    for sub_id in order:
+        ev = latest_eval_by_sub.get(sub_id)
+        if ev is None:
+            continue
+        exp = exp_by_sub[sub_id]
+        pairs.append((exp, ev))
+
+    assert all(
+        pair[0].submission.submission_id == pair[1].result.submission_id
+        for pair in pairs
+    )
+
+    return pairs
 
 
 def select_latest_pair(
@@ -279,7 +352,7 @@ def format_agent_messages(
     """
     assert messages, "Empty messages list given to format_agent_messages"
     assert all(m.get("role") for m in messages), "Some messages are missing role"
-    assert all(m.get("content") for m in messages), "Some messages are missing content"
+    assert all("content" in m for m in messages), "Some messages are missing content"
 
     rendered: list[str] = []
     for msg in messages:
@@ -506,47 +579,93 @@ if __name__ == "__main__":
 
     print("Loading experiments and evaluations...")
     experiments = load_experiments()
-    completed, _ = load_evaluations()
-    print("Selecting latest experiment/evaluation pair...")
-    pair = select_latest_pair(experiments, completed)
+    completed_evaluations = load_evaluations()[0]
+    completed_experiments = [
+        er.root for er in experiments if er.root.status == "completed"
+    ]
 
-    print("Creating analysis task...")
-    task = AnalysisTask(
-        experiment=pair.experiment,
-        evaluation=pair.evaluation,
-        model_name=ANALYSIS_MODEL_NAME,
-    )
-    print(f"Created task with trace_id: {task.trace_id}")
-
-    tasks_dir = Path("analysis") / "tasks"
-    tasks_dir.mkdir(parents=True, exist_ok=True)
-    task_path = tasks_dir / f"{task.trace_id}.json"
-    task_path.write_text(task.model_dump_json(indent=2))
-
-    print(
-        f"Running analysis for experiment {task.experiment.id}, "
-        f"evaluation {task.evaluation.id}..."
+    pairs = match_experiments_and_evaluations(
+        completed_experiments, completed_evaluations
     )
 
-    def _on_prompt(prompt: str, task: AnalysisTask) -> None:
-        prompt_dir = Path("analysis") / "prompts"
-        prompt_dir.mkdir(parents=True, exist_ok=True)
-        prompt_path = (
-            prompt_dir
-            / f"trace_{task.trace_id}_eval_{task.evaluation.id}_exp_{task.experiment.id}.md"  # noqa: E501
+    tasks = [
+        AnalysisTask(
+            experiment=experiment,
+            evaluation=evaluation,
+            model_name=ANALYSIS_MODEL_NAME,
         )
-        prompt_path.write_text(prompt)
+        for experiment, evaluation in pairs
+    ]
+    print(f"Created {len(tasks)} tasks")
 
-    result = run_analysis_task(task, llm=llm, on_prompt=_on_prompt)
+    # Read the results directory and parse filenames to extract eval_id and exp_id
+    results_dir = Path("analysis") / "results"
+    result_files = list(results_dir.glob("trace_*_eval_*_exp_*.md"))
+    parsed_ids: list[tuple[str, str]] = []
+    for file in result_files:
+        # Example filename: trace_<trace_id>_eval_<eval_id>_exp_<exp_id>.md
+        parts = file.stem.split("_")
+        try:
+            eval_idx = parts.index("eval")
+            exp_idx = parts.index("exp")
+            eval_id = parts[eval_idx + 1]
+            exp_id = parts[exp_idx + 1]
+            parsed_ids.append((eval_id, exp_id))
+        except (ValueError, IndexError):
+            continue
 
-    result_dir = Path("analysis") / "results"
-    result_dir.mkdir(parents=True, exist_ok=True)
-    base_name = (
-        f"trace_{task.trace_id}_eval_{task.evaluation.id}_exp_{task.experiment.id}"
+    # Filter out tasks for which we already have a result
+    completed_pairs = set(parsed_ids)
+    filtered_tasks = [
+        task
+        for task in tasks
+        if (str(task.evaluation.id), str(task.experiment.id)) not in completed_pairs
+    ]
+    tasks = filtered_tasks
+    print(
+        f"Skipped {len(tasks) - len(filtered_tasks)} tasks that already have a result"
     )
-    result_md_path = result_dir / f"{base_name}.md"
-    result_md_path.write_text(result.text())
-    result_json_path = result_dir / f"{base_name}.json"
-    result_json_path.write_text(result.model_dump_json(indent=2))
+    print(f"Filtered to {len(tasks)} tasks")
 
-    print(result)
+    for task in tqdm(tasks, desc="Analyzing tasks"):
+        experiment, evaluation = pairs[0]
+
+        print(f"Created task with trace_id: {task.trace_id}")
+
+        tasks_dir = Path("analysis") / "tasks"
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        task_path = tasks_dir / f"{task.trace_id}.json"
+        task_path.write_text(task.model_dump_json(indent=2))
+
+        print(
+            f"Running analysis for experiment {task.experiment.id}, "
+            f"evaluation {task.evaluation.id}..."
+        )
+
+        def _on_prompt(prompt: str, task: AnalysisTask) -> None:
+            prompt_dir = Path("analysis") / "prompts"
+            prompt_dir.mkdir(parents=True, exist_ok=True)
+            prompt_path = (
+                prompt_dir
+                / f"trace_{task.trace_id}_eval_{task.evaluation.id}_exp_{task.experiment.id}.md"  # noqa: E501
+            )
+            prompt_path.write_text(prompt)
+
+        result = run_analysis_task(
+            task,
+            llm=llm,
+            # llm=FakeChatModel(),
+            on_prompt=_on_prompt,
+        )
+
+        result_dir = Path("analysis") / "results"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        base_name = (
+            f"trace_{task.trace_id}_eval_{task.evaluation.id}_exp_{task.experiment.id}"
+        )
+        result_md_path = result_dir / f"{base_name}.md"
+        result_md_path.write_text(result.text())
+        result_json_path = result_dir / f"{base_name}.json"
+        result_json_path.write_text(result.model_dump_json(indent=2))
+
+        print(result)

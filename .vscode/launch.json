@@ -1,0 +1,39 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Analysis Script",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "analysis.analysis",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {},
+            "args": [],
+            "justMyCode": false,
+            "python": "${command:python.interpreterPath}",
+            "presentation": {
+                "hidden": false,
+                "group": "",
+                "order": 1
+            }
+        },
+        {
+            "name": "Run Analysis with uv",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/analysis.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {},
+            "args": [],
+            "justMyCode": false,
+            "python": "${command:python.interpreterPath}",
+            "presentation": {
+                "hidden": false,
+                "group": "",
+                "order": 2
+            }
+        }
+    ]
+}

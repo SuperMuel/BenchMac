@@ -68,6 +68,7 @@ Below is the full agent trace, including system prompt, agent thoughts, actions,
 
 <generated_patch>
 This is the final `unified diff` file produced by the agent at the end of the generation stage. This is the ground truth of what the agent proposed.
+The patch is automatically collected by running `git diff --no-prefix baseline` in the docker container after the agent has finished its work.
 IMPORTANT: To save space, this patch may be truncated, and auto-generated files like lockfiles (`package-lock.json`) may have their diffs removed entirely.
 
 ```diff
@@ -123,9 +124,8 @@ The logic is as follows:
 Privately check your output against this 5-point rubric before finalizing:
 - R1: Every non-obvious claim has a quote.
 - R2: Agent vs Harness attribution is explicit.
-- R3: There is at least one concrete, minimal recommendation when a failure appears.
-- R4: Angular-specific issues are explained briefly and accessibly.
-- R5: No speculation beyond artifacts
+- R3: Angular-specific issues are explained briefly and accessibly.
+- R4: No speculation beyond artifacts
 (Do not include this rubric in the final report.)
 </self_reflection>
 

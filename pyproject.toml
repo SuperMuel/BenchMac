@@ -34,7 +34,7 @@ packages = ["src/bench_mac", "experiments", "explorer"]
 include = ["src/bench_mac", "experiments", "explorer", "README.md", "LICENSE"]
 
 [dependency-groups]
-analysis = ["langchain>=0.3.27", "langchain-openai>=0.3.33"]
+analysis = ["langchain>=0.3.27", "langchain-openai>=0.3.33", "tqdm>=4.67.1"]
 dev = [
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
