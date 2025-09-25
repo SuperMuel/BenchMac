@@ -23,7 +23,7 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
-st.caption("Browse agent runs loaded from results under experiments/results/*.jsonl.")
+st.caption("Browse agent runs loaded from results under experiments/results/*.json.")
 
 
 def filter_patch_excluding_package_lock(

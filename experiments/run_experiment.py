@@ -105,14 +105,22 @@ def build_agent_configs(
     return configs
 
 
-def get_results_file_path(experiments_dir: Path, now: datetime | None = None) -> Path:
+def get_results_run_dir(experiments_dir: Path, now: datetime | None = None) -> Path:
     if now is None:
         now = datetime.now(UTC)
     assert experiments_dir.is_dir() and experiments_dir.exists()
-    results_dir = experiments_dir / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    results_root = experiments_dir / "results"
+    results_root.mkdir(parents=True, exist_ok=True)
 
-    return results_dir / f"results_{now.strftime('%Y-%m-%d_%H-%M-%S')}.jsonl"
+    base_name = f"run_{now.strftime('%Y-%m-%d_%H-%M-%S')}"
+    run_dir = results_root / base_name
+    suffix = 1
+    # Avoid clashes when multiple runs start within the same second.
+    while run_dir.exists():
+        run_dir = results_root / f"{base_name}_{suffix}"
+        suffix += 1
+    run_dir.mkdir(parents=True, exist_ok=False)
+    return run_dir
 
 
 def _format_timedelta(td: timedelta) -> str:
@@ -157,22 +165,20 @@ def collect_old_results(experiments_dir: Path) -> list[ExperimentResult]:
         List of all ExperimentResult objects found in results files
     """
     results: list[ExperimentResult] = []
-    results_dir = experiments_dir / "results"
+    results_root = experiments_dir / "results"
 
-    if not results_dir.exists():
+    if not results_root.exists():
+        logger.warning(f"Results directory not found: {results_root}")
         return results
 
-    result_files = list(results_dir.glob("*.jsonl"))
+    result_files = list(results_root.rglob("*.json"))
 
     for result_file in result_files:
         try:
-            with result_file.open("r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        data = json.loads(line)
-                        result = ExperimentResult.model_validate(data)
-                        results.append(result)
+            with result_file.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            result = ExperimentResult.model_validate(data)
+            results.append(result)
         except (json.JSONDecodeError, ValidationError) as e:
             console.print(
                 f"[yellow]Warning: Could not parse {result_file}: {e}[/yellow]"
@@ -351,11 +357,11 @@ def main(
     instances_file: Path = typer.Option(  # noqa: B008
         settings.instances_file, help="Path to the benchmark instances file."
     ),
-    results_file: Path | None = typer.Option(  # noqa: B008
+    results_dir: Path | None = typer.Option(  # noqa: B008
         None,
-        "--results-file",
+        "--results-dir",
         "-r",
-        help="Path to the results JSONL file.",
+        help=f"Directory where experiment JSON files will be written. Default: {settings.experiments_dir}/results/run_<timestamp>",
     ),
     instance_ids: list[str] | None = typer.Option(  # noqa: B008
         None,
@@ -433,12 +439,18 @@ def main(
     else:
         instances = all_instances
 
-    if results_file is None:
-        results_file = get_results_file_path(settings.experiments_dir)
+    if results_dir is None:
+        results_dir = get_results_run_dir(settings.experiments_dir)
+    else:
+        if results_dir.exists() and not results_dir.is_dir():
+            msg = f"Provided results path is not a directory: {results_dir}"
+            raise typer.BadParameter(msg)
+        results_dir.mkdir(parents=True, exist_ok=True)
 
-    log_path = setup_experiment_logging(results_file.stem)
+    log_path = setup_experiment_logging(results_dir.name)
     console.print(f"🗒 Logging to [cyan]{log_path}[/cyan]")
     logger.info("Initialized experiment logging -> {log_path}", log_path=str(log_path))
+    console.print(f"📁 Writing results to [cyan]{results_dir}[/cyan]")
 
     # Collect old results to avoid re-running completed tasks
     old_results = collect_old_results(settings.experiments_dir)
@@ -487,12 +499,16 @@ def main(
             )
 
             result_wrapper = ExperimentResult(root=result)
-            with results_file.open("a") as f:
-                f.write(result_wrapper.model_dump_json() + "\n")
+            result_id = result_wrapper.root.id
+            result_path = results_dir / f"{result_id}.json"
+            result_path.write_text(
+                result_wrapper.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
 
             task_logger.info(
-                "Persisted result to {results_file}",
-                results_file=str(results_file),
+                "Persisted result to {results_path}",
+                results_path=str(result_path),
             )
 
             progress.advance(task_progress)
@@ -501,11 +517,11 @@ def main(
         console.print(
             "\n[bold yellow]Experiment interrupted by user (KeyboardInterrupt).[/bold yellow]"
         )
-        console.print(f"Partial results saved to [cyan]{results_file}[/cyan]")
+        console.print(f"Partial results saved in [cyan]{results_dir}[/cyan]")
         return
 
     console.print("\n[bold green]✅ Experiment finished![/bold green]")
-    console.print(f"Results saved to [cyan]{results_file}[/cyan]")
+    console.print(f"Results saved in [cyan]{results_dir}[/cyan]")
 
 
 if __name__ == "__main__":

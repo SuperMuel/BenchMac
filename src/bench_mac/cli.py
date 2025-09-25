@@ -9,6 +9,9 @@ from typing import Annotated
 import cyclopts
 from cyclopts import Parameter
 from loguru import logger
+
+# Third party might raise ValidationError on pydantic validation
+from pydantic import ValidationError
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.progress import (
@@ -31,7 +34,6 @@ from bench_mac.core.models import (
     utc_now,
 )
 from bench_mac.core.utils import collect_network_error_details, load_instances
-from bench_mac.core.utils_jsonl import iter_lines_from_jsonl_files
 from bench_mac.core.version import harness_version
 from bench_mac.docker.builder import get_instance_image_tag, prepare_environment
 from bench_mac.docker.manager import DockerManager
@@ -50,30 +52,28 @@ app = cyclopts.App(
 
 def _load_experiment_results(
     results_dir: Path,
-) -> Generator[tuple[ExperimentResult, Path, int], None, None]:
-    """Load experiment results from JSONL files in the results directory.
-
-    Yields tuples of (experiment_result, file_path, line_num) for each valid
-    experiment result.
-    """
+) -> Generator[tuple[ExperimentResult, Path], None, None]:
+    """Load experiment results from per-run JSON files in the results directory."""
     if not results_dir.exists():
         logger.warning(f"Results directory not found: {results_dir}")
         return
 
-    jsonl_files = list(results_dir.rglob("*.jsonl"))
-    if not jsonl_files:
-        logger.warning(f"No JSONL files found in results directory: {results_dir}")
+    json_files = list(results_dir.rglob("*.json"))
+    if not json_files:
+        logger.warning(
+            f"No experiment result files found in results directory: {results_dir}"
+        )
         return
 
-    for file_path, line_num, line in iter_lines_from_jsonl_files(jsonl_files):
+    for file_path in sorted(json_files):
         try:
-            data = json.loads(line)
+            with file_path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
             experiment_result = ExperimentResult.model_validate(data)
-            yield (experiment_result, file_path, line_num)
-        except (json.JSONDecodeError, Exception) as e:
+            yield (experiment_result, file_path)
+        except (json.JSONDecodeError, ValidationError, Exception) as e:
             logger.warning(
-                f"⚠️ Warning: Skipping invalid experiment result in "
-                f"{file_path.name} line {line_num}: {e}"
+                f"⚠️ Warning: Skipping invalid experiment result in {file_path}: {e}"
             )
 
 
@@ -105,15 +105,15 @@ def _prepare_tasks(
         )
 
     logger.debug("Loading and matching experiment results...")
-    for experiment_result, file_path, line_num in _load_experiment_results(
+    for experiment_result, file_path in _load_experiment_results(
         experiments_results_dir
     ):
         if experiment_result.is_failed:
             failed_experiment = experiment_result.root
             assert isinstance(failed_experiment, FailedExperiment)
             logger.warning(
-                f"⚠️ Warning: Skipping failed experiment in {file_path.name} "
-                f"line {line_num}: {failed_experiment.error}"
+                f"⚠️ Warning: Skipping failed experiment in {file_path.name}: "
+                f"{failed_experiment.error}"
             )
             continue
 
@@ -126,8 +126,7 @@ def _prepare_tasks(
         if submission.submission_id in completed_submission_ids:
             logger.debug(
                 f"⏭️ Skipping already evaluated submission {submission.submission_id} "
-                f"for instance {submission.instance_id} "
-                f"(from {file_path.name} line {line_num})"
+                f"for instance {submission.instance_id} (from {file_path.name})"
             )
             continue
 
@@ -142,8 +141,7 @@ def _prepare_tasks(
         else:
             logger.warning(
                 f"⚠️ Warning: Submission for '{submission.instance_id}' found in "
-                f"{file_path.name} line {line_num}, but no matching "
-                "instance exists. Skipping."
+                f"{file_path.name}, but no matching instance exists. Skipping."
             )
 
 
@@ -736,9 +734,9 @@ def eval(
     """
     Run the BenchMAC evaluation on a set of experiment results.
 
-    This command reads ExperimentResult objects from JSONL files in the results
-    directory, filters out failed experiments (showing warnings), and evaluates
-    the completed ones.
+    This command reads ExperimentResult objects from JSON result files in the
+    results directory, filters out failed experiments (showing warnings), and
+    evaluates the completed ones.
     """
     run_id = utc_now().strftime("%Y-%m-%d_%H%M%S")
 

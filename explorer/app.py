@@ -68,7 +68,7 @@ def load_all_evaluations(
 
 @st.cache_data(show_spinner=False)
 def load_all_experiments(experiments_dir: Path) -> list[ExperimentResult]:
-    """Load all experiment results (agent runs) from experiments_dir/results/*.jsonl."""
+    """Load all experiment results (agent runs) from experiments_dir/results/*.json."""
     if not experiments_dir.exists():
         return []
 
@@ -77,18 +77,15 @@ def load_all_experiments(experiments_dir: Path) -> list[ExperimentResult]:
     if not results_dir.exists():
         return results
 
-    for file_path, line_num, line in iter_lines_from_jsonl_files(
-        results_dir.glob("*.jsonl")
-    ):
+    json_files = list(results_dir.rglob("*.json"))
+    for file_path in sorted(json_files):
         try:
-            data = json.loads(line)
+            with file_path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
             result = ExperimentResult.model_validate(data)
             results.append(result)
         except (json.JSONDecodeError, ValidationError) as e:
-            st.warning(
-                f"Skipping invalid experiment result in {file_path.name} "
-                f"line {line_num}: {e}"
-            )
+            st.warning(f"Skipping invalid experiment result in {file_path.name}: {e}")
 
     return results
 

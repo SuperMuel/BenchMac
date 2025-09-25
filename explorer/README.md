@@ -32,7 +32,7 @@ streamlit run app.py
 
 3. The app automatically aggregates all results from the configured directories:
    - `settings.evaluations_dir`: scans recursively for `*.jsonl` outcome files
-   - `settings.experiments_dir/submissions/*.jsonl`: loads submissions metadata
+   - `settings.experiments_dir/results/**/*.json`: loads experiment run metadata
 
 4. Explore your evaluation results through the interactive interface.
 
