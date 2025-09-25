@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from threading import Semaphore
 from typing import Any, Literal
 
 import litellm
@@ -325,6 +326,7 @@ def execute_task(
     submission_id: str,
     results_dir: Path,
     dt_factory: Callable[[], datetime] | None = None,
+    provider_lock: Semaphore | None = None,
 ) -> tuple[ExperimentResult, Path, list[TaskEvent]]:
     """Run a single task end-to-end and persist the result JSON."""
     assert task.instance_id == instance.instance_id
@@ -335,15 +337,25 @@ def execute_task(
         submission=submission_id,
     )
 
-    agent = create_agent(instance, task.agent_config)
-    task_logger.debug("Agent created for task")
-
-    result, events = process_single_task(
-        task,
-        agent,
-        submission_id,
-        dt_factory=dt_factory,
-    )
+    if provider_lock is None:
+        agent = create_agent(instance, task.agent_config)
+        task_logger.debug("Agent created for task")
+        result, events = process_single_task(
+            task,
+            agent,
+            submission_id,
+            dt_factory=dt_factory,
+        )
+    else:
+        with provider_lock:
+            agent = create_agent(instance, task.agent_config)
+            task_logger.debug("Agent created for task")
+            result, events = process_single_task(
+                task,
+                agent,
+                submission_id,
+                dt_factory=dt_factory,
+            )
 
     result_wrapper = ExperimentResult(root=result)
     result_path = save_experiment_result(result_wrapper, results_dir)
@@ -390,6 +402,18 @@ def render_task_event(event: TaskEvent) -> None:
     console.print(event.message)
 
 
+def resolve_provider_key(task: ExperimentTask) -> str:
+    agent_config = task.agent_config
+    match agent_config:
+        case MiniSweAgentConfig():
+            model_name = agent_config.model_name
+            return model_name.split("/", 1)[0]
+        case AngularSchematicsConfig():
+            return "angular-schematics"
+        case _:
+            return "unknown"
+
+
 def dispatch_tasks(
     *,
     tasks: list[ExperimentTask],
@@ -407,11 +431,18 @@ def dispatch_tasks(
         Future[tuple[ExperimentResult, Path, list[TaskEvent]]],
         tuple[ExperimentTask, str],
     ] = {}
+    provider_locks: dict[str, Semaphore] = {}
     cancelled = False
     try:
         for task in tasks:
             instance = instances[task.instance_id]
             submission_id = str(uuid7())
+
+            provider_key = resolve_provider_key(task)
+            provider_lock = provider_locks.get(provider_key)
+            if provider_lock is None:
+                provider_lock = Semaphore(1)
+                provider_locks[provider_key] = provider_lock
 
             future = executor.submit(
                 execute_task,
@@ -419,6 +450,7 @@ def dispatch_tasks(
                 instance=instance,
                 submission_id=submission_id,
                 results_dir=results_dir,
+                provider_lock=provider_lock,
             )
             futures[future] = (task, submission_id)
 
