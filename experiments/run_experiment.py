@@ -2,6 +2,7 @@
 # this is temporary a Typer app, but we'll fusion this with the main CLI later
 
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError
@@ -15,7 +16,7 @@ import yaml
 from dotenv import load_dotenv
 from loguru import logger
 from rich.console import Console
-from rich.progress import Progress
+from rich.progress import Progress, TaskID
 from uuid6 import uuid7
 
 from bench_mac.core.config import settings
@@ -235,7 +236,7 @@ def process_single_task(
         started_at: When the task processing started
 
     Returns:
-        Either a CompletedExperiment or FailedExperiment result
+        Tuple containing the experiment outcome and emitted task events
     """
     dt_factory = dt_factory or (lambda: datetime.now(UTC))
     started_at = dt_factory()
@@ -389,6 +390,82 @@ def render_task_event(event: TaskEvent) -> None:
     console.print(event.message)
 
 
+def dispatch_tasks(
+    *,
+    tasks: list[ExperimentTask],
+    instances: dict[str, BenchmarkInstance],
+    results_dir: Path,
+    progress: Progress,
+    progress_task_id: int,
+    max_workers: int,
+) -> None:
+    total_tasks = len(tasks)
+    completed = 0
+    max_workers = max(1, max_workers)
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    futures: dict[
+        Future[tuple[ExperimentResult, Path, list[TaskEvent]]],
+        tuple[ExperimentTask, str],
+    ] = {}
+    cancelled = False
+    try:
+        for task in tasks:
+            instance = instances[task.instance_id]
+            submission_id = str(uuid7())
+
+            future = executor.submit(
+                execute_task,
+                task=task,
+                instance=instance,
+                submission_id=submission_id,
+                results_dir=results_dir,
+            )
+            futures[future] = (task, submission_id)
+
+        for future in as_completed(futures):
+            task, submission_id = futures[future]
+            try:
+                _, _, events = future.result()
+            except Exception as exc:  # pragma: no cover - defensive guard
+                logger.opt(exception=True).error(
+                    "Task execution crashed: instance={instance} model={model}",
+                    instance=task.instance_id,
+                    model=task.agent_config.display_name,
+                )
+                render_task_event(
+                    TaskEvent(
+                        status="failed",
+                        message="Task crashed",
+                        instance_id=task.instance_id,
+                        agent_display_name=task.agent_config.display_name,
+                        submission_id=submission_id,
+                        details={"error": str(exc)},
+                    )
+                )
+            else:
+                for event in events:
+                    render_task_event(event)
+            finally:
+                completed += 1
+                remaining = total_tasks - completed
+                progress.advance(TaskID(progress_task_id))
+                progress.update(
+                    TaskID(progress_task_id),
+                    description=(
+                        f"[cyan]Processing Tasks ({remaining} remaining)[/cyan]"
+                    ),
+                )
+    except KeyboardInterrupt:
+        cancelled = True
+        for future in futures:
+            future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise
+    finally:
+        if not cancelled:
+            executor.shutdown(wait=True)
+
+
 def create_agent(instance: BenchmarkInstance, agent_config: AgentConfig) -> BaseAgent:
     docker_manager = DockerManager()
 
@@ -443,6 +520,11 @@ def main(
         1.0,
         "--cost-limit-usd",
         help="Maximum cost in USD for the swe-agent-mini scaffold.",
+    ),
+    max_workers: int = typer.Option(
+        1,
+        "--max-workers",
+        help="Maximum number of experiment tasks processed concurrently.",
     ),
 ) -> None:
     """
@@ -500,6 +582,9 @@ def main(
     else:
         instances = all_instances
 
+    if max_workers < 1:
+        raise typer.BadParameter("--max-workers must be greater than 0")
+
     if results_dir is None:
         results_dir = create_results_run_dir(settings.experiments_dir)
     else:
@@ -534,28 +619,14 @@ def main(
                 "[cyan]Processing Tasks...", total=len(tasks)
             )
 
-            for task in tasks:
-                instance = instances[task.instance_id]
-                submission_id = str(uuid7())
-                progress.update(
-                    task_progress,
-                    description=(
-                        f"[cyan]Processing: {task.instance_id} "
-                        f"({task.agent_config.display_name})[/cyan]"
-                    ),
-                )
-
-                _result_wrapper, _result_path, events = execute_task(
-                    task=task,
-                    instance=instance,
-                    submission_id=submission_id,
-                    results_dir=results_dir,
-                )
-
-                for event in events:
-                    render_task_event(event)
-
-                progress.advance(task_progress)
+            dispatch_tasks(
+                tasks=tasks,
+                instances=instances,
+                results_dir=results_dir,
+                progress=progress,
+                progress_task_id=task_progress,
+                max_workers=max_workers,
+            )
 
     except KeyboardInterrupt:
         console.print(
