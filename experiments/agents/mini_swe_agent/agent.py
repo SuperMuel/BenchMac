@@ -1,5 +1,6 @@
 from pathlib import Path
 from textwrap import dedent
+from typing import Any
 
 from jinja2 import Environment, StrictUndefined
 from loguru import logger
@@ -48,15 +49,17 @@ class MiniSweAgent(BaseAgent):
         self.agent_config = agent_config
 
         # Use tracing subclass to collect raw LiteLLM responses for analysis
-        self.model = TracingModel(model_name=agent_config.model_name)
-        self.env = MiniSweAgentEnvironmentAdapter(instance, docker_manager)
+        model_kwargs: dict[str, Any] = {}
+        if agent_config.temperature is not None:
+            model_kwargs["temperature"] = agent_config.temperature
+        if agent_config.top_p is not None:
+            model_kwargs["top_p"] = agent_config.top_p
 
-        test_env = self.env.execute("ls -la")
-        assert "package.json" in str(test_env.get("output", "")), (
-            "package.json not found in the environment. "
-            "The repository is not cloned correctly, or the current directory "
-            "is not the project directory."
+        self.model = TracingModel(
+            model_name=agent_config.model_name,
+            model_kwargs=model_kwargs,
         )
+        self.env = MiniSweAgentEnvironmentAdapter(instance, docker_manager)
 
         self.task_prompt = _render_task_prompt(
             agent_config.task_template, instance=self.instance

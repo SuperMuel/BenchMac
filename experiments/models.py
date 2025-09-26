@@ -19,6 +19,18 @@ class MiniSweAgentConfig(BaseModel):
         description="The name of the model to use for patch generation "
         "(e.g., 'mistral/devstral-medium-2507').",
     )
+    temperature: float | None = Field(
+        default=0.0,
+        ge=0.0,
+        le=2.0,
+        description="The temperature to use for the model.",
+    )
+    top_p: float | None = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="The top-p to use for the model.",
+    )
     swe_agent_mini_version: str = Field(
         min_length=1,
         description="Resolved minisweagent package version used to run the agent.",
@@ -38,11 +50,13 @@ class MiniSweAgentConfig(BaseModel):
 
     step_limit: int | None = Field(
         default=100,
+        gt=0,
         description="The maximum number of steps the agent can take.",
     )
 
     cost_limit_usd: float | None = Field(
         default=1.0,
+        gt=0.0,
         description="The maximum cost the agent can spend in USD.",
     )
 
@@ -60,6 +74,10 @@ class MiniSweAgentConfig(BaseModel):
         ).hexdigest()[:8]
 
         key = f"{self.scaffold}/{self.model_name}"
+        if self.temperature is not None:
+            key += f"@T{self.temperature}"
+        if self.top_p is not None:
+            key += f"@P{self.top_p}"
         if self.swe_agent_mini_version:
             key += f"@minisweagent-{self.swe_agent_mini_version}"
         if self.step_limit:

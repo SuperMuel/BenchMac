@@ -52,6 +52,8 @@ from experiments.storage import (
 load_dotenv()
 
 
+litellm._turn_on_debug()  # pyright: ignore[reportPrivateUsage, reportPrivateImportUsage]
+
 litellm.register_model(  # pyright: ignore[reportPrivateImportUsage]
     {
         "mistral/magistral-medium-2509": {
@@ -175,6 +177,8 @@ def build_agent_configs(
     agent_settings: dict[str, Any],
     step_limit: int | None = None,
     cost_limit_usd: float | None = None,
+    temperature: float | None = None,
+    top_p: float | None = None,
 ) -> list[AgentConfig]:
     configs: list[AgentConfig] = []
     mini_swe_agent_version: str | None = None
@@ -202,6 +206,8 @@ def build_agent_configs(
                         agent_settings=agent_settings,
                         step_limit=step_limit,
                         cost_limit_usd=cost_limit_usd,
+                        temperature=temperature,
+                        top_p=top_p,
                     )
                 )
         elif scaffold_key == "angular-schematics":
@@ -661,6 +667,20 @@ def main(
         "--cost-limit-usd",
         help="Maximum cost in USD for the swe-agent-mini scaffold.",
     ),
+    temperature: float | None = typer.Option(
+        0.0,
+        "--temperature",
+        help="Sampling temperature for swe-agent-mini LLM calls.",
+        min=0.0,
+        max=2.0,
+    ),
+    top_p: float | None = typer.Option(
+        1.0,
+        "--top-p",
+        help="Nucleus sampling top-p for swe-agent-mini LLM calls.",
+        min=0.0,
+        max=1.0,
+    ),
     max_workers: int = typer.Option(
         1,
         "--max-workers",
@@ -695,6 +715,8 @@ def main(
         agent_settings=agent_settings,
         step_limit=step_limit,
         cost_limit_usd=cost_limit_usd,
+        temperature=temperature,
+        top_p=top_p,
     )
 
     if not agent_configs:
