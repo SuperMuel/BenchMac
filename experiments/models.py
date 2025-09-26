@@ -48,18 +48,6 @@ class MiniSweAgentConfig(BaseModel):
         ],
     )
 
-    step_limit: int | None = Field(
-        default=100,
-        gt=0,
-        description="The maximum number of steps the agent can take.",
-    )
-
-    cost_limit_usd: float | None = Field(
-        default=1.0,
-        gt=0.0,
-        description="The maximum cost the agent can spend in USD.",
-    )
-
     @property
     def key(self) -> str:
         # Hash task_template and agent_settings for uniqueness
@@ -80,10 +68,6 @@ class MiniSweAgentConfig(BaseModel):
             key += f"@P{self.top_p}"
         if self.swe_agent_mini_version:
             key += f"@minisweagent-{self.swe_agent_mini_version}"
-        if self.step_limit:
-            key += f"@step-limit-{self.step_limit}"
-        if self.cost_limit_usd:
-            key += f"@cost-limit-usd-{self.cost_limit_usd}"
         key += f"@tasktpl-{task_template_hash}"
         key += f"@agentsettings-{agent_settings_hash}"
 

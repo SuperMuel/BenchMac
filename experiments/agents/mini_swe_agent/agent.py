@@ -44,9 +44,14 @@ class MiniSweAgent(BaseAgent):
         instance: BenchmarkInstance,
         agent_config: MiniSweAgentConfig,
         docker_manager: DockerManager,
+        *,
+        step_limit: int | None = None,
+        cost_limit_usd: float | None = None,
     ) -> None:
         self.instance = instance
         self.agent_config = agent_config
+        self.step_limit = step_limit
+        self.cost_limit_usd = cost_limit_usd
 
         # Use tracing subclass to collect raw LiteLLM responses for analysis
         model_kwargs: dict[str, Any] = {}
@@ -66,10 +71,10 @@ class MiniSweAgent(BaseAgent):
         )
 
         agent_kwargs = dict(agent_config.agent_settings)
-        if agent_config.step_limit is not None:
-            agent_kwargs["step_limit"] = int(agent_config.step_limit)
-        if agent_config.cost_limit_usd is not None:
-            agent_kwargs["cost_limit"] = float(agent_config.cost_limit_usd)
+        if step_limit is not None:
+            agent_kwargs["step_limit"] = int(step_limit)
+        if cost_limit_usd is not None:
+            agent_kwargs["cost_limit"] = float(cost_limit_usd)
 
         self.agent = DefaultAgent(
             self.model,
@@ -96,6 +101,23 @@ class MiniSweAgent(BaseAgent):
             cost_usd = self.agent.model.cost
             n_calls = self.agent.model.n_calls
 
+            run_limits = None
+            if self.step_limit is not None or self.cost_limit_usd is not None:
+                run_limits = {
+                    "step_limit": self.step_limit,
+                    "cost_limit_usd": self.cost_limit_usd,
+                }
+
+            extra_info: dict[str, Any] = {
+                "instance_id": self.instance.instance_id,
+                "submission_id": submission_id,
+                "agent_config": self.agent_config.model_dump(),
+                "cost_usd": cost_usd,
+                "n_calls": n_calls,
+            }
+            if run_limits is not None:
+                extra_info["run_limits"] = run_limits
+
             save_traj(
                 self.agent,
                 settings.experiments_dir
@@ -103,13 +125,7 @@ class MiniSweAgent(BaseAgent):
                 / Path(f"{submission_id}.traj.json"),
                 exit_status=exit_status,
                 result=result,
-                extra_info={
-                    "instance_id": self.instance.instance_id,
-                    "submission_id": submission_id,
-                    "agent_config": self.agent_config.model_dump(),
-                    "cost_usd": cost_usd,
-                    "n_calls": n_calls,
-                },
+                extra_info=extra_info,
             )
 
             if exit_status != "Submitted":

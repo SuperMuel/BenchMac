@@ -175,8 +175,6 @@ def build_agent_configs(
     model_names: list[str],
     task_templates: str,
     agent_settings: dict[str, Any],
-    step_limit: int | None = None,
-    cost_limit_usd: float | None = None,
     temperature: float | None = None,
     top_p: float | None = None,
 ) -> list[AgentConfig]:
@@ -204,8 +202,6 @@ def build_agent_configs(
                         swe_agent_mini_version=mini_swe_agent_version,
                         task_template=task_templates,
                         agent_settings=agent_settings,
-                        step_limit=step_limit,
-                        cost_limit_usd=cost_limit_usd,
                         temperature=temperature,
                         top_p=top_p,
                     )
@@ -421,6 +417,8 @@ def execute_task(
     results_dir: Path,
     dt_factory: Callable[[], datetime] | None = None,
     provider_lock: Semaphore | None = None,
+    mini_swe_step_limit: int | None = None,
+    mini_swe_cost_limit_usd: float | None = None,
 ) -> tuple[ExperimentResult, Path, list[TaskEvent]]:
     """Run a single task end-to-end and persist the result JSON.
 
@@ -438,7 +436,12 @@ def execute_task(
     )
 
     if provider_lock is None:
-        agent = create_agent(instance, task.agent_config)
+        agent = create_agent(
+            instance,
+            task.agent_config,
+            mini_swe_step_limit=mini_swe_step_limit,
+            mini_swe_cost_limit_usd=mini_swe_cost_limit_usd,
+        )
         task_logger.debug("Agent created for task")
         result, events = process_single_task(
             task,
@@ -448,7 +451,12 @@ def execute_task(
         )
     else:
         with provider_lock:
-            agent = create_agent(instance, task.agent_config)
+            agent = create_agent(
+                instance,
+                task.agent_config,
+                mini_swe_step_limit=mini_swe_step_limit,
+                mini_swe_cost_limit_usd=mini_swe_cost_limit_usd,
+            )
             task_logger.debug("Agent created for task")
             result, events = process_single_task(
                 task,
@@ -524,6 +532,8 @@ def dispatch_tasks(
     progress_task_id: int,
     max_workers: int,
     provider_limit: int,
+    mini_swe_step_limit: int | None = None,
+    mini_swe_cost_limit_usd: float | None = None,
 ) -> None:
     """Execute tasks with global and per-provider concurrency limits.
 
@@ -565,6 +575,8 @@ def dispatch_tasks(
                 submission_id=submission_id,
                 results_dir=results_dir,
                 provider_lock=provider_lock,
+                mini_swe_step_limit=mini_swe_step_limit,
+                mini_swe_cost_limit_usd=mini_swe_cost_limit_usd,
             )
             futures[future] = (task, submission_id)
 
@@ -612,12 +624,24 @@ def dispatch_tasks(
             executor.shutdown(wait=True)
 
 
-def create_agent(instance: BenchmarkInstance, agent_config: AgentConfig) -> BaseAgent:
+def create_agent(
+    instance: BenchmarkInstance,
+    agent_config: AgentConfig,
+    *,
+    mini_swe_step_limit: int | None = None,
+    mini_swe_cost_limit_usd: float | None = None,
+) -> BaseAgent:
     docker_manager = DockerManager()
 
     match agent_config:
         case MiniSweAgentConfig():
-            return MiniSweAgent(instance, agent_config, docker_manager)
+            return MiniSweAgent(
+                instance,
+                agent_config,
+                docker_manager,
+                step_limit=mini_swe_step_limit,
+                cost_limit_usd=mini_swe_cost_limit_usd,
+            )
         case AngularSchematicsConfig():
             return AngularSchematicsAgent(instance, agent_config, docker_manager)
 
@@ -713,8 +737,6 @@ def main(
         model_names=model_names,
         task_templates=task_templates,
         agent_settings=agent_settings,
-        step_limit=step_limit,
-        cost_limit_usd=cost_limit_usd,
         temperature=temperature,
         top_p=top_p,
     )
@@ -805,6 +827,8 @@ def main(
                 progress_task_id=task_progress,
                 max_workers=max_workers,
                 provider_limit=provider_workers,
+                mini_swe_step_limit=step_limit,
+                mini_swe_cost_limit_usd=cost_limit_usd,
             )
 
     except KeyboardInterrupt:
