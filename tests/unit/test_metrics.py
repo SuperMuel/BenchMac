@@ -126,6 +126,21 @@ class TestCalculateTargetVersionAchieved:
         )
         assert calculate_target_version_achieved(version_step, "16") is None
 
+    def test_returns_false_for_prerelease_version_with_different_major_version(
+        self,
+    ) -> None:
+        """Test that pre-release versions like '21.0.0-next.5' are handled correctly."""
+        # Minimal npm ls JSON output with pre-release version
+        version_output = {
+            "dependencies": {"@angular/core": {"version": "21.0.0-next.5"}}
+        }
+        version_step = create_command_output(
+            command=self.NPM_LS_COMMAND, exit_code=0, stdout=json.dumps(version_output)
+        )
+        # Pre-release version "21.0.0-next.5" has major version 21,
+        # target "20" should return False
+        assert calculate_target_version_achieved(version_step, "20") is False
+
 
 @pytest.fixture
 def sample_instance() -> BenchmarkInstance:

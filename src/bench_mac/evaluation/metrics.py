@@ -1,7 +1,8 @@
 import json
+import re
 from logging import getLogger
 
-from packaging.version import parse as parse_version
+from packaging.version import InvalidVersion, Version
 
 from bench_mac.core.models import (
     BenchmarkInstance,
@@ -76,6 +77,27 @@ def _calculate_patch_application_success(
         return None
 
 
+def _extract_major_version(raw_version: str) -> int | None:
+    """Extracts the major version from a version string.
+
+    Tries to parse the version using `packaging.Version` first. If that fails
+    because the string is not PEP 440 compliant (e.g. "21.0.0-next.5"),
+    falls back to extracting the leading integer prefix.
+    Returns ``None`` when neither strategy works.
+    """
+
+    try:
+        return Version(raw_version).major
+    except InvalidVersion:
+        match = re.match(r"\d+", raw_version)
+        if match:
+            return int(match.group())
+    except TypeError:
+        return None
+
+    return None
+
+
 def calculate_target_version_achieved(
     version_check_step: CommandResult | None, target_version: str
 ) -> bool | None:
@@ -107,19 +129,21 @@ def calculate_target_version_achieved(
         # The command ran but @angular/core was not found in the dependency tree.
         return False
 
-    try:
-        achieved_version_str = angular_core_info["version"]
-        parsed_achieved_version = parse_version(achieved_version_str)
-        parsed_target_version = parse_version(target_version)
+    achieved_version_str = angular_core_info["version"]
+    achieved_major = _extract_major_version(achieved_version_str)
+    target_major = _extract_major_version(target_version)
+    assert target_major is not None, (
+        "Target version must be a valid major version. "
+        "Check your instance configuration."
+    )
 
-        # The core logic: compare major versions.
-        return parsed_achieved_version.major == parsed_target_version.major
-    except (TypeError, ValueError) as e:
-        # Handle malformed version strings
+    if achieved_major is None:
         logger.warning(
-            f"Could not parse version string '{angular_core_info.get('version')}': {e}"
+            "Could not determine major version from output '%s'", achieved_version_str
         )
-        return None  # Outcome is uncertain
+        return None
+
+    return achieved_major == target_major
 
 
 def calculate_metrics(
