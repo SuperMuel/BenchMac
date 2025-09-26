@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal, NewType
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 from uuid6 import uuid7
 
-from bench_mac.core.models import ExecutionTrace, Submission
+from bench_mac.core.models import ExecutionTrace, InstanceID, Submission
 
 
 class MiniSweAgentConfig(BaseModel):
@@ -126,7 +126,7 @@ class ExperimentTask(BaseModel):
     This represents a single unit of work in the patch generation process.
     """
 
-    instance_id: str = Field(
+    instance_id: InstanceID = Field(
         ...,
         description="Unique identifier for the benchmark instance to process.",
     )
@@ -137,6 +137,22 @@ class ExperimentTask(BaseModel):
 
 
 ExperimentID = NewType("ExperimentID", str)
+
+
+class AgentRunLimits(BaseModel):
+    step_limit: int | None = Field(
+        default=None,
+        gt=0,
+        description="Maximum number of steps permitted for this run.",
+    )
+    cost_limit_usd: float | None = Field(
+        default=None,
+        gt=0.0,
+        description="Maximum cost in USD permitted for this run.",
+    )
+
+    def is_empty(self) -> bool:
+        return self.step_limit is None and self.cost_limit_usd is None
 
 
 class ExperimentArtifacts(BaseModel):
@@ -155,6 +171,10 @@ class ExperimentArtifacts(BaseModel):
     model_responses: list[dict[str, Any]] | None = Field(
         default=None,
         description="Raw model responses captured at each query step.",
+    )
+    run_limits: AgentRunLimits | None = Field(
+        default=None,
+        description="Optional guardrails applied during the run.",
     )
 
 

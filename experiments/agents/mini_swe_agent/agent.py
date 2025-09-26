@@ -14,7 +14,7 @@ from experiments.agents.base import AgentRunResult, BaseAgent
 from experiments.agents.mini_swe_agent.environment import (
     MiniSweAgentEnvironmentAdapter,
 )
-from experiments.models import ExperimentArtifacts, MiniSweAgentConfig
+from experiments.models import AgentRunLimits, ExperimentArtifacts, MiniSweAgentConfig
 
 from .tracing_model import TracingModel
 
@@ -101,12 +101,12 @@ class MiniSweAgent(BaseAgent):
             cost_usd = self.agent.model.cost
             n_calls = self.agent.model.n_calls
 
-            run_limits = None
+            run_limits_model = None
             if self.step_limit is not None or self.cost_limit_usd is not None:
-                run_limits = {
-                    "step_limit": self.step_limit,
-                    "cost_limit_usd": self.cost_limit_usd,
-                }
+                run_limits_model = AgentRunLimits(
+                    step_limit=self.step_limit,
+                    cost_limit_usd=self.cost_limit_usd,
+                )
 
             extra_info: dict[str, Any] = {
                 "instance_id": self.instance.instance_id,
@@ -115,8 +115,8 @@ class MiniSweAgent(BaseAgent):
                 "cost_usd": cost_usd,
                 "n_calls": n_calls,
             }
-            if run_limits is not None:
-                extra_info["run_limits"] = run_limits
+            if run_limits_model is not None:
+                extra_info["run_limits"] = run_limits_model.model_dump()
 
             save_traj(
                 self.agent,
@@ -140,17 +140,26 @@ class MiniSweAgent(BaseAgent):
                 cost_usd=cost_usd,
                 n_calls=n_calls,
                 model_responses=list(self.model.responses),
+                run_limits=run_limits_model,
             )
 
             return AgentRunResult(model_patch=model_patch, artifacts=artifacts)
 
     def collect_artifacts(self) -> ExperimentArtifacts | None:
         try:
+            run_limits_model = None
+            if self.step_limit is not None or self.cost_limit_usd is not None:
+                run_limits_model = AgentRunLimits(
+                    step_limit=self.step_limit,
+                    cost_limit_usd=self.cost_limit_usd,
+                )
+
             return ExperimentArtifacts(
                 execution_trace=self.env.execution_trace(),
                 cost_usd=self.agent.model.cost,
                 n_calls=self.agent.model.n_calls,
                 model_responses=list(self.model.responses),
+                run_limits=run_limits_model,
             )
         except Exception:
             return None
