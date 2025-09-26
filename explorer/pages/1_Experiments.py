@@ -244,39 +244,7 @@ def render_model_responses(model_responses: list[dict[str, Any]]) -> None:
             except (KeyError, IndexError, TypeError):
                 st.write("*Unable to extract content from response*")
 
-            # Show estimated cost in small text
-            usage_info = _extract_usage_info(response)
-            if usage_info:
-                st.caption(f"Estimated cost: ${usage_info['estimated_cost']:.6f}")
-
             st.divider()
-
-
-def _extract_usage_info(response: dict[str, Any]) -> dict[str, Any] | None:
-    """Extract token usage and calculate estimated cost from a model response."""
-    try:
-        usage = response.get("usage", {})
-        if not usage:
-            return None
-
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
-
-        # Estimate cost using OpenAI GPT-4 pricing (approximate)
-        # Input: $0.01 per 1K tokens, Output: $0.03 per 1K tokens
-        input_cost = (prompt_tokens / 1000) * 0.01
-        output_cost = (completion_tokens / 1000) * 0.03
-        estimated_cost = input_cost + output_cost
-
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": total_tokens,
-            "estimated_cost": estimated_cost,
-        }
-    except (KeyError, TypeError):
-        return None
 
 
 def render_completed_experiment(experiment: CompletedExperiment) -> None:
