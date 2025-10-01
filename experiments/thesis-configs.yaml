@@ -63,22 +63,26 @@ configs:
   # ==========================================================
   - model_name: openai/gpt-5-2025-08-07
     model_kwargs:
-      reasoning: { effort: "medium" } # default
+      "verbosity": "medium"
+      "reasoning_effort": "medium"
       seed: 42
     scaffold: swe-agent-mini
   - model_name: openai/gpt-5-mini-2025-08-07
     model_kwargs:
-      reasoning: { effort: "medium" } # default
+      "verbosity": "medium"
+      "reasoning_effort": "medium"
       seed: 42
     scaffold: swe-agent-mini
   - model_name: openai/gpt-5-nano-2025-08-07
     model_kwargs:
-      reasoning: { effort: "medium" } # default
+      "verbosity": "medium"
+      "reasoning_effort": "medium"
       seed: 42
     scaffold: swe-agent-mini
   - model_name: openai/gpt-5-codex
     model_kwargs:
-      reasoning: { effort: "medium" } # default
+      "verbosity": "medium"
+      "reasoning_effort": "medium"
       seed: 42
     scaffold: swe-agent-mini
 
