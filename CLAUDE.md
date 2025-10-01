@@ -32,6 +32,7 @@ They should be run manually after adding or changing instances in `data/`.
 - **Main CLI entry point**: `uv run benchmac` or `uv run python -m bench_mac.cli`
 - **Evaluate submissions**: `uv run benchmac eval path/to/submissions.jsonl`
 - **Filter by instance ID**: `uv run benchmac eval submissions.jsonl --instance-id angular2-hn_v10_to_v11`
+- **Interactive results explorer**: `uv run explorer` (launches Streamlit app for analyzing results)
 
 ## Architecture Overview
 
@@ -62,8 +63,14 @@ BenchMAC is a benchmark for evaluating AI agents on Angular version migration ta
    - `manager.py`: High-level Docker API wrapper
    - `builder.py`: Creates specialized Docker images for each benchmark instance
 
-6. **Metrics** (`metrics.py`): Analyzes execution traces to compute performance metrics
-7. **Configuration** (`config.py`): Centralized settings using `pydantic-settings`
+6. **Evaluation System** (`evaluation/`): Computes metrics from execution traces
+   - Analyzes command outputs to determine patch application, version achievement, build/lint/test success
+
+7. **Environments** (`environments/`): Abstractions for execution contexts
+   - `base.py`: Base environment interface
+   - `docker.py`: Docker-based environment implementation
+
+8. **Configuration** (`config.py`): Centralized settings using `pydantic-settings`
 
 ### Key Data Flow
 
@@ -92,3 +99,25 @@ Settings can be configured via:
 - Environment variables with `BENCHMAC_` prefix
 - `.env` file in project root
 - Key settings: log levels, Docker host, cache directories
+
+## Experiments Framework
+
+The `experiments/` directory contains the agent experimentation system for generating patches:
+
+- **`run_experiment.py`**: Main entry point for running agent experiments
+- **Agent implementations** (`experiments/agents/`):
+  - `mini_swe_agent/`: Integration with MiniSWE agent for autonomous migrations
+  - `angular_schematics/`: Agent that uses Angular's built-in migration schematics
+  - `base.py`: Abstract base class for all agents
+- **Models and storage** (`experiments/models.py`, `experiments/storage.py`): Experiment configuration, results, and persistence
+
+### Running Experiments
+```bash
+uv run experiments/run_experiment.py --config experiments/your-config.yaml
+```
+
+## Utility Scripts
+
+The `scripts/` directory contains maintenance and data generation tools:
+- `generate_silvers.py`: Extract "silver" reference patches from Git history
+- `pin_docker_images.py`: Pin and freeze Docker base images for reproducibility

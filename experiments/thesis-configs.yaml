@@ -1,0 +1,148 @@
+configs:
+  - scaffold: angular-schematics
+
+  # ==========================================================
+  #                        MISTRAL MODELS
+  # ==========================================================
+  - model_name: mistral/magistral-medium-2509
+    # Official name: Magistral Medium 1.2
+    # Open Source: No
+    model_kwargs:
+      temperature: 0.7 # Default
+      top_p: 1.0 # Default
+      random_seed: 42
+    scaffold: swe-agent-mini
+
+  - model_name: mistral/magistral-small-2509
+    # Official name: Magistral Small 1.2
+    # Open Source: Yes (Apache 2.0)
+    model_kwargs: # Recommended by Mistral (https://huggingface.co/mistralai/Magistral-Small-2509)
+      temperature: 0.7 # Default
+      top_p: 0.95
+      random_seed: 42
+    scaffold: swe-agent-mini
+
+  - model_name: mistral/mistral-medium-2508
+    # Official name: Mistral Medium 3.1
+    # Open Source: No
+    model_kwargs:
+      temperature: 0.3 # Default
+      top_p: 1.0 # Default
+      random_seed: 42
+    scaffold: swe-agent-mini
+
+  - model_name: mistral/mistral-small-2506
+    # Official name: Mistral Small 3.2
+    # Open Source: Yes (Apache 2.0)
+    model_kwargs:
+      temperature: 0.3 # Default
+      top_p: 1.0 # Default
+      random_seed: 42
+    scaffold: swe-agent-mini
+
+  - model_name: mistral/devstral-medium-2507
+    # Official name: Devstral Medium
+    # Open Source: No
+    model_kwargs:
+      temperature: 0.15 # Recommanded value
+      top_p: 1.0 # Default
+      random_seed: 42
+    scaffold: swe-agent-mini
+
+  - model_name: mistral/devstral-small-2507
+    # Official name: Devstral Small 1.1
+    # Open Source: Yes (Apache 2.0)
+    model_kwargs:
+      temperature: 0.15 # Recommanded value (https://huggingface.co/mistralai/Devstral-Small-2507)
+      top_p: 1.0 # Default
+      random_seed: 42
+    scaffold: swe-agent-mini
+
+  # ==========================================================
+  #                        OPENAI MODELS
+  # ==========================================================
+  - model_name: openai/gpt-5-2025-08-07
+    model_kwargs:
+      reasoning: { effort: "medium" } # default
+      seed: 42
+    scaffold: swe-agent-mini
+  - model_name: openai/gpt-5-mini-2025-08-07
+    model_kwargs:
+      reasoning: { effort: "medium" } # default
+      seed: 42
+    scaffold: swe-agent-mini
+  - model_name: openai/gpt-5-nano-2025-08-07
+    model_kwargs:
+      reasoning: { effort: "medium" } # default
+      seed: 42
+    scaffold: swe-agent-mini
+  - model_name: openai/gpt-5-codex
+    model_kwargs:
+      reasoning: { effort: "medium" } # default
+      seed: 42
+    scaffold: swe-agent-mini
+
+  # ==========================================================
+  #                        XAI MODELS
+  # ==========================================================
+  - model_name: xai/grok-4-0709
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+  - model_name: xai/grok-code-fast-1-0825
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+  - model_name: xai/grok-4-fast-reasoning
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+  - model_name: xai/grok-4-fast-non-reasoning
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+
+  # ==========================================================
+  #                        GEMINI (Google) MODELS
+  # ==========================================================
+  #  Setting the thinkingBudget to -1 turns on dynamic thinking,
+  #  meaning the model will adjust the budget based on the complexity
+  #  of the request. (https://ai.google.dev/gemini-api/docs/thinking)
+
+  - model_name: gemini/gemini-2.5-pro
+    model_kwargs:
+      temperature: 0.0
+      thinkingBudget: -1
+    scaffold: swe-agent-mini
+  - model_name: gemini/gemini-2.5-flash
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+  - model_name: gemini/gemini-2.5-flash-lite
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+
+  # ==========================================================
+  #                        ANTHROPIC MODELS
+  # ==========================================================
+  - model_name: anthropic/claude-opus-4-1-20250805
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+
+  - model_name: anthropic/claude-sonnet-4-20250514
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+
+  - model_name: anthropic/claude-sonnet-4-5-20250929
+    model_kwargs:
+      temperature: 0.0
+    scaffold: swe-agent-mini
+
+  # # ==========================================================
+  # #                        DASHSCOPE (Alibaba) MODELS
+  # # ==========================================================
+  # - model_name: dashscope/qwen3-coder-plus-2025-07-22
+  # - model_name: dashscope/qwen3-coder-flash-2025-07-28

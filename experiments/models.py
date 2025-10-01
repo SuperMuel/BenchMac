@@ -19,17 +19,12 @@ class MiniSweAgentConfig(BaseModel):
         description="The name of the model to use for patch generation "
         "(e.g., 'mistral/devstral-medium-2507').",
     )
-    temperature: float | None = Field(
-        default=0.0,
-        ge=0.0,
-        le=2.0,
-        description="The temperature to use for the model.",
-    )
-    top_p: float | None = Field(
-        default=1.0,
-        ge=0.0,
-        le=1.0,
-        description="The top-p to use for the model.",
+    model_kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyword arguments passed to the model.",
+        examples=[
+            {"temperature": 0.15, "top_p": 0.95},
+        ],
     )
     swe_agent_mini_version: str = Field(
         min_length=1,
@@ -44,7 +39,7 @@ class MiniSweAgentConfig(BaseModel):
         min_length=1,
         description="Jinja template used to render the instance-specific task prompt.",
         examples=[
-            "Migrate the application from Angular to {{ instance.target_angular_version }}.",  # noqa: E501
+            "Migrate the Angular application to {{ instance.target_angular_version }}.",
         ],
     )
 
@@ -61,11 +56,14 @@ class MiniSweAgentConfig(BaseModel):
             agent_settings_json.encode("utf-8")
         ).hexdigest()[:8]
 
+        model_kwargs_json = json.dumps(self.model_kwargs, sort_keys=True)
+        model_kwargs_hash = hashlib.sha256(
+            model_kwargs_json.encode("utf-8")
+        ).hexdigest()[:8]
+
         key = f"{self.scaffold}/{self.model_name}"
-        if self.temperature is not None:
-            key += f"@T{self.temperature}"
-        if self.top_p is not None:
-            key += f"@P{self.top_p}"
+        if self.model_kwargs:
+            key += f"@modelkw-{model_kwargs_hash}"
         if self.swe_agent_mini_version:
             key += f"@minisweagent-{self.swe_agent_mini_version}"
         key += f"@tasktpl-{task_template_hash}"

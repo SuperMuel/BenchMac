@@ -7,13 +7,14 @@ from bench_mac.core.models import (
     BenchmarkInstance,
     EvaluationID,
     EvaluationResult,
+    InstanceID,
     SubmissionID,
 )
 
 
 def load_instances(
     instances_path: Path, *, strict: bool = True
-) -> dict[str, BenchmarkInstance]:
+) -> dict[InstanceID, BenchmarkInstance]:
     """Loads benchmark instances into a dict for fast lookup.
 
     Args:
@@ -26,7 +27,7 @@ def load_instances(
     Raises:
         ValueError: If strict=True and invalid instances are found
     """
-    instances: dict[str, BenchmarkInstance] = {}
+    instances: dict[InstanceID, BenchmarkInstance] = {}
     invalid_count = 0
 
     with instances_path.open("r", encoding="utf-8") as f:

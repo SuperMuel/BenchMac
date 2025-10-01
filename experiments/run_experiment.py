@@ -86,20 +86,17 @@ litellm.register_model(  # pyright: ignore[reportPrivateImportUsage]
         },
     }
 )
-litellm.drop_params = True
+# litellm.drop_params = True
 
 
 # --- Configuration ---
 app = typer.Typer(add_completion=False)
 console = Console()
 
-
 SUPPORTED_SCAFFOLDS = {"swe-agent-mini", "angular-schematics"}
-DEFAULT_SCAFFOLDS = ("swe-agent-mini",)
-DEFAULT_MODEL_NAMES = ("mistral/devstral-medium-2507",)
 
 
-def _is_known_model(model_name: str) -> bool:
+def _is_known_litellm_model(model_name: str) -> bool:
     """Return True if a model is known to litellm (built-in or registered).
 
     Accepts provider-prefixed names like ``openai/gpt-4o`` by also checking the
@@ -136,12 +133,12 @@ def _is_known_model(model_name: str) -> bool:
     return False
 
 
-def _validate_model_names_or_exit(model_names: list[str]) -> None:
+def _validate_litellm_model_names_or_exit(litellm_model_names: list[str]) -> None:
     """Validate that all provided model names are known to litellm.
 
     Raises a Typer error when one or more models are unknown.
     """
-    unknown = [m for m in model_names if not _is_known_model(m)]
+    unknown = [m for m in litellm_model_names if not _is_known_litellm_model(m)]
     if unknown:
         missing = ", ".join(unknown)
         msg = (
@@ -169,49 +166,6 @@ def _resolve_minisweagent_version() -> str:
         raise RuntimeError(msg) from exc
 
 
-def build_agent_configs(
-    *,
-    scaffolds: list[str],
-    model_names: list[str],
-    task_templates: str,
-    agent_settings: dict[str, Any],
-    temperature: float | None = None,
-    top_p: float | None = None,
-) -> list[AgentConfig]:
-    configs: list[AgentConfig] = []
-    mini_swe_agent_version: str | None = None
-    for scaffold in scaffolds:
-        scaffold_key = scaffold.strip().lower()
-
-        if scaffold_key not in SUPPORTED_SCAFFOLDS:
-            raise typer.BadParameter(
-                f"Unsupported scaffold '{scaffold}'. Supported: {', '.join(sorted(SUPPORTED_SCAFFOLDS))}"
-            )
-
-        if scaffold_key == "swe-agent-mini":
-            if not model_names:
-                raise typer.BadParameter(
-                    "At least one --model-name must be provided when using the swe-agent-mini scaffold."
-                )
-            if mini_swe_agent_version is None:
-                mini_swe_agent_version = _resolve_minisweagent_version()
-            for model_name in model_names:
-                configs.append(
-                    MiniSweAgentConfig(
-                        model_name=model_name,
-                        swe_agent_mini_version=mini_swe_agent_version,
-                        task_template=task_templates,
-                        agent_settings=agent_settings,
-                        temperature=temperature,
-                        top_p=top_p,
-                    )
-                )
-        elif scaffold_key == "angular-schematics":
-            configs.append(AngularSchematicsConfig())
-
-    return configs
-
-
 def _format_timedelta(td: timedelta) -> str:
     total_seconds = int(td.total_seconds())
     hours, remainder = divmod(total_seconds, 3600)
@@ -224,7 +178,7 @@ def _format_timedelta(td: timedelta) -> str:
 
 
 def collect_tasks(
-    instances: dict[str, BenchmarkInstance], agent_configs: list[AgentConfig]
+    instances: dict[InstanceID, BenchmarkInstance], agent_configs: list[AgentConfig]
 ) -> list[ExperimentTask]:
     """
     Collect all patch generation tasks by combining instances with agent configurations.
@@ -526,7 +480,7 @@ def resolve_provider_key(task: ExperimentTask) -> str:
 def dispatch_tasks(
     *,
     tasks: list[ExperimentTask],
-    instances: dict[str, BenchmarkInstance],
+    instances: dict[InstanceID, BenchmarkInstance],
     results_dir: Path,
     progress: Progress,
     progress_task_id: int,
@@ -624,6 +578,107 @@ def dispatch_tasks(
             executor.shutdown(wait=True)
 
 
+def load_agent_configs(
+    configs_yaml: Path,
+    swe_mini_config_yaml: Path | None = None,
+) -> list[AgentConfig]:
+    """Load agent configurations from YAML file.
+
+    Args:
+        configs_yaml: Path to YAML file containing list of agent configurations
+        swe_mini_config_yaml: Path to swe-mini config YAML (required if any config uses swe-agent-mini scaffold)
+
+    Returns:
+        List of validated AgentConfig instances
+
+    Raises:
+        ValueError: If configuration is invalid or required files are missing
+    """
+    with configs_yaml.open("r") as f:
+        data = yaml.safe_load(f)
+
+    if not isinstance(data, dict) or "configs" not in data:
+        msg = f"Invalid config structure in {configs_yaml}. Expected 'configs' key at root."
+        raise ValueError(msg)
+
+    raw_configs = data["configs"]
+    if not isinstance(raw_configs, list):
+        msg = f"Invalid config structure. 'configs' must be a list, got {type(raw_configs)}"
+        raise ValueError(msg)
+
+    # Check if we need swe-mini config
+    needs_swe_mini = any(
+        isinstance(cfg, dict) and cfg.get("scaffold") == "swe-agent-mini"
+        for cfg in raw_configs
+    )
+
+    swe_mini_settings = None
+    if needs_swe_mini:
+        if swe_mini_config_yaml is None or not swe_mini_config_yaml.exists():
+            msg = (
+                "swe-agent-mini scaffold requires --swe-mini-config-yaml. "
+                f"Provided: {swe_mini_config_yaml}"
+            )
+            raise ValueError(msg)
+
+        with swe_mini_config_yaml.open("r") as f:
+            swe_mini_settings = yaml.safe_load(f)
+
+        if not isinstance(swe_mini_settings, dict):
+            msg = f"Invalid swe-mini config in {swe_mini_config_yaml}"
+            raise ValueError(msg)
+
+        # Validate required keys
+        if "task_template" not in swe_mini_settings:
+            msg = f"Missing 'task_template' in {swe_mini_config_yaml}"
+            raise ValueError(msg)
+        if "agent_settings" not in swe_mini_settings:
+            msg = f"Missing 'agent_settings' in {swe_mini_config_yaml}"
+            raise ValueError(msg)
+
+    agent_configs: list[AgentConfig] = []
+    swe_agent_mini_version = None
+
+    for raw_config in raw_configs:
+        if not isinstance(raw_config, dict):
+            msg = f"Invalid config item: {raw_config}. Must be a dict."
+            raise ValueError(msg)
+
+        scaffold = raw_config.get("scaffold")
+
+        if scaffold == "swe-agent-mini":
+            # Resolve version once for all swe-agent-mini configs
+            if swe_agent_mini_version is None:
+                swe_agent_mini_version = _resolve_minisweagent_version()
+
+            assert swe_mini_settings is not None  # Already validated above
+            # Merge with swe_mini_settings
+            config_dict = {
+                "scaffold": "swe-agent-mini",
+                "model_name": raw_config.get("model_name"),
+                "model_kwargs": raw_config.get("model_kwargs", {}),
+                "swe_agent_mini_version": swe_agent_mini_version,
+                "task_template": swe_mini_settings["task_template"],
+                "agent_settings": swe_mini_settings["agent_settings"],
+            }
+            agent_configs.append(MiniSweAgentConfig(**config_dict))
+
+        elif scaffold == "angular-schematics":
+            config_dict = {
+                "scaffold": "angular-schematics",
+                "update_command_template": raw_config.get("update_command_template"),
+            }
+            # Remove None values to use defaults
+            config_dict = {k: v for k, v in config_dict.items() if v is not None}
+            agent_configs.append(AngularSchematicsConfig(**config_dict))
+
+        else:
+            msg = f"Unknown scaffold: {scaffold}. Supported: {SUPPORTED_SCAFFOLDS}"
+            raise ValueError(msg)
+
+    return agent_configs
+
+
 def create_agent(
     instance: BenchmarkInstance,
     agent_config: AgentConfig,
@@ -651,16 +706,14 @@ def create_agent(
 
 @app.command()
 def main(
-    scaffolds: list[str] = typer.Option(  # noqa: B008
-        list(DEFAULT_SCAFFOLDS),
-        "--scaffold",
-        help="Agent scaffold(s) to run (e.g., 'swe-agent-mini', 'angular-schematics'). Can be used multiple times.",
-    ),
-    model_names: list[str] = typer.Option(  # noqa: B008
-        list(DEFAULT_MODEL_NAMES),
-        "--model-name",
-        "-m",
-        help="Name of the model(s) to use when applicable for the scaffold (e.g., 'mistral/devstral'). Can be used multiple times.",
+    configs_yaml: Path = typer.Option(  # noqa: B008
+        ...,
+        "--configs-yaml",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to a YAML file containing agents configurations.",
     ),
     instances_file: Path = typer.Option(  # noqa: B008
         settings.instances_file, help="Path to the benchmark instances file."
@@ -675,7 +728,7 @@ def main(
         None,
         "--instance-id",
         help="Filter by specific instance ID(s). Can be used multiple times.",
-    ),
+    ),  # TODO: allow regex
     swe_mini_config_yaml: Path = typer.Option(  # noqa: B008
         Path("experiments/prompts/mini_swe_agent/minimal.yaml"),
         "--swe-mini-config-yaml",
@@ -690,20 +743,6 @@ def main(
         1.0,
         "--cost-limit-usd",
         help="Maximum cost in USD for the swe-agent-mini scaffold.",
-    ),
-    temperature: float | None = typer.Option(
-        0.0,
-        "--temperature",
-        help="Sampling temperature for swe-agent-mini LLM calls.",
-        min=0.0,
-        max=2.0,
-    ),
-    top_p: float | None = typer.Option(
-        1.0,
-        "--top-p",
-        help="Nucleus sampling top-p for swe-agent-mini LLM calls.",
-        min=0.0,
-        max=1.0,
     ),
     max_workers: int = typer.Option(
         1,
@@ -722,28 +761,23 @@ def main(
     settings.initialize_directories()
     console.print("[bold green]Starting BenchMAC Experiment Runner[/bold green]")
 
-    selected_scaffolds = scaffolds or list(DEFAULT_SCAFFOLDS)
-
-    # Validate model names early if swe-agent-mini is selected
-    if any(s.strip().lower() == "swe-agent-mini" for s in selected_scaffolds):
-        _validate_model_names_or_exit(model_names)
-
-    swe_mini_config = yaml.safe_load(swe_mini_config_yaml.read_text())
-    task_templates = swe_mini_config["task_template"]
-    agent_settings = swe_mini_config["agent_settings"]
-
-    agent_configs = build_agent_configs(
-        scaffolds=selected_scaffolds,
-        model_names=model_names,
-        task_templates=task_templates,
-        agent_settings=agent_settings,
-        temperature=temperature,
-        top_p=top_p,
-    )
+    # Load agent configurations from YAML
+    try:
+        agent_configs = load_agent_configs(configs_yaml, swe_mini_config_yaml)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        raise typer.Exit(code=1) from e
 
     if not agent_configs:
         console.print("[yellow]No agent configurations specified. Exiting...[/yellow]")
         return
+
+    # Validate model names for swe-agent-mini configs
+    model_names = [
+        cfg.model_name for cfg in agent_configs if isinstance(cfg, MiniSweAgentConfig)
+    ]
+    if model_names:
+        _validate_litellm_model_names_or_exit(model_names)
 
     agents_display = ", ".join(
         f"[cyan]{config.display_name}[/cyan]" for config in agent_configs

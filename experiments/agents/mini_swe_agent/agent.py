@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -54,12 +55,7 @@ class MiniSweAgent(BaseAgent):
         self.cost_limit_usd = cost_limit_usd
 
         # Use tracing subclass to collect raw LiteLLM responses for analysis
-        model_kwargs: dict[str, Any] = {}
-        if agent_config.temperature is not None:
-            model_kwargs["temperature"] = agent_config.temperature
-        if agent_config.top_p is not None:
-            model_kwargs["top_p"] = agent_config.top_p
-
+        model_kwargs = deepcopy(agent_config.model_kwargs)
         self.model = TracingModel(
             model_name=agent_config.model_name,
             model_kwargs=model_kwargs,
