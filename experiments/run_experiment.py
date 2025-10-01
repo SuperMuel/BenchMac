@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 # this is temporary a Typer app, but we'll fusion this with the main CLI later
 
+import re
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -52,7 +53,7 @@ from experiments.storage import (
 load_dotenv()
 
 
-litellm._turn_on_debug()  # pyright: ignore[reportPrivateUsage, reportPrivateImportUsage]
+# litellm._turn_on_debug()  # pyright: ignore[reportPrivateUsage, reportPrivateImportUsage]
 
 litellm.register_model(  # pyright: ignore[reportPrivateImportUsage]
     {
@@ -729,6 +730,11 @@ def main(
         "--instance-id",
         help="Filter by specific instance ID(s). Can be used multiple times.",
     ),  # TODO: allow regex
+    model_name_pattern: str | None = typer.Option(
+        None,
+        "--model-name-pattern",
+        help="Filter agent configurations by model name using regex pattern. E.g., 'mistral*' to match all Mistral models.",
+    ),
     swe_mini_config_yaml: Path = typer.Option(  # noqa: B008
         Path("experiments/prompts/mini_swe_agent/minimal.yaml"),
         "--swe-mini-config-yaml",
@@ -771,6 +777,27 @@ def main(
     if not agent_configs:
         console.print("[yellow]No agent configurations specified. Exiting...[/yellow]")
         return
+
+    # Filter agent configurations by model name pattern if specified
+    if model_name_pattern:
+        try:
+            pattern = re.compile(model_name_pattern, re.IGNORECASE)
+            filtered_configs = []
+            for config in agent_configs:
+                if isinstance(config, MiniSweAgentConfig):
+                    if pattern.search(config.model_name):
+                        filtered_configs.append(config)
+                else:
+                    # For non-swe-agent-mini configs (like angular-schematics), include them
+                    # unless the pattern specifically excludes them
+                    filtered_configs.append(config)
+            agent_configs = filtered_configs
+            console.print(
+                f"Filtered to {len(agent_configs)} agent configuration(s) matching pattern '{model_name_pattern}'"
+            )
+        except re.error as e:
+            console.print(f"[bold red]Invalid regex pattern:[/bold red] {e}")
+            raise typer.Exit(code=1) from e
 
     # Validate model names for swe-agent-mini configs
     model_names = [
