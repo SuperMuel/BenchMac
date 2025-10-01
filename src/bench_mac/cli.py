@@ -506,9 +506,7 @@ def refresh_images(
 
     unknown_ids = sorted(set(requested_ids) - set(instances_map.keys()))
     if unknown_ids:
-        logger.error(
-            "❌ Requested instance IDs not found: {}".format(", ".join(unknown_ids))
-        )
+        logger.error(f"❌ Requested instance IDs not found: {', '.join(unknown_ids)}")
         raise SystemExit(1)
 
     selected_instances = [instances_map[i] for i in requested_ids]

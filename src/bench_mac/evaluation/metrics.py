@@ -1,7 +1,7 @@
 import json
 import re
-from logging import getLogger
 
+from loguru import logger
 from packaging.version import InvalidVersion, Version
 
 from bench_mac.core.models import (
@@ -12,8 +12,6 @@ from bench_mac.core.models import (
 )
 
 from .trace_analyzer import TraceAnalyzer
-
-logger = getLogger(__name__)
 
 
 def _calculate_patch_application_success(
@@ -139,7 +137,7 @@ def calculate_target_version_achieved(
 
     if achieved_major is None:
         logger.warning(
-            "Could not determine major version from output '%s'", achieved_version_str
+            f"Could not determine major version from output '{achieved_version_str}'"
         )
         return None
 
