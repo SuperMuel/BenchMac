@@ -7,6 +7,7 @@ import streamlit as st
 
 from bench_mac.core.config import settings
 from experiments.models import (
+    AgentConfig,
     CompletedExperiment,
     ExperimentArtifacts,
     ExperimentResult,
@@ -190,7 +191,7 @@ def render_overview_section(
     *,
     started_at: datetime,
     ended_at: datetime,
-    agent_key: str,
+    agent_config: AgentConfig,
     instance_id: str,
     submission_id: str | None = None,
     error: str | None = None,
@@ -208,7 +209,11 @@ def render_overview_section(
 
     st.write(f"**Started:** {started_at}")
     st.write(f"**Ended:** {ended_at}")
-    st.write("**Agent:** `" + agent_key + "`")
+    st.write("**Agent:** `" + agent_config.key + "`")
+
+    with st.expander("View full AgentConfig JSON"):
+        st.json(agent_config.model_dump(), expanded=1)
+
     st.write("**Instance:** `" + instance_id + "`")
 
     if submission_id is not None:
@@ -275,7 +280,7 @@ def render_completed_experiment(experiment: CompletedExperiment) -> None:
             metrics,
             started_at=experiment.started_at,
             ended_at=experiment.ended_at,
-            agent_key=experiment.task.agent_config.key,
+            agent_config=experiment.task.agent_config,
             instance_id=experiment.task.instance_id,
             submission_id=str(experiment.submission.submission_id),
         )
@@ -339,7 +344,7 @@ def render_failed_experiment(experiment: FailedExperiment) -> None:
             metrics,
             started_at=experiment.started_at,
             ended_at=experiment.ended_at,
-            agent_key=experiment.task.agent_config.key,
+            agent_config=experiment.task.agent_config,
             instance_id=experiment.task.instance_id,
             error=experiment.error,
         )
