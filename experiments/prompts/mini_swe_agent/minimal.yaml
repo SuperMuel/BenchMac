@@ -28,6 +28,11 @@ agent_settings:
     2. The action must be enclosed in triple backticks
     3. Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
        However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+    4. Avoid long-running or interactive commands (e.g., servers, watch modes, shells).
+    5. Prefer commands that finish on their own; add a time limit when uncertain (e.g., wrap with a timeout).
+
+
+
 
     ## Submit and finish
 
