@@ -217,37 +217,51 @@ def collect_old_results(experiments_dir: Path) -> list[ExperimentResult]:
 
 
 def filter_completed_tasks(
-    tasks: list[ExperimentTask], old_results: list[ExperimentResult]
+    tasks: list[ExperimentTask],
+    old_results: list[ExperimentResult],
+    *,
+    retry_failed: bool = True,
 ) -> list[ExperimentTask]:
     """
-    Filter out tasks that have already been completed based on old submissions.
+    Filter out tasks that have already been processed based on old submissions.
 
-    A task is considered completed if there's already a completed result with the same
-    instance_id and the same full AgentConfig.
+    Rules:
+    - Always skip tasks with a previously "completed" result for the same
+      (instance_id, agent_config.key).
+    - If ``retry_failed`` is False, also skip tasks with a previously "failed"
+      result for the same (instance_id, agent_config.key).
 
     Args:
         tasks: List of tasks to potentially run
         old_results: List of existing results
+        retry_failed: When False, do not retry tasks that previously failed
 
     Returns:
-        List of tasks that haven't been completed yet
+        List of tasks that should be run in this execution
     """
-    # Create a set of completed (instance_id, agent_config_key) combinations
+    # Create sets of (instance_id, agent_config_key) combinations
     completed_combinations = set()
+    failed_combinations = set()
+
     for r in old_results:
-        if r.root.status != "completed":
-            continue
         try:
+            status = r.root.status
             instance_id = r.root.task.instance_id
             key = r.root.task.agent_config.key
-            completed_combinations.add((instance_id, key))
         except Exception:
+            logger.error(f"Unexpected result structure: {r.root.id}")
             # Be defensive: if structure is unexpected, skip that result
             continue
 
-    # Filter tasks that haven't been completed
+        if status == "completed":
+            completed_combinations.add((instance_id, key))
+        elif status == "failed":
+            failed_combinations.add((instance_id, key))
+
+    # Filter tasks based on history
     filtered_tasks: list[ExperimentTask] = []
-    skipped_count = 0
+    skipped_completed_count = 0
+    skipped_failed_count = 0
 
     for task in tasks:
         task_key = (task.instance_id, task.agent_config.key)
@@ -256,12 +270,27 @@ def filter_completed_tasks(
                 f"[blue]Skipping already completed task: {task.instance_id} "
                 f"({task.agent_config.display_name})[/blue]"
             )
-            skipped_count += 1
-        else:
-            filtered_tasks.append(task)
+            skipped_completed_count += 1
+            continue
 
-    if skipped_count > 0:
-        console.print(f"[blue]Skipped {skipped_count} already completed tasks[/blue]")
+        if not retry_failed and task_key in failed_combinations:
+            console.print(
+                f"[blue]Skipping previously failed task: {task.instance_id} "
+                f"({task.agent_config.display_name}) due to --no-retry-failed[/blue]"
+            )
+            skipped_failed_count += 1
+            continue
+
+        filtered_tasks.append(task)
+
+    if skipped_completed_count > 0:
+        console.print(
+            f"[blue]Skipped {skipped_completed_count} already completed tasks[/blue]"
+        )
+    if skipped_failed_count > 0:
+        console.print(
+            f"[blue]Skipped {skipped_failed_count} previously failed tasks due to --no-retry-failed[/blue]"
+        )
 
     return filtered_tasks
 
@@ -760,6 +789,11 @@ def main(
         "--provider-workers",
         help="Maximum concurrent tasks per provider.",
     ),
+    retry_failed: bool = typer.Option(
+        True,
+        "--retry-failed/--no-retry-failed",
+        help="Retry tasks that previously failed (default: enabled).",
+    ),
 ) -> None:
     """
     Runs an LLM-powered agent on BenchMAC instances and generates a submission file.
@@ -867,8 +901,8 @@ def main(
     tasks = collect_tasks(instances, agent_configs)
     console.print(f"Generated {len(tasks)} potential tasks")
 
-    # Filter out already completed tasks
-    tasks = filter_completed_tasks(tasks, old_results)
+    # Filter out already completed tasks and, optionally, previously failed ones
+    tasks = filter_completed_tasks(tasks, old_results, retry_failed=retry_failed)
 
     if not tasks:
         console.print("No tasks to process. Exiting...")
