@@ -7,7 +7,6 @@ from pydantic import (
     AwareDatetime,
     BaseModel,
     BeforeValidator,
-    ConfigDict,
     Field,
     TypeAdapter,
     field_validator,
@@ -188,17 +187,6 @@ class BenchmarkInstance(BaseModel):
         return content
 
 
-class SubmissionMetadata(BaseModel):
-    """Metadata for a submission."""
-
-    model_config = ConfigDict(extra="allow")
-
-    created_at: AwareDatetime = Field(
-        default_factory=utc_now,
-        description="The timestamp when the submission was created.",
-    )
-
-
 SubmissionID = NewType("SubmissionID", str)
 EvaluationID = NewType("EvaluationID", str)
 
@@ -232,11 +220,6 @@ class Submission(BaseModel):
         if not value or not value.strip():
             raise ValueError("model_patch must contain a non-empty unified diff")
         return value
-
-    metadata: SubmissionMetadata = Field(
-        default_factory=SubmissionMetadata,
-        description="Metadata for the submission.",
-    )
 
 
 # --- Evaluation & Metrics Models ---
