@@ -16,6 +16,7 @@ from bench_mac.core.models import (
     EvaluationReport,
     EvaluationResult,
     EvaluationTask,
+    ExecutionTrace,
     utc_now,
 )
 from bench_mac.docker.manager import DockerManager
@@ -54,23 +55,34 @@ def run_single_evaluation_task(context: WorkerContext) -> EvaluationResult:
     started_at = utc_now()
 
     try:
-        docker_manager = DockerManager(quiet_init=True)
+        submission = context.task.submission
+        instance = context.task.instance
+        is_empty_patch = not submission.model_patch.strip()
 
-        # 1. Get the raw execution trace
-        trace = run_submission_in_docker(
-            context.task.instance,
-            context.task.submission,
-            docker_manager,
-            logger=instance_logger,
-        )
+        if is_empty_patch:
+            instance_logger.info(
+                "Empty submission detected; skipping container execution"
+                " and assigning zero metrics."
+            )
+            trace = ExecutionTrace(steps=[])
+        else:
+            docker_manager = DockerManager(quiet_init=True)
+
+            # 1. Get the raw execution trace
+            trace = run_submission_in_docker(
+                instance,
+                submission,
+                docker_manager,
+                logger=instance_logger,
+            )
 
         # 2. Calculate metrics from the trace
-        metrics = calculate_metrics(trace, context.task.instance)
+        metrics = calculate_metrics(trace, instance, empty_patch=is_empty_patch)
 
         # 3. Assemble the final, comprehensive report
         report = EvaluationReport(
-            instance_id=context.task.instance.instance_id,
-            submission_id=context.task.submission.submission_id,
+            instance_id=instance.instance_id,
+            submission_id=submission.submission_id,
             execution=trace,
             metrics=metrics,
         )

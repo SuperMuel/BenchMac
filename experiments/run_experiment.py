@@ -345,14 +345,16 @@ def process_single_task(
 
     try:
         agent_result = agent.run(submission_id=submission_id)
-        if not agent_result.model_patch or not agent_result.model_patch.strip():
-            raise RuntimeError(
-                "Agent produced an empty diff; submission aborted before evaluation."
+        model_patch = agent_result.model_patch
+        is_empty_patch = not model_patch.strip()
+        if is_empty_patch:
+            task_logger.warning(
+                "Agent produced an empty diff; marking submission as no-op with zeroed metrics."
             )
         submission = Submission(
             submission_id=SubmissionID(submission_id),
             instance_id=InstanceID(task.instance_id),
-            model_patch=agent_result.model_patch,
+            model_patch=model_patch,
         )
         artifacts = None
         if agent_result.artifacts is not None:
@@ -376,6 +378,8 @@ def process_single_task(
                     details["duration"] = _format_timedelta(duration_td)
                 except Exception:
                     pass
+        if is_empty_patch:
+            details["empty_patch"] = True
         add_event("completed", "Task completed successfully", details=details or None)
         task_logger.success("Task completed successfully")
         return completed, events
@@ -460,13 +464,14 @@ def execute_task(
     return result_wrapper, result_path, events
 
 
-def render_task_event(event: TaskEvent) -> None:
+def render_task_event(event: TaskEvent, *, show_started: bool = True) -> None:
     """Render a task event to the console."""
 
     header = f"{event.instance_id} ({event.agent_display_name})"
 
     if event.status == "started":
-        console.print(f"[cyan]Running agent:[/cyan] {header}")
+        if show_started:
+            console.print(f"[cyan]▶ Started:[/cyan] {header}")
         return
 
     if event.status == "completed":
@@ -488,7 +493,7 @@ def render_task_event(event: TaskEvent) -> None:
         error = "unknown error"
         if event.details and isinstance(event.details.get("error"), str):
             error = event.details["error"]
-        console.print(f"[bold red]Error processing {header}: {error}[/bold red]")
+        console.print(f"[bold red]✗ Failed:[/bold red] {header} — {error}")
         return
 
     console.print(event.message)
@@ -586,17 +591,23 @@ def dispatch_tasks(
                 )
             else:
                 for event in events:
-                    render_task_event(event)
+                    render_task_event(event, show_started=False)
             finally:
                 completed += 1
                 remaining = total_tasks - completed
                 progress.advance(TaskID(progress_task_id))
-                progress.update(
-                    TaskID(progress_task_id),
-                    description=(
-                        f"[cyan]Processing Tasks ({remaining} remaining)[/cyan]"
-                    ),
-                )
+                if remaining > 0:
+                    progress.update(
+                        TaskID(progress_task_id),
+                        description=(
+                            f"[cyan]Processing tasks ({remaining} remaining)[/cyan]"
+                        ),
+                    )
+                else:
+                    progress.update(
+                        TaskID(progress_task_id),
+                        description="[green]All tasks completed[/green]",
+                    )
     except KeyboardInterrupt:
         cancelled = True
         for future in futures:
@@ -908,10 +919,15 @@ def main(
         console.print("No tasks to process. Exiting...")
         return
 
+    console.print(
+        f"[bold cyan]Starting {len(tasks)} tasks with {max_workers} workers "
+        f"(max {provider_workers} per provider)[/bold cyan]"
+    )
+
     try:
         with Progress(console=console) as progress:
             task_progress = progress.add_task(
-                "[cyan]Processing Tasks...", total=len(tasks)
+                "[cyan]Processing tasks...", total=len(tasks)
             )
 
             dispatch_tasks(

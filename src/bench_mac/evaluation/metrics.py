@@ -145,17 +145,27 @@ def calculate_target_version_achieved(
 
 
 def calculate_metrics(
-    trace: ExecutionTrace, instance: BenchmarkInstance
+    trace: ExecutionTrace, instance: BenchmarkInstance, *, empty_patch: bool = False
 ) -> MetricsReport:
     """
     Analyzes an ExecutionTrace and computes the final performance metrics.
 
     Args:
         trace: The execution trace containing all command outputs
+        instance: The benchmark instance
+        empty_patch: Whether the SUT submitted an empty patch
 
     Returns:
         MetricsReport with calculated metrics based on the trace
     """
+    if empty_patch:
+        return MetricsReport(
+            patch_application_success=False,  # empty patches are considered failures
+            install_success=False,
+            target_version_achieved=False,
+            build_success=False,
+        )
+
     # Patch application metric
     # Check both the patch check and patch apply steps
     analyzer = TraceAnalyzer(trace, instance)

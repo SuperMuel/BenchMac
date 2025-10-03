@@ -122,13 +122,13 @@ class TestSubmission:
         assert submission.model_patch == patch_content
 
     @pytest.mark.parametrize("patch_content", ["", "   ", "\n\t\n"])
-    def test_empty_model_patch_raises_error(self, patch_content: str) -> None:
-        """Blank diffs are rejected by the Submission model."""
-        with pytest.raises(ValidationError, match="model_patch must contain"):
-            Submission(
-                instance_id=InstanceID("my-project_v15_to_v16"),
-                model_patch=patch_content,
-            )
+    def test_empty_model_patch_is_accepted(self, patch_content: str) -> None:
+        """Blank diffs are accepted by the Submission model."""
+        submission = Submission(
+            instance_id=InstanceID("my-project_v15_to_v16"),
+            model_patch=patch_content,
+        )
+        assert submission.model_patch == patch_content
 
     def test_missing_model_patch_raises_error(self) -> None:
         """Test that omitting the model_patch field raises a ValidationError."""

@@ -234,3 +234,15 @@ class TestCalculateMetrics:
         assert metrics.install_success is None
         assert metrics.target_version_achieved is None
         assert metrics.build_success is None
+
+    def test_empty_patch_short_circuits_metrics(
+        self, sample_instance: BenchmarkInstance
+    ) -> None:
+        """Ensure empty patches emit the expected zero/None metrics."""
+        trace = ExecutionTrace(steps=[])
+        metrics = calculate_metrics(trace, sample_instance, empty_patch=True)
+
+        assert metrics.patch_application_success is False
+        assert metrics.install_success is False
+        assert metrics.target_version_achieved is False
+        assert metrics.build_success is False

@@ -194,9 +194,6 @@ EvaluationID = NewType("EvaluationID", str)
 class Submission(BaseModel):
     """
     A solution candidate for a specific instance.
-
-    `model_patch` must be a unified diff (git patch) applying all changes that
-    implement the migration from source to target.
     """
 
     submission_id: SubmissionID = Field(
@@ -210,16 +207,11 @@ class Submission(BaseModel):
     )
     model_patch: str = Field(
         ...,
-        description="A string containing the full, unified diff (.patch format) of all changes.",  # noqa: E501
+        description=(
+            "The unified diff (.patch format) to apply. Empty strings represent"
+            " no-op submissions that are scored as unsuccessful."
+        ),
     )
-
-    @field_validator("model_patch")
-    @classmethod
-    def _ensure_model_patch_not_empty(cls, value: str) -> str:
-        """Reject submissions that do not include any actual diff content."""
-        if not value or not value.strip():
-            raise ValueError("model_patch must contain a non-empty unified diff")
-        return value
 
 
 # --- Evaluation & Metrics Models ---
