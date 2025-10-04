@@ -224,6 +224,10 @@ class MetricsReport(BaseModel):
     Fields are tri-state:
       - True/False when the harness can determine success or failure;
       - None when indeterminate (step not run or insufficient data).
+
+    Convenience properties such as `install_success_effective` collapse the
+    sequential dependencies so downstream consumers can use a pure boolean view
+    without losing the raw tri-state signal captured above.
     """
 
     patch_application_success: bool | None = Field(
@@ -242,6 +246,9 @@ class MetricsReport(BaseModel):
         default=None,
         description="Did the install command complete successfully?",
     )
+
+    # We keep this commented out code for illustrating the possible
+    # future metrics we could add
     # no_new_critical_lint_errors: bool = Field(
     #     ...,
     #     description="Did the 'ng lint' command pass without new critical errors?",
@@ -270,6 +277,31 @@ class MetricsReport(BaseModel):
     #     default=None,
     #     description="(Future) LLM-as-judge score for code style, idiomaticity, etc.",
     # )
+
+    @property
+    def install_success_effective(self) -> bool:
+        """Return True only when patch application and install both succeeded."""
+
+        if self.patch_application_success is not True:
+            return False
+        return self.install_success is True
+
+    @property
+    def target_version_achieved_effective(self) -> bool:
+        """Return True when install prerequisites succeeded
+        and the target version was reached."""
+
+        if not self.install_success_effective:
+            return False
+        return self.target_version_achieved is True
+
+    @property
+    def build_success_effective(self) -> bool:
+        """Return True when all preceding stages succeeded and the build passed."""
+
+        if not self.target_version_achieved_effective:
+            return False
+        return self.build_success is True
 
 
 class EvaluationTask(BaseModel):

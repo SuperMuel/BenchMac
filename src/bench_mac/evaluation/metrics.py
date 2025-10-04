@@ -187,6 +187,13 @@ def calculate_metrics(
 
     build_success = build_step.success if build_step else None
 
+    # The MetricsReport model exposes "effective" properties that collapse this
+    # sequential logic (e.g. build success only counts when patch application,
+    # install, and version checks all passed). Keeping the raw tri-state values
+    # here lets downstream tooling understand whether a command was skipped,
+    # failed, or genuinely succeeded, while the effective properties give
+    # contributors a single boolean when they just need to know if the pipeline
+    # made it through each gate.
     return MetricsReport(
         patch_application_success=patch_application_success,
         install_success=install_success,
