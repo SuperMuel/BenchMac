@@ -10,7 +10,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from threading import Semaphore
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import litellm
 import typer
@@ -827,18 +827,19 @@ def main(
     if model_name_pattern:
         try:
             pattern = re.compile(model_name_pattern, re.IGNORECASE)
-            filtered_configs = []
-            for config in agent_configs:
-                if isinstance(config, MiniSweAgentConfig):
-                    if pattern.search(config.model_name):
-                        filtered_configs.append(config)
-                else:
-                    # For non-swe-agent-mini configs (like angular-schematics), include them
-                    # unless the pattern specifically excludes them
-                    filtered_configs.append(config)
-            agent_configs = filtered_configs
+            # When a model name pattern is provided, we only keep swe-agent-mini
+            # configurations whose model_name matches the pattern.
+            agent_configs = cast(
+                list[AgentConfig],
+                [
+                    cfg
+                    for cfg in agent_configs
+                    if isinstance(cfg, MiniSweAgentConfig)
+                    and pattern.search(cfg.model_name)
+                ],
+            )
             console.print(
-                f"Filtered to {len(agent_configs)} agent configuration(s) matching pattern '{model_name_pattern}'"
+                f"Filtered to {len(agent_configs)} swe-agent-mini configuration(s) matching pattern '{model_name_pattern}'"
             )
         except re.error as e:
             console.print(f"[bold red]Invalid regex pattern:[/bold red] {e}")
