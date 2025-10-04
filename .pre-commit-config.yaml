@@ -12,7 +12,11 @@ repos:
     rev: v0.12.0
     hooks:
       # Run the linter with automatic fixes
+      # types_or restricts to Python files only (excludes Jupyter notebooks)
       - id: ruff
+        types_or: [python, pyi]
         args: [--fix]
       # Run the formatter
+      # types_or restricts to Python files only (excludes Jupyter notebooks)
       - id: ruff-format
+        types_or: [python, pyi]

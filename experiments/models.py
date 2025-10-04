@@ -133,6 +133,17 @@ class ExperimentTask(BaseModel):
         description="The agent configuration to use for patch generation.",
     )
 
+    def __hash__(self) -> int:
+        return hash((self.instance_id, self.agent_config))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ExperimentTask):
+            return NotImplemented
+        return (
+            self.instance_id == other.instance_id
+            and self.agent_config == other.agent_config
+        )
+
 
 ExperimentID = NewType("ExperimentID", str)
 
@@ -211,6 +222,10 @@ class FailedExperiment(BaseModel):
         description="Optional structured artifacts captured during the run,"
         " possibly empty or incomplete.",
     )
+
+    @property
+    def duration(self) -> timedelta:
+        return self.ended_at - self.started_at
 
 
 Discriminated = Annotated[
