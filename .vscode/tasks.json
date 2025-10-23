@@ -71,6 +71,29 @@
                 "panel": "shared"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Convert analysis notebook to markdown",
+            "type": "shell",
+            "command": "uv",
+            "args": [
+                "run",
+                "--with",
+                "nbconvert",
+                "jupyter",
+                "nbconvert",
+                "--to",
+                "markdown",
+                "analysis/analysis.ipynb"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "detail": "Convert the analysis.ipynb notebook to markdown format"
         }
     ]
 }
