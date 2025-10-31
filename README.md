@@ -86,6 +86,7 @@ To get started with the BenchMAC evaluation harness, follow these steps.
 
 ## 📘 Documentation
 
+- [Concepts](docs/concepts.md)
 - [Architecture](docs/architecture.md)
 - [Metrics](docs/metrics.md)
 - [Dataset](docs/dataset.md)
