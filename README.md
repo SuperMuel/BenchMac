@@ -7,7 +7,7 @@
 
 **BenchMAC** is a benchmark for evaluating AI agents on their ability to perform complex, real-world **M**igration tasks for **A**ngular **C**odebases.
 
-Developped as part of my Master's thesis in collaboration with **[onepoint](https://groupeonepoint.com/)**.
+Developped as part of my [Master's thesis](https://github.com/SuperMuel/BenchMac/blob/master-thesis/master-thesis.pdf) in collaboration with **[onepoint](https://groupeonepoint.com/)**.
 
 ## 🚀 Introduction
 
@@ -15,18 +15,7 @@ Migrating Angular applications across major versions is a nuanced task that goes
 
 BenchMAC provides a standardized, automated, and reproducible way to measure the performance of any AI system on these tasks.
 
-### Key Features
-
-* **Realistic Tasks:** Operates on real-world, open-source Angular projects.
-* **Holistic Evaluation:** Measures success through a suite of metrics including build success, linting integrity, and test pass rates.
-* **Reproducible Environments:** Uses a containerized Docker environment to ensure every evaluation is isolated and scientifically valid.
-* **Decoupled Evaluation:** Employs a post-hoc model where the harness evaluates a static patch file, making it easy to test any SUT.
-
-## Why BenchMAC
-
-Angular upgrades are strategic modernization efforts. Delaying them increases security risk, fractures toolchains, and slows delivery. Existing LLM benchmarks mostly target backend code or isolated functions, so they fail to capture the repository-scale coordination, template changes, and ecosystem churn that make Angular migrations difficult. BenchMAC fills that gap with reproducible, apples-to-apples comparisons of systems attempting the same real upgrade.
-
-## How It Works
+## 🛠️ How It Works
 
 BenchMAC separates migration **generation** from **evaluation** so any system under test (SUT) can plug in while results stay comparable.
 
@@ -35,7 +24,7 @@ BenchMAC separates migration **generation** from **evaluation** so any system un
 
 This architecture lets researchers innovate on agents, prompts, or rules without touching the evaluator, and keeps scoring deterministic across submissions.
 
-## Evaluation Metrics
+## 📊 Evaluation Metrics
 
 | Metric | What it checks | Why it matters |
 | :-- | :-- | :-- |
@@ -45,19 +34,17 @@ This architecture lets researchers innovate on agents, prompts, or rules without
 
 Each run also archives command logs and agent output so teams can trace failure modes.
 
-## Dataset at a Glance
+## 🗃️ Dataset
 
-BenchMAC v1.0 ships nine instances drawn from `gothinkster/angular-realworld-example-app`, covering consecutive upgrades from Angular 11→12 through 19→20. Leveraging real Git histories lets us define multiple tasks from one repository while keeping every baseline green and reproducible. The dataset definition lives in [`data/instances.jsonl`](data/instances.jsonl) with matching Dockerfiles under [`data/dockerfiles/`](data/dockerfiles/).
+BenchMAC v1.0 ships nine instances drawn from `gothinkster/angular-realworld-example-app`, covering consecutive upgrades from Angular 11→12 through 19→20. The dataset definition lives in [`data/instances.jsonl`](data/instances.jsonl) with matching Dockerfiles under [`data/dockerfiles/`](data/dockerfiles/).
 
-To keep the harness honest we also extract “silver” patches—human-authored migrations from the same history. Applying a silver patch must succeed end-to-end; failures indicate harness or environment drift rather than AI errors.
-
-## Reproducible Environments
+## 🧊 Reproducible Environments
 
 Every instance has a pinned Docker image that:
 
 * Downloads a history-free archive of the baseline commit
 * Pins Node.js and npm by digest, then freezes Debian packages via `snapshot.debian.org`
-* Records toolchain versions for auditing and tags a baseline Git commit
+* Tags a baseline Git commit
 
 The harness and the agents both rely on these images, ensuring that patches generated today will be evaluated the same way tomorrow.
 
@@ -92,6 +79,8 @@ To get started with the BenchMAC evaluation harness, follow these steps.
 - [Dataset](docs/dataset.md)
 - [Reproducibility](docs/reproducibility.md)
 - [Add a new instance](docs/add-new-instance.md)
+
+For a comprehensive understanding of the research methodology and experimental results, please refer to the [Master's thesis](https://github.com/SuperMuel/BenchMac/blob/master-thesis/master-thesis.pdf), particularly the **Methodology** and **Experiments** sections.
 
 ## 📄 License
 
