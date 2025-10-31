@@ -76,8 +76,10 @@ Create:
 
 ```dockerfile
 # Pick a Node image compatible with the source Angular version
-# (see Angular’s compatibility docs for exact ranges)
-FROM node:18-bookworm-slim@sha256:<digest-from-docker-hub>
+# (see Angular's compatibility docs for exact ranges)
+# NOTE: You can start with just the tag (e.g., node:18-bookworm-slim)
+# and pin it to a specific SHA256 digest later using the pin_docker_images.py script
+FROM node:18-bookworm-slim
 
 # Minimal, repeatable CI-ish environment
 ENV CI=true \
@@ -138,7 +140,7 @@ CMD ["bash", "-lc", "sleep infinity"]
 * **Do not** `git clone` the repo. Always `curl | tar` an archive for a **history-free** snapshot.
 * **Do not** run `npm ci`, builds, tests, or lint in the Dockerfile. The harness and AI agents does that.
 * **Do create** a baseline git commit and tag after extracting source code. This allows the harness to get the progress using `git diff baseline`, even if the AI agent created commits.
-* Choose a **Node image** compatible with your **source AND target** Angular version, and record the SHA256 digest when you pull it the first time so every rebuild sees identical bits.
+* Choose a **Node image** compatible with your **source AND target** Angular version. You can start with just the tag name (e.g., `node:18-bookworm-slim`) during development, then use `scripts/pin_docker_images.py` to lock it to a SHA256 digest before submitting your PR.
 * Keep images reproducible: pin apt through Debian snapshot mirrors, capture `node --version` / `npm --version`, and keep the container running as root so agents can install temporary tooling without permission friction.
 * Remove optional packages (Chromium, etc.) unless an instance truly needs them—`npm ci` and build flows are the only operations we run by default.
 
@@ -192,7 +194,21 @@ Verify that all the instances from a single repository are valid
   uv run pytest -m instance_validation tests/integration/test_baseline_validation.py -k "<owner>__<repo>"
 ```
 
-## 5) Tips
+## 5) Pin Docker base images
+
+Before submitting your PR, pin the base image to a SHA256 digest for reproducibility. Without pinning, Docker Hub updates can silently change Node versions or system libraries, breaking your baseline months later.
+
+Run the automated pinning script:
+```bash
+uv run scripts/pin_docker_images.py --dry-run  # preview changes
+uv run scripts/pin_docker_images.py            # apply changes
+```
+
+This transforms `FROM node:18-bookworm-slim` into `FROM node:18-bookworm-slim@sha256:f9ab18...` automatically.
+
+> **Tip:** Start with unpinned tags during development for faster iteration, then pin before submitting your PR.
+
+## 6) Tips
 
 ### Research the target repository
 Before creating your Dockerfile, research the repository's existing setup:
@@ -214,7 +230,7 @@ Don't try to integrate the instance into the benchmark immediately. Instead, fol
 
 ---
 
-## 6) PR checklist
+## 7) PR checklist
 
 * [ ] **Dockerfile** at `data/dockerfiles/<instance_id>`:
 
@@ -222,5 +238,6 @@ Don't try to integrate the instance into the benchmark immediately. Instead, fol
   * Creates baseline git commit and tag for diffing.
   * Contains no baseline "work" (no `npm ci`, build, test, or lint).
   * Leaves container idle (e.g., `sleep infinity`).
+  * **Uses pinned base image** with SHA256 digest (run `uv run scripts/pin_docker_images.py` before submitting).
 * [ ] **Instance line** appended to `data/instances.jsonl` with correct fields.
 * [ ] `uv run pytest -m instance_validation -k "<your new instance id>` passes.
