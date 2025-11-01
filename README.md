@@ -64,28 +64,15 @@ However, we also observed that the current dataset is relatively simple, since m
 
 To address this, future work should focus on raising the benchmark difficulty by introducing more complex instances. (See [./docs/add-new-instance.md](./docs/add-new-instance.md)))
 
-## ⚙️ Installation
+## 🚀 Getting Started
 
-To get started with the BenchMAC evaluation harness, follow these steps.
+For detailed instructions on running experiments and evaluating AI agents, see the [Usage Guide](docs/usage.md).
 
-### Prerequisites
-
-*   [UV](https://docs.astral.sh/uv/)
-*   [Docker](https://docs.docker.com/get-docker/) installed and running.
-
-### Setup
-
-1.  **Install dependencies:**
-    ```bash
-    uv sync
-    ```
-
-2.  **Set up pre-commit hooks:**
-    ```bash
-    uv run pre-commit install
-    ```
-    
-    This ensures that code is automatically linted, formatted, and the lockfile stays up to date before each commit.
+Quick overview:
+- Install dependencies with `uv sync`
+- Run experiments: `uv run experiments/run_experiment.py`
+- Evaluate results: `uv run benchmac eval`
+- Explore results: `uv run explorer`
 
 ## 📘 Documentation
 

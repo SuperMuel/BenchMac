@@ -149,9 +149,3 @@ configs:
     model_kwargs:
       temperature: 0.0
     scaffold: swe-agent-mini
-
-  # # ==========================================================
-  # #                        DASHSCOPE (Alibaba) MODELS
-  # # ==========================================================
-  # - model_name: dashscope/qwen3-coder-plus-2025-07-22
-  # - model_name: dashscope/qwen3-coder-flash-2025-07-28

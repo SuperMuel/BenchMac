@@ -15,6 +15,7 @@ from typing import Any, Literal, cast
 import litellm
 import typer
 import yaml
+from docker.errors import DockerException
 from dotenv import load_dotenv
 from loguru import logger
 from rich.console import Console
@@ -924,6 +925,11 @@ def main(
         f"[bold cyan]Starting {len(tasks)} tasks with {max_workers} workers "
         f"(max {provider_workers} per provider)[/bold cyan]"
     )
+    try:
+        DockerManager.get_client(quiet=False)
+    except DockerException as e:
+        console.print(f"[bold red]Docker is not running: {e}[/bold red]")
+        raise typer.Exit(code=1) from e
 
     try:
         with Progress(console=console) as progress:
