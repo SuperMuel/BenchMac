@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
+![docs/images/banner.png](docs/images/banner.png)
+
 **BenchMAC** is a benchmark for evaluating AI agents on their ability to perform complex, real-world **M**igration tasks for **A**ngular **C**odebases.
 
 Developped as part of my [Master's thesis](https://github.com/SuperMuel/BenchMac/blob/master-thesis/master-thesis.pdf) in collaboration with **[onepoint](https://groupeonepoint.com/)**.
@@ -47,6 +49,20 @@ Every instance has a pinned Docker image that:
 * Tags a baseline Git commit
 
 The harness and the agents both rely on these images, ensuring that patches generated today will be evaluated the same way tomorrow.
+
+## 🔬 BenchMAC v1.0: A Case Study
+
+The inaugural v1.0 dataset consists of nine consecutive migration tasks (Angular v11→v20) from the `gothinkster/angular-realworld-example-app` repository. An initial study from the master thesis produced the following comparison of agent performance versus cost.
+
+![Agent Performance: Build Success Rate vs Average Cost](docs/images/benchmac_V1_cost_vs_success.png)
+
+**Findings:**
+
+Multiple methods, including the rule-based `angular-schematics` tool, achieved a perfect 100% success rate. 
+The benchmark successfully highlighted that several LLMs underperformed compared to the non-AI, rule-based approach.
+However, we also observed that the current dataset is relatively simple, since many methods achieve perfect scores, the benchmark does not effectively distinguish between their capabilities.
+
+To address this, future work should focus on raising the benchmark difficulty by introducing more complex instances. (See [./docs/add-new-instance.md](./docs/add-new-instance.md)))
 
 ## ⚙️ Installation
 
